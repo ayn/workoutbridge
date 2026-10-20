@@ -31,7 +31,9 @@ class StridesTests(unittest.TestCase):
     def test_review_opt_out_and_unknown_instructions(self):
         for title in ("4 strides", "4 strides with 30 sec recovery", "0 strides", "101 strides"):
             event = Event("synthetic", "strides", "", "2030-01-01", title, "")
-            self.assertTrue(parse(normalize_workout(event, recovery_choice="review").prescription).unresolved)
+            self.assertTrue(
+                parse(normalize_workout(event, recovery_choice="review").prescription).unresolved
+            )
         for title in ("0 strides", "101 strides", "4 strides with 30 sec recovery"):
             event = Event("synthetic", "strides", "", "2030-01-01", title, "")
             self.assertTrue(parse(normalize_workout(event).prescription).unresolved)
