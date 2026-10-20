@@ -92,6 +92,52 @@ class WorkflowTests(unittest.TestCase):
             self.assertEqual(self.call(self.publish_args(plan) + ["--apply"])[0], 2)
         connect.assert_not_called()
 
+    def test_explicit_dry_run_never_authenticates_or_creates_state(self):
+        with patch("workoutbridge.cli.GarminProvider.connect") as connect:
+            code, output, _ = self.call(self.publish_args(self.plan()) + ["--dry-run"])
+        self.assertEqual(code, 0)
+        self.assertEqual(json.loads(output)["mode"], "dry-run")
+        connect.assert_not_called()
+        self.assertFalse((self.root / "state.sqlite").exists())
+
+    def test_yolo_publishes_without_hash_confirmation_and_deduplicates(self):
+        args = self.publish_args(self.plan()) + ["--yolo"]
+        with patch("workoutbridge.cli.GarminProvider.connect", return_value=self.provider):
+            self.assertEqual(self.call(args)[0], 0)
+            self.assertEqual(self.call(args)[0], 0)
+        self.assertEqual((self.provider.uploads, self.provider.schedules), (1, 1))
+
+    def test_modes_are_mutually_exclusive(self):
+        args = self.publish_args(self.plan())
+        for flags in (["--dry-run", "--yolo"], ["--dry-run", "--apply"], ["--apply", "--yolo"]):
+            with (
+                self.subTest(flags=flags),
+                patch("workoutbridge.cli.GarminProvider.connect") as connect,
+            ):
+                with self.assertRaises(SystemExit) as raised:
+                    self.call(args + flags)
+                self.assertEqual(raised.exception.code, 2)
+                connect.assert_not_called()
+
+    def test_yolo_does_not_bypass_plan_validation(self):
+        for mutation in ("account", "tamper", "unresolved"):
+            with self.subTest(mutation=mutation):
+                plan = self.plan()
+                if mutation == "account":
+                    plan["account_id"] = "different-account"
+                elif mutation == "tamper":
+                    plan["items"][0]["event"]["description"] = "Run 45 min"
+                else:
+                    plan["items"][0]["error"] = "Needs review"
+                    from workoutbridge.publishing import digest
+
+                    plan["review_hash"] = digest(
+                        {k: v for k, v in plan.items() if k != "review_hash"}
+                    )
+                with patch("workoutbridge.cli.GarminProvider.connect") as connect:
+                    self.assertEqual(self.call(self.publish_args(plan) + ["--yolo"])[0], 2)
+                    connect.assert_not_called()
+
     def test_altered_review_does_not_authenticate(self):
         plan = self.plan()
         plan["items"][0]["event"]["description"] = "Run 45 min"

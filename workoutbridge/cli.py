@@ -1,4 +1,4 @@
-"""Local review workflow; live publishing requires explicit exact-plan approval."""
+"""Local review workflow; live publishing requires explicit opt-in."""
 
 import argparse
 import json
@@ -53,7 +53,20 @@ def main(argv=None) -> int:
     publish.add_argument("--account-id", required=True)
     publish.add_argument("--session-dir", type=Path, required=True)
     publish.add_argument("--state-db", type=Path, required=True)
-    publish.add_argument("--apply", action="store_true")
+    modes = publish.add_mutually_exclusive_group()
+    modes.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Validate locally without contacting Garmin (default)",
+    )
+    modes.add_argument(
+        "--apply", action="store_true", help="Publish with exact review-hash confirmation"
+    )
+    modes.add_argument(
+        "--yolo",
+        action="store_true",
+        help="Publish without hash confirmation; all validation and duplicate checks remain",
+    )
     publish.add_argument("--approve", help="Exact review_hash of the reviewed plan")
     args = parser.parse_args(argv)
     try:
@@ -119,10 +132,10 @@ def main(argv=None) -> int:
             if "error" in item or digest(review_item(args.account_id, event)) != digest(item):
                 raise ReviewRequired("Plan is unresolved or outdated; regenerate and review")
             events.append(event)
-        if not args.apply:
+        if not (args.apply or args.yolo):
             emit({"mode": "dry-run", "events": len(events), "review_hash": review_hash})
             return 0
-        if args.approve != review_hash:
+        if not args.yolo and args.approve != review_hash:
             raise ReviewRequired("Pass --approve with the exact reviewed plan hash")
 
         # Third-party auth logs may contain session details; never expose them here.
