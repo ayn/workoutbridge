@@ -53,6 +53,14 @@ its workouts.
 See [architecture and roadmap](docs/architecture.md),
 [contributing](CONTRIBUTING.md), and [security](SECURITY.md).
 
+## Hosting and Funding
+
+The planned hosted service will have a useful free tier, voluntary donations
+and GitHub Sponsors, and optional paid capacity such as more frequent polling.
+The code remains MIT-licensed and self-hostable. Prices and limits are not set,
+and no hosted service, payment collection, or sponsorship enrollment is live yet.
+See the [hosted service model](docs/hosting-model.md).
+
 ## License
 
 MIT. See [LICENSE](LICENSE).
