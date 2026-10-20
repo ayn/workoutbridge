@@ -5,6 +5,16 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class DeploymentTests(unittest.TestCase):
+    def test_private_https_sidecar(self):
+        compose = (ROOT / "compose.yaml").read_text()
+        self.assertIn("network_mode: service:caddy", compose)
+        self.assertIn('TS_ACCEPT_DNS: "false"', compose)
+        self.assertIn("WORKOUTBRIDGE_DOMAIN", compose)
+        caddy = (ROOT / "Caddyfile").read_text()
+        self.assertIn("reverse_proxy web:8000", caddy)
+        self.assertIn("dns cloudflare", caddy)
+        self.assertNotIn("443:443", compose)
+
     def test_private_container_contract(self):
         compose = (ROOT / "compose.yaml").read_text()
         self.assertIn("127.0.0.1:1879:8000", compose)

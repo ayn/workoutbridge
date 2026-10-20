@@ -9,9 +9,16 @@ sync rules. Each profile must retain its own original publishing database.
 ## Access and state
 
 Use rootless Docker Compose. The application publishes only host loopback
-`127.0.0.1:1879`. Put Tailscale Serve HTTPS in front of it, using an unused HTTPS
-port. Do not enable Funnel, public port forwarding, or a public reverse proxy.
-Set `WORKOUTBRIDGE_ORIGIN` to the exact HTTPS origin, including its port.
+`127.0.0.1:1879` for local diagnostics. A dedicated Tailscale sidecar shares
+Caddy's network namespace; Caddy terminates HTTPS with Cloudflare DNS-01.
+No Caddy ports are published on the host. Do not enable Funnel or public port
+forwarding. Point your private DNS hostname to the sidecar's Tailscale IP.
+Set `WORKOUTBRIDGE_DOMAIN` to that hostname and `WORKOUTBRIDGE_ORIGIN` to its
+exact HTTPS origin. The DNS challenge token needs access to that domain's zone.
+On first startup, authorize the new sidecar interactively using
+`docker compose --env-file "$HOME/.config/workoutbridge-deploy.env" exec tailscale tailscale up --accept-dns=false`.
+Keep the resulting login URL private. Authentication state persists under
+`tailscale/` in the private directory. Do not share another node's state.
 
 Store the following **outside the checkout** in a private directory mounted as
 `/data` (owner-only directories, files 0600):
@@ -23,7 +30,8 @@ Store the following **outside the checkout** in a private directory mounted as
 - `web/web.sqlite`: sources, sync rules, current review plans, publish history.
 - `web/archive/`: content-addressed private ICS snapshots.
 
-Put `WORKOUTBRIDGE_PRIVATE_DIR` and `WORKOUTBRIDGE_ORIGIN` in
+Put `WORKOUTBRIDGE_PRIVATE_DIR`, `WORKOUTBRIDGE_ORIGIN`,
+`WORKOUTBRIDGE_DOMAIN`, and `CF_API_TOKEN` in
 `~/.config/workoutbridge-deploy.env`, chmod 600. The app uses an HttpOnly,
 SameSite=Strict cookie with a 12-hour session; HTTPS enables Secure cookies.
 Sessions expire on container restart. Login attempts are rate-limited. Write

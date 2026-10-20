@@ -111,7 +111,10 @@ try {
     await page.getByRole("button", { name: "Review publication" }).click();
     await page.getByRole("dialog").waitFor();
     const bounds = await page.getByRole("dialog").boundingBox();
-    assert(bounds && bounds.x >= 0 && bounds.x + bounds.width <= width, `Dialog overflow at ${width}`);
+    assert(
+      bounds && bounds.x >= 0 && bounds.x + bounds.width <= width,
+      `Dialog overflow at ${width}`,
+    );
     assert.equal(
       await page
         .getByRole("button", { name: "Close dialog" })

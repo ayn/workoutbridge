@@ -1,4 +1,52 @@
+x-bounded-logs: &bounded-logs
+  driver: json-file
+  options:
+    max-size: "5m"
+    max-file: "3"
+
 services:
+  caddy:
+    build:
+      context: .
+      dockerfile: Dockerfile.caddy
+    restart: unless-stopped
+    environment:
+      DOMAIN: ${WORKOUTBRIDGE_DOMAIN:?Set private HTTPS hostname}
+      CF_API_TOKEN: ${CF_API_TOKEN:?Set DNS challenge token}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    mem_limit: 128m
+    pids_limit: 128
+    logging: *bounded-logs
+    depends_on:
+      web:
+        condition: service_healthy
+
+  tailscale:
+    image: tailscale/tailscale:latest
+    restart: unless-stopped
+    network_mode: service:caddy
+    depends_on:
+      caddy:
+        condition: service_started
+        restart: true
+    cap_add: [NET_ADMIN]
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    volumes:
+      - ${WORKOUTBRIDGE_PRIVATE_DIR:?Set private data directory}/tailscale:/var/lib/tailscale
+    environment:
+      TS_AUTH_ONCE: "true"
+      TS_ACCEPT_DNS: "false"
+      TS_HOSTNAME: workoutbridge
+      TS_STATE_DIR: /var/lib/tailscale
+      TS_USERSPACE: "false"
+    mem_limit: 256m
+    pids_limit: 128
+    logging: *bounded-logs
+
   web:
     build: .
     image: workoutbridge:${WORKOUTBRIDGE_REVISION:-local}
@@ -31,3 +79,7 @@ services:
       timeout: 10s
       retries: 3
       start_period: 20s
+
+volumes:
+  caddy-data:
+  caddy-config:
