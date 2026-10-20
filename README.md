@@ -66,10 +66,38 @@ and block batch publishing. Descriptions take precedence over titles as the
 prescription; both are retained, and the review includes original text and steps.
 
 On Python 3.12+, install `python -m pip install -e '.[garmin]'`.
-Use an existing isolated `python-garminconnect` session directory and its numeric
+Use an isolated `python-garminconnect` session directory and its numeric
 profile ID. This tool does not collect passwords or perform interactive login.
 Do not use a different athlete's session. An expired session requires renewal
-through your trusted authentication workflow.
+through the native authentication command below, into a new directory.
+
+### Garmin Login
+
+No Dotfit installation is needed. In an interactive terminal, with Python 3.12+
+and the Garmin extra:
+
+```bash
+uv run --locked --extra garmin workoutbridge auth garmin \
+  --session-dir "$HOME/.config/workoutbridge/garmin-test"
+```
+
+Enter the test account's email, hidden password, and hidden MFA code if requested.
+The command prints the numeric `account_id` to use in plans and publishing.
+It creates a directory with mode 0700 and saves session tokens with mode 0600.
+Use that exact directory as `--session-dir`; there is no extra nested directory.
+Credentials are not accepted as CLI flags. No workouts are uploaded or scheduled.
+
+The directory must not already exist, to prevent accidentally reusing another
+athlete's session. To renew authentication, choose a new private directory and
+confirm that the returned account ID matches the old account. Keep the same
+publishing state database; changing authentication must not reset duplicate
+protection. A failed/cancelled attempt may leave its private directory behind;
+use another new path for a later attempt and inspect old directories before
+removing them. Do not repeatedly retry rate-limited logins.
+
+Keep sessions outside the checkout and never share tokens, passwords, or MFA
+codes. Authentication depends on Garmin's unofficial login flow and can fail
+when Garmin changes it or rate limits requests.
 
 ```sh
 workoutbridge publish /private/path/review.json \
@@ -165,6 +193,7 @@ its workouts.
 - No analytics. Parsing, plans, tests, and dry runs never access accounts.
 - `garmin-check` contacts Garmin for read-only verification; `publish --apply`
   and `publish --yolo` contact Garmin for explicitly requested publishing.
+- `auth garmin` contacts Garmin to authenticate and save a local session only.
 
 See [architecture and roadmap](docs/architecture.md),
 [contributing](CONTRIBUTING.md), and [security](SECURITY.md).

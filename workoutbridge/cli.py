@@ -36,6 +36,11 @@ def main(argv=None) -> int:
         return 2 if draft.unresolved else 0
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
+    auth = sub.add_parser("auth", help="Interactively authenticate; no workout changes")
+    auth.add_argument("provider", choices=["garmin"])
+    auth.add_argument(
+        "--session-dir", type=Path, required=True, help="New private session directory"
+    )
     check = sub.add_parser("garmin-check", help="Verify existing session and read access only")
     check.add_argument("--account-id", required=True)
     check.add_argument("--session-dir", type=Path, required=True)
@@ -70,6 +75,21 @@ def main(argv=None) -> int:
     publish.add_argument("--approve", help="Exact review_hash of the reviewed plan")
     args = parser.parse_args(argv)
     try:
+        if args.command == "auth":
+            from .auth import authenticate
+
+            try:
+                account = authenticate(args.session_dir)
+            except (Exception, KeyboardInterrupt):  # noqa: BLE001 - never print auth secrets.
+                print(
+                    "Authentication failed or cancelled. Use Python 3.12+ with --extra garmin, "
+                    "an interactive terminal, and a new session directory. Existing sessions "
+                    "are never overwritten. Avoid repeated attempts if rate limited.",
+                    file=sys.stderr,
+                )
+                return 2
+            emit({"status": "authenticated", "account_id": account})
+            return 0
         if args.command == "garmin-check":
             previous = logging.root.manager.disable
             logging.disable(logging.CRITICAL)
