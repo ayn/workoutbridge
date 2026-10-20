@@ -5,6 +5,17 @@ service should offer a useful free tier, funded by voluntary donations,
 GitHub Sponsors, and optional paid capacity. No billing or donations are
 currently configured.
 
+## Web First
+
+The hosted product is a responsive web application, not a hosted CLI.
+Its core workflow is connect a feed, review generated steps, then publish.
+Design mobile and desktop review together. An installable web experience can
+follow; a native iOS companion is a later option for notifications and quick
+approvals, not a prerequisite for launch.
+
+Scheduled polling and publishing belong on the backend, independent of whether
+the user's browser or future mobile app is open.
+
 ## Principles
 
 - Keep core parsing, review, and publishing available in the open-source project.
