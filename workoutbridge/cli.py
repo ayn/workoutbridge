@@ -53,7 +53,7 @@ def main(argv=None) -> int:
         "--interval-recovery",
         choices=["lap", "review"],
         default="lap",
-        help="Final Surge missing distance-repeat recovery: lap (default) or require review",
+        help="Implied interval recovery: lap (default) or require review, for all calendar formats",
     )
     plan.add_argument("--source", required=True, help="Stable source label, not a secret feed URL")
     plan.add_argument("--timezone", required=True)
@@ -140,13 +140,6 @@ def main(argv=None) -> int:
             )
             if args.uid:
                 events = [event for event in events if event.uid in args.uid]
-            if args.calendar_format == "finalsurge":
-                from .finalsurge import normalize_finalsurge
-
-                events = [
-                    normalize_finalsurge(event, recovery_choice=args.interval_recovery)
-                    for event in events
-                ]
             if args.easy_run_range:
                 from .reviewed import review_easy_run
 
@@ -162,6 +155,12 @@ def main(argv=None) -> int:
                         pass  # Preserve unsupported prescriptions for normal review.
                     reviewed.append(event)
                 events = reviewed
+            from .prescriptions import normalize_finalsurge, normalize_workout
+
+            normalizer = (
+                normalize_finalsurge if args.calendar_format == "finalsurge" else normalize_workout
+            )
+            events = [normalizer(event, recovery_choice=args.interval_recovery) for event in events]
             bundle = {
                 "version": 1,
                 "account_id": args.account_id,

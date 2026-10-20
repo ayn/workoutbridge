@@ -1,12 +1,50 @@
 import unittest
 
 from workoutbridge.calendar import Event
-from workoutbridge.finalsurge import normalize_finalsurge
 from workoutbridge.parser import parse
+from workoutbridge.prescriptions import normalize_finalsurge, normalize_workout
 from workoutbridge.publishing import event_payload
 
 
 class FinalSurgeTests(unittest.TestCase):
+    def test_generic_title_or_description_implies_hill_recovery(self):
+        for in_description in (False, True):
+            original = Event(
+                "synthetic-google",
+                "hill",
+                "",
+                "2027-01-06",
+                "Hill session" if in_description else "4 x 1' hill hard",
+                "4 x 1' hill hard" if in_description else "",
+            )
+            event = normalize_workout(original)
+            group = event_payload(event)["workoutSegments"][0]["workoutSteps"][0]
+            self.assertEqual(group["numberOfIterations"], 4)
+            self.assertEqual(group["workoutSteps"][0]["endConditionValue"], 60)
+            self.assertEqual(group["workoutSteps"][0]["description"], "Hills hard")
+            self.assertEqual(
+                group["workoutSteps"][1]["endCondition"]["conditionTypeKey"], "lap.button"
+            )
+            with self.assertRaises(ValueError):
+                event_payload(normalize_workout(original, recovery_choice="review"))
+
+    def test_generic_explicit_recovery_not_replaced(self):
+        original = self.event("4 x 200 m in 60-65 sec with 90 sec easy recovery")
+        from dataclasses import replace
+
+        original = replace(original, description="")
+        normalized = normalize_workout(original)
+        self.assertEqual(normalized, original)
+        group = parse(normalized.prescription).steps[0]
+        self.assertEqual(group.steps[1].duration, 90)
+        self.assertEqual(group.steps[1].kind, "run")
+
+    def test_explicit_unknown_hill_recovery_stays_for_review(self):
+        from dataclasses import replace
+
+        event = replace(self.event("4 x 1' hill hard, jog down recovery"), description="")
+        self.assertTrue(parse(normalize_workout(event).prescription).unresolved)
+
     def event(self, title=" Run: 5 miles + 3x200m smooth + 2x100m", extra=""):
         return Event(
             "synthetic-fs",

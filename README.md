@@ -144,9 +144,12 @@ Repeats become native groups, effort words remain labels, and timed easy/moderat
 recovery remains running. A Run-until-Lap transition separates an initial run
 from these interval groups. No warm-up, cooldown, or numeric pace is invented.
 
-For distance repeats without prescribed recovery, the Final Surge format policy
+For repeats with implied but unspecified recovery, the provider-independent policy
 defaults to lap-ended rest between reps (not after the last rep), and records
-this choice in workout notes. Explicit recovery instructions take precedence.
+this choice in workout notes. This applies to Google Calendar, Final Surge,
+and other ICS sources, in either the title or the substantive description.
+For example, `4 x 1' hill hard` becomes four one-minute hard hill reps with
+lap-ended recovery between them. Explicit recovery instructions take precedence.
 Use `--interval-recovery review` to disable the fallback and require review. Timed
 fartlek groups include their prescribed recovery after every repetition.
 Non-running/race titles and unsupported formats require separate review.
@@ -327,7 +330,9 @@ it does not grant permission or ability to edit Final Surge workouts.
 
 ## Safety and Privacy
 
-- Do not invent training, recovery, pace targets, or cooldowns.
+- Do not invent training, recovery durations, pace targets, or cooldowns.
+  Supported interval shorthand with implied recovery defaults to lap-ended
+  recovery, with an explicit require-review opt-out.
 - Rep completion times are not pace; conversion must use interval distance.
 - Preserve timed easy running as running, not stationary rest.
 - Never interpret disappearance from a rolling feed as a deletion request.

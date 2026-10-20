@@ -117,14 +117,27 @@ def interval(clause: str) -> Repeat | None:
             ),
             skip_last_recovery=False,
         )
-    timed = re.fullmatch(r"(\d+) x (\d+) sec hills with lap recovery", clause, re.IGNORECASE)
+    timed = re.fullmatch(
+        r"(\d+) x (\d+) sec hills(?: (hard|smooth|easy|moderate))? with lap recovery",
+        clause,
+        re.IGNORECASE,
+    )
     if timed:
-        count, seconds = map(int, timed.groups())
+        count, seconds = map(int, timed.groups()[:2])
+        effort = timed[3]
         if not 1 <= count <= 100 or not 0 < seconds <= 3600:
             return None
         return Repeat(
             count,
-            (Step("run", seconds, "seconds", note="Hills"), Step("rest", None, "lap_button")),
+            (
+                Step(
+                    "run",
+                    seconds,
+                    "seconds",
+                    note="Hills" + (f" {effort.lower()}" if effort else ""),
+                ),
+                Step("rest", None, "lap_button"),
+            ),
         )
     match = INTERVAL.fullmatch(clause)
     if not match:

@@ -13,6 +13,18 @@ from workoutbridge.cli import main
 
 
 class WorkflowTests(unittest.TestCase):
+    def test_generic_calendar_title_uses_lap_recovery_default(self):
+        self.ics.write_bytes(
+            calendar(
+                "UID:hill-synthetic\r\nDTSTART;VALUE=DATE:20270105\r\nSUMMARY:4 x 1' hill hard"
+            )
+        )
+        bundle = self.plan()
+        self.assertNotIn("error", bundle["items"][0])
+        group = bundle["items"][0]["payload"]["workoutSegments"][0]["workoutSteps"][0]
+        self.assertEqual(group["numberOfIterations"], 4)
+        self.assertEqual(group["workoutSteps"][0]["endConditionValue"], 60)
+
     def test_finalsurge_title_policy_end_to_end(self):
         self.ics.write_bytes(
             calendar(

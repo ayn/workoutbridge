@@ -16,8 +16,9 @@ API and may omit important description details.
 - [x] Explicit HTTPS feed input for the local CLI, including authorized Google
   Calendar and Final Surge subscription feeds; bounded reads and no redirects.
 - [x] Opt-in Final Surge normalization for title-based runs/repeats and
-  metadata-only descriptions, with documented lap-ended missing-recovery default
-  and a require-review opt-out.
+  metadata-only descriptions.
+- [x] Provider-independent implied interval recovery: documented lap-ended
+  default, explicit recovery precedence, and a require-review opt-out.
 - [ ] Daily-or-more-frequent feed ingestion with private, revision-preserving
   prescription storage before Final Surge removes past runs from its feed.
 - [x] Narrow explicit interval grammar, native repeat groups, explicit recoveries,
