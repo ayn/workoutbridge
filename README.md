@@ -154,15 +154,17 @@ argument. No Final Surge API credentials or login are required for a feed URL
 that already grants calendar access:
 
 ```bash
-uv run --locked --extra garmin workoutbridge plan "$FINAL_SURGE_CALENDAR_URL" \
+uv run --locked --extra garmin workoutbridge plan \
+  'https://log.finalsurge.com/delivery/ical/EXAMPLE123456789' \
   --calendar-format finalsurge \
   --source finalsurge-calendar --timezone Asia/Taipei \
   --start 2027-01-01 --end 2027-02-01 --account-id 12345 \
   > /private/path/finalsurge-review.json
 ```
 
-Set the variable privately to your actual HTTPS subscription URL, never in a
-committed file. Then inspect the review and use the same Garmin `publish`
+The URL above uses Final Surge's feed format but has a fake token. Replace it
+with your own subscription URL; never put the real URL in a committed file.
+Then inspect the review and use the same Garmin `publish`
 workflow below. This reads the feed and writes to Garmin only; it does not add
 structured steps back to Final Surge or sync through its other destinations.
 Feed descriptions can be incomplete and history can roll off: compare the
