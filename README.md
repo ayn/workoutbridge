@@ -116,6 +116,7 @@ that already grants calendar access:
 
 ```bash
 uv run --locked --extra garmin workoutbridge plan "$FINAL_SURGE_CALENDAR_URL" \
+  --calendar-format finalsurge \
   --source finalsurge-calendar --timezone Asia/Taipei \
   --start 2027-01-01 --end 2027-02-01 --account-id 12345 \
   > /private/path/finalsurge-review.json
@@ -128,6 +129,36 @@ structured steps back to Final Surge or sync through its other destinations.
 Feed descriptions can be incomplete and history can roll off: compare the
 full coach assignment before publishing, and do not infer missing instructions.
 Automatic polling is not implemented yet.
+
+`--calendar-format finalsurge` recognizes `Run:` titles when the description
+contains only `Workout: Run` and numeric `Planned: ... mi/km` metadata. It preserves
+the original title and description, including planned mileage, in the review
+and destination notes. Planned mileage is not substituted for the run distance.
+Substantive description text takes precedence; unrecognized instructions remain
+unresolved rather than being discarded.
+
+Supported title examples include `Run: 12 miles moderate`,
+`Run: 5 miles + 3x200m smooth + 2x100m`, and
+`Run: 5 miles + 3x(30s hard; 45s moderate)`.
+Repeats become native groups, effort words remain labels, and timed easy/moderate
+recovery remains running. A Run-until-Lap transition separates an initial run
+from these interval groups. No warm-up, cooldown, or numeric pace is invented.
+
+For repeats with implied but unspecified recovery, the provider-independent policy
+defaults to lap-ended rest between reps (not after the last rep), and records
+this choice in workout notes. This applies to Google Calendar, Final Surge,
+and other ICS sources, in either the title or the substantive description.
+For example, `4 x 1' hill hard` becomes four one-minute hard hill reps with
+lap-ended recovery between them. Explicit recovery instructions take precedence.
+Use `--interval-recovery review` to disable the fallback and require review. Timed
+fartlek groups include their prescribed recovery after every repetition.
+Non-running/race titles and unsupported formats require separate review.
+
+Final Surge removes past runs from the feed. A future recurring importer must
+fetch at least daily, preserve prescriptions and revisions privately, and never
+interpret disappearing events as deletion requests. More frequent polling can
+catch same-day assignments. Neither scheduled polling nor a prescription archive
+is configured by this command; retain private review files in the meantime.
 
 Replace the example paths, dates, timezone, and profile ID with your own.
 `--end` is exclusive; windows are limited to 93 days. Use `--uid` (repeatable)
@@ -299,7 +330,9 @@ it does not grant permission or ability to edit Final Surge workouts.
 
 ## Safety and Privacy
 
-- Do not invent training, recovery, pace targets, or cooldowns.
+- Do not invent training, recovery durations, pace targets, or cooldowns.
+  Supported interval shorthand with implied recovery defaults to lap-ended
+  recovery, with an explicit require-review opt-out.
 - Rep completion times are not pace; conversion must use interval distance.
 - Preserve timed easy running as running, not stationary rest.
 - Never interpret disappearance from a rolling feed as a deletion request.

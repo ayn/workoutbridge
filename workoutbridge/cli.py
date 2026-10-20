@@ -48,6 +48,13 @@ def main(argv=None) -> int:
     check.add_argument("--date", type=date.fromisoformat, required=True)
     plan = sub.add_parser("plan", help="Import local ICS or HTTPS feed and emit a JSON review plan")
     plan.add_argument("calendar", help="Local ICS path or authorized HTTPS feed URL")
+    plan.add_argument("--calendar-format", choices=["generic", "finalsurge"], default="generic")
+    plan.add_argument(
+        "--interval-recovery",
+        choices=["lap", "review"],
+        default="lap",
+        help="Implied interval recovery: lap (default) or require review, for all calendar formats",
+    )
     plan.add_argument("--source", required=True, help="Stable source label, not a secret feed URL")
     plan.add_argument("--timezone", required=True)
     plan.add_argument("--start", required=True, type=date.fromisoformat)
@@ -148,6 +155,12 @@ def main(argv=None) -> int:
                         pass  # Preserve unsupported prescriptions for normal review.
                     reviewed.append(event)
                 events = reviewed
+            from .prescriptions import normalize_finalsurge, normalize_workout
+
+            normalizer = (
+                normalize_finalsurge if args.calendar_format == "finalsurge" else normalize_workout
+            )
+            events = [normalizer(event, recovery_choice=args.interval_recovery) for event in events]
             bundle = {
                 "version": 1,
                 "account_id": args.account_id,

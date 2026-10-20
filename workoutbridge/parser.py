@@ -82,14 +82,62 @@ def clock_label(seconds: int) -> str:
 
 
 def interval(clause: str) -> Repeat | None:
-    timed = re.fullmatch(r"(\d+) x (\d+) sec hills with lap recovery", clause, re.IGNORECASE)
+    lap = re.fullmatch(
+        r"(\d+) x (\d+(?:\.\d+)?) (m|km)(?: (smooth|hard|easy|moderate))? with lap recovery",
+        clause,
+        re.IGNORECASE,
+    )
+    if lap:
+        count, amount, unit, effort = lap.groups()
+        distance = float(amount) * FACTORS[unit.lower()]
+        if not 1 <= int(count) <= 100 or not 0 < distance < float("inf"):
+            return None
+        return Repeat(
+            int(count),
+            (
+                Step("run", distance, "meters", effort.lower() if effort else None),
+                Step("rest", None, "lap_button"),
+            ),
+        )
+    fartlek = re.fullmatch(
+        r"(\d+) x (\d+) sec (hard|smooth|easy|moderate) with "
+        r"(\d+) sec (easy|moderate) recovery",
+        clause,
+        re.IGNORECASE,
+    )
+    if fartlek:
+        count, work, effort, recovery, recovery_effort = fartlek.groups()
+        if not 1 <= int(count) <= 100 or not 0 < int(work) <= 3600 or not 0 < int(recovery) <= 3600:
+            return None
+        return Repeat(
+            int(count),
+            (
+                Step("run", int(work), "seconds", effort.lower()),
+                Step("run", int(recovery), "seconds", recovery_effort.lower()),
+            ),
+            skip_last_recovery=False,
+        )
+    timed = re.fullmatch(
+        r"(\d+) x (\d+) sec hills(?: (hard|smooth|easy|moderate))? with lap recovery",
+        clause,
+        re.IGNORECASE,
+    )
     if timed:
-        count, seconds = map(int, timed.groups())
+        count, seconds = map(int, timed.groups()[:2])
+        effort = timed[3]
         if not 1 <= count <= 100 or not 0 < seconds <= 3600:
             return None
         return Repeat(
             count,
-            (Step("run", seconds, "seconds", note="Hills"), Step("rest", None, "lap_button")),
+            (
+                Step(
+                    "run",
+                    seconds,
+                    "seconds",
+                    note="Hills" + (f" {effort.lower()}" if effort else ""),
+                ),
+                Step("rest", None, "lap_button"),
+            ),
         )
     match = INTERVAL.fullmatch(clause)
     if not match:
