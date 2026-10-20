@@ -67,18 +67,18 @@ prescription; both are retained, and the review includes original text and steps
 
 On Python 3.12+, install `python -m pip install -e '.[garmin]'`.
 Use an isolated `python-garminconnect` session directory and its numeric
-profile ID. This tool does not collect passwords or perform interactive login.
+profile ID. Create the session with the interactive login command below.
 Do not use a different athlete's session. An expired session requires renewal
 through the native authentication command below, into a new directory.
 
 ### Garmin Login
 
 No Dotfit installation is needed. In an interactive terminal, with Python 3.12+
-and the Garmin extra:
+and the Garmin extra, run from the WorkoutBridge checkout:
 
 ```bash
 uv run --locked --extra garmin workoutbridge auth garmin \
-  --session-dir "$HOME/.config/workoutbridge/garmin-test"
+  --session-dir "$HOME/.config/garmin-sessions/workoutbridge-test"
 ```
 
 Enter the test account's email, hidden password, and hidden MFA code if requested.
@@ -86,6 +86,15 @@ The command prints the numeric `account_id` to use in plans and publishing.
 It creates a directory with mode 0700 and saves session tokens with mode 0600.
 Use that exact directory as `--session-dir`; there is no extra nested directory.
 Credentials are not accepted as CLI flags. No workouts are uploaded or scheduled.
+
+Check the saved session without changing workouts (replace `12345` with the
+printed account ID and select the calendar date to check):
+
+```bash
+uv run --locked --extra garmin workoutbridge garmin-check \
+  --session-dir "$HOME/.config/garmin-sessions/workoutbridge-test" \
+  --account-id 12345 --date 2027-01-05
+```
 
 The directory must not already exist, to prevent accidentally reusing another
 athlete's session. To renew authentication, choose a new private directory and
