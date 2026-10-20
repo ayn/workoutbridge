@@ -1,14 +1,20 @@
 # WorkoutBridge
 
-Turn plain-text training prescriptions into reviewable structured workouts.
+Turn plain-text running and coaching prescriptions into reviewable structured
+workouts for Garmin Connect. Designed for training calendars from Final Surge,
+Google Calendar, iCloud Calendar, and other iCalendar (ICS) sources.
 
-**Early development, not a hosted service.** Currently a local, dependency-free
-draft parser. Calendar import and Garmin publishing are planned, not implemented.
-Not affiliated with Garmin, Final Surge, Google, or Apple.
+**Early development, not a hosted service.** The web app is the intended product;
+this repository now has its first local backend workflow: ICS file import,
+review plans, Garmin payloads, and a persistent opt-in publisher. The full pipeline
+is tested with fake Garmin accounts, not live-verified in this project.
+No web UI, automatic feed polling, or Final Surge write-back yet.
+Not affiliated with Garmin, Final Surge, Google, Apple, or any coach.
 
 ## Try It
 
-Requires Python 3.11 or newer:
+Requires Python 3.11+ for parsing, or Python 3.12+ for the Garmin extra.
+The local publisher supports Linux/macOS and uses a single-host file lock.
 
 ```sh
 python -m venv .venv
@@ -18,14 +24,87 @@ printf '%s\n' 'Warm up until lap; Run 10 min easy; Cool down 5 min' | workoutbri
 python -m unittest discover -s tests -v
 ```
 
+For a reproducible developer setup, use `uv sync --locked --extra garmin`
+and `uv run --locked --extra garmin python -m unittest discover -s tests -v`.
+
 Output is JSON with the original prescription, normalized steps, unresolved
 clauses, and `requires_review: true`. Exit status 2 means unresolved input.
 Exit status 0 means parsing succeeded, **not** permission to publish.
 
-The initial grammar accepts semicolon-separated Warm up, Run, Rest, and Cool down
-steps with explicit duration/distance or "until lap", plus optional effort labels.
-Natural-language intervals, pace ranges, and repeats are intentionally unresolved
-until their parsing and validation are implemented. No LLM API is required.
+The deliberately narrow grammar accepts semicolon-separated Warm up, Run, Rest,
+and Cool down steps with explicit duration/distance or "until lap", plus effort
+labels. It also accepts explicit interval prescriptions such as:
+
+```text
+Warm up until lap; 4 x 200 m in 62-64 sec with 2 min walk/jog recovery; Cool down 5 min
+```
+
+This produces a native repeat group, speed targets equivalent to the rep times,
+rep-time notes, and recovery between repetitions (not after the last rep).
+`3 x 400 m in 2:04-2:08 with 3 min easy recovery` is also supported.
+Easy recovery remains a Run step. No recovery or cooldown is inferred.
+Other natural-language formats remain unresolved; no LLM API is required.
+
+## Calendar to Garmin
+
+Keep input files, review output, sessions, and receipts outside the checkout.
+Use a local file exported/downloaded from an authorized calendar; this version
+does not fetch remote feed URLs.
+
+```sh
+umask 077
+workoutbridge plan /private/path/training.ics \
+  --source training-calendar --timezone Asia/Taipei \
+  --start 2027-01-01 --end 2027-02-01 --account-id 12345 \
+  > /private/path/review.json
+```
+
+Replace the example paths, dates, timezone, and profile ID with your own.
+`--end` is exclusive; windows are limited to 93 days. Use `--uid` (repeatable)
+to select individual events. Unsupported/cancelled events stay visible for review
+and block batch publishing. Descriptions take precedence over titles as the
+prescription; both are retained, and the review includes original text and steps.
+
+On Python 3.12+, install `python -m pip install -e '.[garmin]'`.
+Use an existing isolated `python-garminconnect` session directory and its numeric
+profile ID. This tool does not collect passwords or perform interactive login.
+Do not use a different athlete's session. An expired session requires renewal
+through your trusted authentication workflow.
+
+```sh
+workoutbridge publish /private/path/review.json \
+  --account-id 12345 --session-dir /private/path/garmin-session \
+  --state-db /private/path/workoutbridge.sqlite
+```
+
+That is a **dry run** and does not authenticate. After inspecting the complete
+review plan, add `--apply --approve HASH`, replacing HASH with its `review_hash`.
+The hash binds approval to the account and exact reviewed content, not a generic
+"yes". It is a confirmation mechanism, not cryptographic authentication.
+Each successful event prints a verified destination workout ID and date.
+
+## Duplicate Protection
+
+- SQLite receipts bind an event UID/recurrence instance and stable source label
+  to a Garmin account, workout ID, and scheduled date.
+- Identical imports verify existing state without another create/schedule.
+- Approved prescription edits update the existing workout ID.
+- Process-held locking serializes publishers using the same local database.
+- Remote-write intent is committed before upload/update/schedule.
+- Lost responses are reconciled using remote identity markers and calendar
+  read-back. Uncertain outcomes stop for review, rather than blindly retrying.
+- Moved/cancelled events and suspected cross-feed overlap require reconciliation.
+- Overlap checks include pending local intents, not only completed uploads.
+
+**Do not delete the state database or change source labels to force a retry.**
+Back it up alongside sessions, with private permissions. If a run stops, rerun
+the same reviewed plan with the same database; if it remains blocked, inspect
+Garmin and the receipt before making changes. No automatic deletion or rollback.
+Batch publishing is per-event, not all-or-nothing.
+
+This is not a universal exactly-once guarantee: Garmin is an unofficial
+integration, unrelated tools can create duplicates, and this lock does not
+coordinate separate hosts/databases. A hosted service needs distributed claims.
 
 ## Intended Workflow
 
@@ -48,7 +127,8 @@ its workouts.
 - Never interpret disappearance from a rolling feed as a deletion request.
 - Never commit real calendar files, athlete data, feed URLs, or credentials.
 - Examples and tests use synthetic prescriptions only.
-- No analytics, account access, network calls, or live writes in this version.
+- No analytics. Parsing, plans, tests, and dry runs never access accounts.
+- Only explicitly approved `publish --apply` operations contact Garmin.
 
 See [architecture and roadmap](docs/architecture.md),
 [contributing](CONTRIBUTING.md), and [security](SECURITY.md).
@@ -58,7 +138,8 @@ See [architecture and roadmap](docs/architecture.md),
 The planned hosted service will have a useful free tier, voluntary donations
 and GitHub Sponsors, and optional paid capacity such as more frequent polling.
 The code remains MIT-licensed and self-hostable. Prices and limits are not set,
-and no hosted service, payment collection, or sponsorship enrollment is live yet.
+and no hosted service or payment collection is live yet. Sponsorship setup is
+pending; no funding link is active.
 See the [hosted service model](docs/hosting-model.md).
 
 ## License

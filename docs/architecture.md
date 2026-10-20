@@ -11,14 +11,17 @@ API and may omit important description details.
 ## Incremental Milestones
 
 - [x] Public MIT repository, synthetic fixtures, tests, local draft CLI.
-- [ ] ICS import: UID, RECURRENCE-ID, time zones, cancellations, bounded recurrence
-  expansion, updates, and missing descriptions. Start with local file import.
-- [ ] Native repeat groups, explicit recoveries, pace conversion, and note labels.
+- [x] Local ICS import: UID, RECURRENCE-ID, time zones, cancellations, and bounded
+  recurrence expansion using icalendar/recurring-ical-events.
+- [x] Narrow explicit interval grammar, native repeat groups, explicit recoveries,
+  rep-time to speed conversion, and note labels.
+- [x] Local JSON review plan with content-bound approval and dry-run default.
 - [ ] Review UI with original text beside structured steps.
-- [ ] Garmin adapter using python-garminconnect, version pinned when integrated.
-  Prove authentication, refresh, read-back, upload, and scheduling in isolation.
-- [ ] Persistent per-account/source-event destination mapping. Serialize writes
-  per account and reconcile uncertain request outcomes before retrying.
+- [x] Garmin adapter using python-garminconnect 0.3.19, tested with fake clients.
+- [ ] Live verification of authentication/refresh, read-back, upload, and scheduling.
+- [x] Single-host persistent per-account/source-event destination mapping,
+  serialized writes, and fail-closed handling of uncertain request outcomes.
+- [ ] Hosted distributed claims, encrypted session management, and remote polling.
 - [ ] Hosted beta with authentication, quotas, observability, and deletion/export.
 - [ ] Final Surge write-back only after investigating supported partner access.
 
@@ -48,10 +51,11 @@ Read back uploaded steps and scheduled date. Handle transient failures,
 expired sessions, duplicate jobs, moved events, and time zones. Test with fakes
 first; never run public CI against real athlete accounts.
 
-### Duplicate-Prevention Contract (Not Yet Implemented)
+### Duplicate-Prevention Contract
 
-The current CLI only emits drafts. There is no publisher or duplicate-prevention
-implementation yet. The following are release gates, not existing guarantees:
+Implemented and tested for the local single-host publisher below. This is not
+a promise of universal exactly-once behavior or a hosted production release.
+Ambiguous outcomes, moved events, and cancellations are blocked for manual review.
 
 - Persist source identity scoped to user, destination account, source connection,
   event UID, and recurrence instance. Titles alone are never identity.
@@ -76,3 +80,15 @@ recurrence exceptions, account isolation, concurrent claims, process restarts,
 upload-success/response-loss, schedule-success/response-loss, and ambiguous
 pre-existing destination entries. A fake provider must count create and schedule
 calls so tests assert no extra writes, not merely matching final JSON.
+
+## Sources Checked
+
+- [icalendar parsing API](https://icalendar.readthedocs.io/en/stable/)
+- [recurring-ical-events examples](https://recurring-ical-events.readthedocs.io/en/latest/user-guide/examples.html)
+- [python-garminconnect](https://github.com/cyberjunky/python-garminconnect):
+  inspected installed 0.3.19 workout, training, and authentication methods.
+
+The adapter uses library upload/update/schedule methods and the authenticated
+numeric `profile_id`. It does not reproduce private endpoint URLs or collect
+passwords. Third-party request errors are suppressed in CLI output to avoid
+leaking session details.
