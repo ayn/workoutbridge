@@ -13,6 +13,37 @@ from workoutbridge.cli import main
 
 
 class WorkflowTests(unittest.TestCase):
+    def test_url_plan_does_not_persist_url_or_authenticate(self):
+        url = "https://example.invalid/private/synthetic-secret/basic.ics"
+        args = [
+            "plan",
+            url,
+            "--source",
+            "synthetic",
+            "--timezone",
+            "UTC",
+            "--start",
+            "2027-01-01",
+            "--end",
+            "2027-02-01",
+            "--account-id",
+            self.provider.account_id,
+        ]
+        with (
+            patch("workoutbridge.cli.read_calendar", return_value=self.ics.read_bytes()) as read,
+            patch("workoutbridge.cli.GarminProvider.connect") as connect,
+        ):
+            code, output, err = self.call(args)
+            self.assertEqual(code, 0)
+            read.assert_called_once_with(url)
+            self.assertNotIn("synthetic-secret", output + err)
+            self.assertEqual(len(json.loads(output)["items"]), 1)
+            connect.assert_not_called()
+        with patch("workoutbridge.cli.read_calendar", side_effect=TimeoutError(url)):
+            code, output, err = self.call(args)
+            self.assertEqual(code, 2)
+            self.assertNotIn("synthetic-secret", output + err)
+
     def test_plan_can_apply_explicit_easy_run_review_policy(self):
         self.ics.write_bytes(
             calendar(

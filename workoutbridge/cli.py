@@ -9,6 +9,7 @@ from datetime import date
 from pathlib import Path
 
 from .calendar import Event, import_calendar
+from .feed import read_calendar
 from .garmin import GarminProvider
 from .parser import parse
 from .publishing import Publisher, ReviewRequired, approval_token, digest, event_payload
@@ -45,8 +46,8 @@ def main(argv=None) -> int:
     check.add_argument("--account-id", required=True)
     check.add_argument("--session-dir", type=Path, required=True)
     check.add_argument("--date", type=date.fromisoformat, required=True)
-    plan = sub.add_parser("plan", help="Import local ICS and emit a JSON review plan")
-    plan.add_argument("calendar", type=Path)
+    plan = sub.add_parser("plan", help="Import local ICS or HTTPS feed and emit a JSON review plan")
+    plan.add_argument("calendar", help="Local ICS path or authorized HTTPS feed URL")
     plan.add_argument("--source", required=True, help="Stable source label, not a secret feed URL")
     plan.add_argument("--timezone", required=True)
     plan.add_argument("--start", required=True, type=date.fromisoformat)
@@ -122,8 +123,7 @@ def main(argv=None) -> int:
             )
             return 0
         if args.command == "plan":
-            with args.calendar.open("rb") as handle:
-                data = handle.read(2_000_001)
+            data = read_calendar(args.calendar)
             events = import_calendar(
                 data,
                 source=args.source,

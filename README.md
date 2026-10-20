@@ -10,7 +10,8 @@ review plans, Garmin payloads, and a persistent opt-in publisher. The full pipel
 is tested with fake Garmin accounts. A limited live test has also verified
 uploading, calendar scheduling, and repeat-publish reuse in a dedicated account;
 watch delivery has not been verified.
-No web UI, automatic feed polling, or Final Surge write-back yet.
+No web UI or automatic feed polling. Final Surge write-back is blocked pending
+an officially available API and permission to use it.
 Not affiliated with Garmin, Final Surge, Google, Apple, or any coach.
 
 ## Try It
@@ -75,22 +76,29 @@ Other natural-language formats remain unresolved; no LLM API is required.
 ## Calendar to Garmin
 
 Keep input files, review output, sessions, and receipts outside the checkout.
-Use a local file exported/downloaded from an authorized calendar; this version
-does not fetch remote feed URLs.
+Pass a local ICS file or an authorized HTTPS calendar feed URL directly to `plan`.
+Remote reads have a 30-second socket timeout and a 2 MB size limit. Redirects,
+non-HTTPS URLs, and URLs with embedded username/password credentials are rejected.
+Use the final HTTPS feed URL if your provider redirects.
 
-For example, download a Google Calendar feed first. This URL is deliberately
+For example, use a Google Calendar feed directly. This URL is deliberately
 fake; replace it with your authorized calendar's iCal URL. Treat real feed URLs
-as private and keep them out of Git and shared logs.
+as private and keep them out of Git and shared logs. URL arguments may be visible
+in shell history or process listings; use a downloaded local file when that is
+unacceptable. WorkoutBridge does not include the input URL in its review plan
+or error messages. Keep `--source` a stable non-secret label, never the feed URL.
 
 ```bash
 umask 077
 mkdir -p "$HOME/.local/share/workoutbridge"
-curl --fail --location \
+uv run --locked --extra garmin workoutbridge plan \
   'https://calendar.google.com/calendar/ical/EXAMPLE_NOT_A_REAL_CALENDAR%40group.calendar.google.com/public/basic.ics' \
-  --output "$HOME/.local/share/workoutbridge/training.ics"
+  --source training-calendar --timezone Asia/Taipei \
+  --start 2027-01-01 --end 2027-02-01 --account-id 12345 \
+  > "$HOME/.local/share/workoutbridge/review.json"
 ```
 
-Use the downloaded file path in place of `/private/path/training.ics` below:
+Local files work with the same command:
 
 ```sh
 umask 077
@@ -260,9 +268,13 @@ when Garmin is rate-limiting requests.
 5. Publish structured steps and schedule through a Garmin adapter.
 6. Record destination IDs so retries and updates do not create duplicates.
 
-Final Surge write-back is a separate future adapter, contingent on verified
-access. Reading its calendar feed does not imply permission or ability to edit
-its workouts.
+Final Surge write-back is blocked pending an official API. As of October 20,
+2026, Final Surge support confirmed that athletes/coaches cannot access an open
+API yet and that unauthorized access to current APIs is being restricted.
+Their tentative availability target is early 2027, subject to announcement,
+not a committed integration date. Do not use private endpoints or bypass these
+restrictions. Authorized calendar feed import remains a separate read-only path;
+it does not grant permission or ability to edit Final Surge workouts.
 
 ## Safety and Privacy
 
@@ -272,7 +284,9 @@ its workouts.
 - Never interpret disappearance from a rolling feed as a deletion request.
 - Never commit real calendar files, athlete data, feed URLs, or credentials.
 - Examples and tests use synthetic prescriptions only.
-- No analytics. Parsing, plans, tests, and dry runs never access accounts.
+- No analytics. Parsing, tests, and publishing dry runs never access accounts.
+  Planning from a URL fetches that authorized feed but never contacts Garmin;
+  planning from a local file makes no network requests.
 - `garmin-check` contacts Garmin for read-only verification; `publish --apply`
   and `publish --yolo` contact Garmin for explicitly requested publishing.
 - `auth garmin` contacts Garmin to authenticate and save a local session only.
