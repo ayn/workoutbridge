@@ -46,7 +46,10 @@ class ParserTests(unittest.TestCase):
         for text, code in (("Run 10 min", 0), ("unknown", 2)):
             result = subprocess.run(
                 [sys.executable, "-m", "workoutbridge.cli"],
-                input=text, text=True, capture_output=True, check=False,
+                input=text,
+                text=True,
+                capture_output=True,
+                check=False,
             )
             self.assertEqual(result.returncode, code)
             self.assertTrue(json.loads(result.stdout)["requires_review"])
