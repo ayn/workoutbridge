@@ -1,0 +1,15 @@
+.git
+.env
+.env.*
+.venv
+private
+*.sqlite*
+*.ics
+**/*tokens*.json
+**/*session*.json
+web/node_modules
+web/dist
+web/test-results
+tests
+__pycache__
+**/__pycache__

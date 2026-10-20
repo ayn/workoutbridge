@@ -1,0 +1,34 @@
+name: Deploy private instance
+on:
+  workflow_run:
+    workflows: [Tests]
+    types: [completed]
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: private-pi-deployment
+  cancel-in-progress: false
+jobs:
+  deploy:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: [self-hosted, Linux, ARM64, workoutbridge-deploy]
+    environment: private-pi
+    timeout-minutes: 20
+    steps:
+      - name: Deploy exact tested main revision
+        env:
+          REVISION: ${{ github.event.workflow_run.head_sha }}
+        working-directory: /opt/workoutbridge
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          test "$REVISION" = "$(git rev-parse origin/main)" || { echo "Superseded revision; skipping"; exit 0; }
+          test -z "$(git status --porcelain)"
+          git checkout --detach "$REVISION"
+          export WORKOUTBRIDGE_REVISION="$REVISION"
+          docker compose --env-file "$HOME/.config/workoutbridge-deploy.env" build
+          docker compose --env-file "$HOME/.config/workoutbridge-deploy.env" up -d --no-build --wait --wait-timeout 90

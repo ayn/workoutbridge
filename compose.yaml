@@ -1,0 +1,33 @@
+services:
+  web:
+    build: .
+    image: workoutbridge:${WORKOUTBRIDGE_REVISION:-local}
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:1879:8000"
+    environment:
+      WORKOUTBRIDGE_ORIGIN: ${WORKOUTBRIDGE_ORIGIN:?Set tailnet HTTPS origin}
+      WORKOUTBRIDGE_DATA_DIR: /data/web
+      WORKOUTBRIDGE_CONFIG_DIR: /data/config
+      WORKOUTBRIDGE_PASSWORD_FILE: /data/access-password
+    volumes:
+      - ${WORKOUTBRIDGE_PRIVATE_DIR:?Set private data directory}:/data
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 512m
+    cpus: 1.0
+    pids_limit: 128
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "3"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import os,urllib.request; from urllib.parse import urlsplit; r=urllib.request.Request('http://127.0.0.1:8000/health',headers={'Host':urlsplit(os.environ['WORKOUTBRIDGE_ORIGIN']).netloc}); urllib.request.urlopen(r,timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s

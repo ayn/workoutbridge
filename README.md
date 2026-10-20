@@ -1,5 +1,10 @@
 # WorkoutBridge
 
+The private web pilot provides calendar sources, saved Garmin connections,
+structured-workout previews, and confirmed publishing. See the
+[private deployment runbook](docs/private-web.md). It is not a public multi-user
+service; scheduled refresh archives feeds but never publishes unattended.
+
 Turn plain-text running and coaching prescriptions into reviewable structured
 workouts for Garmin Connect. Designed for training calendars from Final Surge,
 Google Calendar, iCloud Calendar, and other iCalendar (ICS) sources.
