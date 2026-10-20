@@ -39,12 +39,15 @@ def main(argv=None) -> int:
     sub = parser.add_subparsers(dest="command", required=True)
     auth = sub.add_parser("auth", help="Interactively authenticate; no workout changes")
     auth.add_argument("provider", choices=["garmin"])
+    auth.add_argument("--session-dir", type=Path, help="New private session directory")
     auth.add_argument(
-        "--session-dir", type=Path, required=True, help="New private session directory"
+        "--state-db",
+        type=Path,
+        help="When creating a profile, retain an existing publishing database",
     )
     check = sub.add_parser("garmin-check", help="Verify existing session and read access only")
-    check.add_argument("--account-id", required=True)
-    check.add_argument("--session-dir", type=Path, required=True)
+    check.add_argument("--account-id")
+    check.add_argument("--session-dir", type=Path)
     check.add_argument("--date", type=date.fromisoformat, required=True)
     plan = sub.add_parser("plan", help="Import local ICS or HTTPS feed and emit a JSON review plan")
     plan.add_argument("calendar", help="Local ICS path or authorized HTTPS feed URL")
@@ -59,7 +62,7 @@ def main(argv=None) -> int:
     plan.add_argument("--timezone", required=True)
     plan.add_argument("--start", required=True, type=date.fromisoformat)
     plan.add_argument("--end", required=True, type=date.fromisoformat, help="Exclusive end date")
-    plan.add_argument("--account-id", required=True, help="Expected Garmin numeric profile ID")
+    plan.add_argument("--account-id", help="Expected Garmin numeric profile ID")
     plan.add_argument("--uid", action="append", help="Include only these event UIDs")
     plan.add_argument(
         "--easy-run-range",
@@ -73,9 +76,9 @@ def main(argv=None) -> int:
     )
     publish = sub.add_parser("publish", help="Validate review plan; dry-run by default")
     publish.add_argument("plan", type=Path)
-    publish.add_argument("--account-id", required=True)
-    publish.add_argument("--session-dir", type=Path, required=True)
-    publish.add_argument("--state-db", type=Path, required=True)
+    publish.add_argument("--account-id")
+    publish.add_argument("--session-dir", type=Path)
+    publish.add_argument("--state-db", type=Path)
     modes = publish.add_mutually_exclusive_group()
     modes.add_argument(
         "--dry-run",
@@ -91,13 +94,43 @@ def main(argv=None) -> int:
         help="Publish without hash confirmation; all validation and duplicate checks remain",
     )
     publish.add_argument("--approve", help="Exact review_hash of the reviewed plan")
+    for command in (auth, check, plan, publish):
+        command.add_argument("--profile", help="Named private connection saved during login")
     args = parser.parse_args(argv)
     try:
+        if args.command != "auth":
+            if args.profile is not None:
+                from .profiles import load_profile
+
+                if any(
+                    getattr(args, field, None) is not None
+                    for field in ("account_id", "session_dir", "state_db")
+                ):
+                    raise ReviewRequired("Use --profile or explicit connection flags, not both")
+                profile = load_profile(args.profile)
+                args.account_id = profile["account_id"]
+                args.session_dir = Path(profile["session_dir"])
+                args.state_db = Path(profile["state_db"])
+            required = ["account_id"]
+            if args.command in ("publish", "garmin-check"):
+                required.append("session_dir")
+            if args.command == "publish":
+                required.append("state_db")
+            if any(getattr(args, field, None) is None for field in required):
+                raise ReviewRequired("Provide --profile or all explicit connection flags")
         if args.command == "auth":
             from .auth import authenticate
 
             try:
-                account = authenticate(args.session_dir)
+                if args.profile is not None:
+                    from .profiles import authenticate_profile
+
+                    profile = authenticate_profile(args.profile, args.session_dir, args.state_db)
+                    account = profile["account_id"]
+                elif args.session_dir is not None and args.state_db is None:
+                    account = authenticate(args.session_dir)
+                else:
+                    raise ValueError("Provide --profile or --session-dir")
             except (Exception, KeyboardInterrupt):  # noqa: BLE001 - never print auth secrets.
                 print(
                     "Authentication failed or cancelled. Use Python 3.12+ with --extra garmin, "
@@ -106,7 +139,10 @@ def main(argv=None) -> int:
                     file=sys.stderr,
                 )
                 return 2
-            emit({"status": "authenticated", "account_id": account})
+            result = {"status": "authenticated", "account_id": account}
+            if args.profile is not None:
+                result["profile"] = args.profile
+            emit(result)
             return 0
         if args.command == "garmin-check":
             previous = logging.root.manager.disable

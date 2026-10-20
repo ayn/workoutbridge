@@ -24,29 +24,27 @@ Requires [uv](https://docs.astral.sh/uv/getting-started/installation/), Python
 ```bash
 uv sync --locked --extra garmin
 umask 077
-SESSION="$HOME/.config/garmin-sessions/workoutbridge"
 DATA="$HOME/.local/share/workoutbridge"
 mkdir -p "$DATA"
 uv run --locked --extra garmin workoutbridge auth garmin \
-  --session-dir "$SESSION"
+  --profile personal
 ```
 
-Enter your email, hidden password, and MFA code if requested. Note the printed
-numeric account ID. The session directory must be new; keep it for subsequent
-runs and skip login while it remains valid. Tokens stay outside the checkout.
-Authentication does not upload workouts.
+Enter your email, hidden password, and MFA code if requested. The `personal`
+profile saves your verified account ID, private session location, and publishing
+database path. Use its name on subsequent commands; no account ID needs copying.
+Skip login while the session remains valid. Authentication does not upload workouts.
 
 ### 2. Import Your iCal Feed
 
-Replace the fake URL, account ID, timezone, and dates below. `--end` is exclusive.
+Replace the fake URL, timezone, and dates below. `--end` is exclusive.
 For a Final Surge feed, also add `--calendar-format finalsurge`.
 
 ```bash
-ACCOUNT_ID=12345
 uv run --locked --extra garmin workoutbridge plan \
   'https://calendar.google.com/calendar/ical/EXAMPLE_NOT_A_REAL_CALENDAR%40group.calendar.google.com/public/basic.ics' \
   --source training-calendar --timezone Asia/Taipei \
-  --start 2027-01-01 --end 2027-01-15 --account-id "$ACCOUNT_ID" \
+  --start 2027-01-01 --end 2027-01-15 --profile personal \
   > "$DATA/review.json"
 ```
 
@@ -64,20 +62,18 @@ First validate without contacting Garmin:
 
 ```bash
 uv run --locked --extra garmin workoutbridge publish "$DATA/review.json" \
-  --account-id "$ACCOUNT_ID" --session-dir "$SESSION" \
-  --state-db "$DATA/publishing.sqlite" --dry-run
+  --profile personal --dry-run
 ```
 
 After reviewing, replace `REVIEW_HASH` with the hash printed by the dry run:
 
 ```bash
 uv run --locked --extra garmin workoutbridge publish "$DATA/review.json" \
-  --account-id "$ACCOUNT_ID" --session-dir "$SESSION" \
-  --state-db "$DATA/publishing.sqlite" --apply --approve REVIEW_HASH
+  --profile personal --apply --approve REVIEW_HASH
 ```
 
 This uploads structured workouts and schedules them on Garmin Connect. For
-later syncs, repeat import, review, and publish using the **same state database**;
+later syncs, repeat import, review, and publish using the **same profile and state database**;
 unchanged events are verified without creating duplicates. This is a manual
 sync, not a background schedule.
 
@@ -247,6 +243,50 @@ through the native authentication command below, into a new directory.
 
 ### Garmin Login
 
+The recommended login command saves a named connection:
+
+```bash
+uv run --locked --extra garmin workoutbridge auth garmin --profile personal
+uv run --locked --extra garmin workoutbridge garmin-check \
+  --profile personal --date 2027-01-05
+```
+
+Profiles support `auth`, `plan`, `publish`, and `garmin-check`. Choose different
+names for different accounts, such as `personal` and `test`. Names may contain
+letters, digits, hyphens, and underscores. There is no implicit default profile.
+For plan/check/publish, use either `--profile` or the explicit connection flags,
+not both. The stored account ID is still checked against the authenticated
+account before remote access, and review plans remain account-bound.
+
+By default, profiles live at `~/.config/workoutbridge/profiles/NAME.json`,
+sessions under `~/.config/workoutbridge/sessions/`, and publishing databases under
+`~/.config/workoutbridge/state/`. Profile directories are mode 0700 and files
+0600. They contain destination/account IDs and paths, never passwords or feed URLs.
+To choose persistent private storage, set an absolute `WORKOUTBRIDGE_CONFIG_DIR`
+before **every** command. In a disposable container, put this directory on a
+private persistent volume; never commit it to Git. Changing this location does
+not migrate existing profiles or receipts.
+
+To renew, run `auth garmin --profile personal` again. It creates a fresh session,
+requires the same account, and preserves the existing publishing database.
+Failed authentication or an account mismatch leaves the previous profile intact.
+Do not delete the profile or receipts to renew a session.
+
+**Existing explicit-flag users:** those commands remain supported unchanged.
+When adopting a profile for an account already used to publish, supply the
+existing database during its first login to retain duplicate-protection history:
+
+```bash
+uv run --locked --extra garmin workoutbridge auth garmin \
+  --profile personal --state-db /private/path/existing-workoutbridge.sqlite
+```
+
+This performs fresh authentication; it does not import an existing session.
+An optional `--session-dir` selects a new private session location. Subsequent
+logins cannot switch an existing profile to a different database.
+
+#### Explicit Paths Without a Profile
+
 No Dotfit installation is needed. In an interactive terminal, with Python 3.12+
 and the Garmin extra, run from the WorkoutBridge checkout:
 
@@ -332,8 +372,9 @@ The `publish` command accepts mutually exclusive mode flags:
 All modes retain plan integrity and account validation. YOLO uses the same
 durable duplicate protection and reconciliation checks as reviewed publishing;
 it does not bypass unresolved prescriptions, cancellations, or conflicts.
-Keep using the same private state database across runs. Existing required
-`--account-id`, `--session-dir`, and `--state-db` arguments remain unchanged.
+Keep using the same private state database across runs. Use `--profile NAME`
+to load connection settings, or supply `--account-id`, `--session-dir`, and
+`--state-db` explicitly.
 
 ### Check Garmin Before Publishing
 
