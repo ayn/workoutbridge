@@ -13,6 +13,8 @@ API and may omit important description details.
 - [x] Public MIT repository, synthetic fixtures, tests, local draft CLI.
 - [x] Local ICS import: UID, RECURRENCE-ID, time zones, cancellations, and bounded
   recurrence expansion using icalendar/recurring-ical-events.
+- [x] Explicit HTTPS feed input for the local CLI, including authorized Google
+  Calendar and Final Surge subscription feeds; bounded reads and no redirects.
 - [x] Narrow explicit interval grammar, native repeat groups, explicit recoveries,
   rep-time to speed conversion, and note labels.
 - [x] Local JSON review plan with content-bound approval and dry-run default.
@@ -23,7 +25,34 @@ API and may omit important description details.
   serialized writes, and fail-closed handling of uncertain request outcomes.
 - [ ] Hosted distributed claims, encrypted session management, and remote polling.
 - [ ] Hosted beta with authentication, quotas, observability, and deletion/export.
-- [ ] Final Surge write-back only after investigating supported partner access.
+- [ ] Official Final Surge API adapter after release and authorized access.
+
+## Final Surge Plan
+
+For now, use the authorized Final Surge calendar subscription URL with `plan`,
+review the available coach text, and publish structured workouts directly to
+Garmin with the existing adapter. Keep the source label and publishing database
+stable across imports. The feed may omit descriptions and older sessions;
+missing instructions require review, and vanished events never imply deletion.
+This route does not modify Final Surge workouts or use its downstream sync.
+
+Support correspondence received October 20, 2026 confirms there is no open API
+for athletes/coaches yet. Availability was tentatively indicated for early 2027,
+with an announcement to follow. This is not a guaranteed release date.
+
+After the official announcement:
+
+1. Obtain permitted access and review published authentication, scopes, rate
+   limits, and structured-workout capabilities.
+2. Implement a separate API source/write-back adapter using supported endpoints
+   only, preserving coach titles, full instructions, and planned mileage.
+3. Add red/green contract tests for authorization, duplicates, updates, failure
+   recovery, and reconciliation before authorized sandbox/live verification.
+4. Verify which downstream destinations receive structured workouts. Avoid
+   direct Garmin publishing and Final Surge downstream sync for the same workout
+   unless reconciliation prevents duplicates.
+
+Do not reverse-engineer private APIs or bypass the restrictions in the meantime.
 
 ## Proposed Cloudflare Hosting
 
@@ -42,7 +71,9 @@ from logs. Plan reauthentication and revocation per user.
 
 Remote feed fetching requires SSRF protection: block private/link-local targets,
 validate redirects and DNS results, limit size and duration, and accept only
-supported URL schemes. Keep fetching out of the initial local-only CLI.
+supported URL schemes. The local CLI now accepts explicit trusted HTTPS URLs
+with bounded reads and rejects redirects; it is not an SSRF-safe hosted fetcher.
+Do not expose it to untrusted remote users without those additional protections.
 
 ## Publishing Acceptance Criteria
 

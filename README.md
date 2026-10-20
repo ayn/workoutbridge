@@ -108,6 +108,27 @@ workoutbridge plan /private/path/training.ics \
   > /private/path/review.json
 ```
 
+### Final Surge Calendar Feed
+
+Use your authorized Final Surge calendar subscription URL as the same `plan`
+argument. No Final Surge API credentials or login are required for a feed URL
+that already grants calendar access:
+
+```bash
+uv run --locked --extra garmin workoutbridge plan "$FINAL_SURGE_CALENDAR_URL" \
+  --source finalsurge-calendar --timezone Asia/Taipei \
+  --start 2027-01-01 --end 2027-02-01 --account-id 12345 \
+  > /private/path/finalsurge-review.json
+```
+
+Set the variable privately to your actual HTTPS subscription URL, never in a
+committed file. Then inspect the review and use the same Garmin `publish`
+workflow below. This reads the feed and writes to Garmin only; it does not add
+structured steps back to Final Surge or sync through its other destinations.
+Feed descriptions can be incomplete and history can roll off: compare the
+full coach assignment before publishing, and do not infer missing instructions.
+Automatic polling is not implemented yet.
+
 Replace the example paths, dates, timezone, and profile ID with your own.
 `--end` is exclusive; windows are limited to 93 days. Use `--uid` (repeatable)
 to select individual events. Unsupported/cancelled events stay visible for review
