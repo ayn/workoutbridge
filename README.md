@@ -7,7 +7,9 @@ Google Calendar, iCloud Calendar, and other iCalendar (ICS) sources.
 **Early development, not a hosted service.** The web app is the intended product;
 this repository now has its first local backend workflow: ICS file import,
 review plans, Garmin payloads, and a persistent opt-in publisher. The full pipeline
-is tested with fake Garmin accounts, not live-verified in this project.
+is tested with fake Garmin accounts. A limited live test has also verified
+uploading, calendar scheduling, and repeat-publish reuse in a dedicated account;
+watch delivery has not been verified.
 No web UI, automatic feed polling, or Final Surge write-back yet.
 Not affiliated with Garmin, Final Surge, Google, Apple, or any coach.
 
@@ -64,6 +66,38 @@ Replace the example paths, dates, timezone, and profile ID with your own.
 to select individual events. Unsupported/cancelled events stay visible for review
 and block batch publishing. Descriptions take precedence over titles as the
 prescription; both are retained, and the review includes original text and steps.
+
+### Explicit Conversion Preferences
+
+For simple easy-run prescriptions, opt in during planning:
+
+```sh
+workoutbridge plan /private/path/training.ics \
+  --source training-calendar --timezone Asia/Taipei \
+  --start 2027-01-01 --end 2027-02-01 --account-id 12345 \
+  --easy-run-range higher --hill-recovery lap \
+  > /private/path/review.json
+```
+
+- `--easy-run-range higher` selects the upper distance in a range such as
+  `5-7 miles easy`. It also adds warm-up and cooldown ending on Lap Button
+  Press to these simple runs. This is an explicit combined review policy,
+  not the default parser behavior.
+- Exact distances and `easy/mod` are supported. The original prescription and
+  selected settings are kept in Garmin workout notes; no numeric pace is invented.
+- Optional additions such as `plus 3 x 15 second hills` become native repeat
+  groups. They require `--hill-recovery lap`, which adds lap-ended recovery
+  between repetitions, not after the last repetition.
+- This policy only accepts complete simple prescriptions. Explicit warm-up,
+  cooldown, recovery, or other complex instructions are not overwritten; they
+  continue through the normal parser and may require manual review.
+- Rest days and conditional instructions remain unresolved and block a batch.
+  Select reviewed run events with `--uid`; nothing is silently published or
+  dropped by these flags.
+
+Preferences are included in the review hash. Regenerate older review files if
+validation rejects them after an upgrade, keeping the same source label and
+publishing database for duplicate protection.
 
 On Python 3.12+, install `python -m pip install -e '.[garmin]'`.
 Use an isolated `python-garminconnect` session directory and its numeric

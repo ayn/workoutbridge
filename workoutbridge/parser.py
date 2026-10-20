@@ -82,6 +82,15 @@ def clock_label(seconds: int) -> str:
 
 
 def interval(clause: str) -> Repeat | None:
+    timed = re.fullmatch(r"(\d+) x (\d+) sec hills with lap recovery", clause, re.IGNORECASE)
+    if timed:
+        count, seconds = map(int, timed.groups())
+        if not 1 <= count <= 100 or not 0 < seconds <= 3600:
+            return None
+        return Repeat(
+            count,
+            (Step("run", seconds, "seconds", note="Hills"), Step("rest", None, "lap_button")),
+        )
     match = INTERVAL.fullmatch(clause)
     if not match:
         return None
