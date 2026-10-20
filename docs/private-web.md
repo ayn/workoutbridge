@@ -57,6 +57,8 @@ Do not delete receipts to resolve a duplicate or uncertain outcome.
 3. Connect the source to the desired saved Garmin profile under Syncs.
 4. Refresh its preview. Review the next 15 calendar days, source text, steps,
    recovery, notes, and destination account. Unsupported workouts cannot be selected.
+   A warm-up-only description beneath an interval/tempo/fartlek title is also
+   blocked rather than silently dropping its main set.
 5. Select workouts and confirm publication. The backend requires the exact
    current preview, verifies the connected account, and reads back Garmin writes.
 

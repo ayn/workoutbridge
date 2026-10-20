@@ -2,7 +2,7 @@ import { chromium } from "@playwright/test";
 import assert from "node:assert/strict";
 import { mkdir } from "node:fs/promises";
 
-const browser = await chromium.launch({ headless: true });
+const browser = await chromium.launch({ headless: true, channel: "chromium" });
 const directory = process.env.SCREENSHOT_DIR || "/tmp/workoutbridge-browser";
 await mkdir(directory, { recursive: true });
 try {

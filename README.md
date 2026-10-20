@@ -448,8 +448,8 @@ For a reproducible developer setup and the test suite, run from the checkout
 with Python 3.12+:
 
 ```bash
-uv sync --locked --extra garmin
-uv run --locked --extra garmin python -m unittest discover -s tests -v
+uv sync --locked --extra garmin --extra web
+uv run --locked --extra garmin --extra web python -m unittest discover -s tests -v
 ```
 
 See [contributing](CONTRIBUTING.md) for the required red/green TDD workflow.
