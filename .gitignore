@@ -1,0 +1,15 @@
+.env
+.env.*
+.venv/
+__pycache__/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+dist/
+build/
+private/
+*.fit
+*.ics
+*.sqlite*
+*tokens*.json
+*session*.json
