@@ -1,5 +1,10 @@
 # WorkoutBridge
 
+The private web pilot provides calendar sources, saved Garmin connections,
+structured-workout previews, and confirmed publishing. See the
+[private deployment runbook](docs/private-web.md). It is not a public multi-user
+service; scheduled refresh archives feeds but never publishes unattended.
+
 Turn plain-text running and coaching prescriptions into reviewable structured
 workouts for Garmin Connect. Designed for training calendars from Final Surge,
 Google Calendar, iCloud Calendar, and other iCalendar (ICS) sources.
@@ -443,8 +448,8 @@ For a reproducible developer setup and the test suite, run from the checkout
 with Python 3.12+:
 
 ```bash
-uv sync --locked --extra garmin
-uv run --locked --extra garmin python -m unittest discover -s tests -v
+uv sync --locked --extra garmin --extra web
+uv run --locked --extra garmin --extra web python -m unittest discover -s tests -v
 ```
 
 See [contributing](CONTRIBUTING.md) for the required red/green TDD workflow.

@@ -4,7 +4,7 @@ import re
 from dataclasses import replace
 
 from .calendar import Event
-from .parser import parse
+from .parser import Step, parse
 
 METADATA = re.compile(r"(?:Workout:\s*Run|Planned:\s*\d+(?:\.\d+)?\s*(?:mi|km))", re.I)
 
@@ -20,6 +20,17 @@ def normalize_finalsurge(event: Event, *, recovery_choice: str = "lap") -> Event
         for line in event.description.splitlines()
         if line.strip() and not METADATA.fullmatch(line.strip())
     )
+    detail_draft = parse(details)
+    if (
+        details
+        and not detail_draft.unresolved
+        and all(
+            isinstance(step, Step) and step.kind in ("warm_up", "cool_down")
+            for step in detail_draft.steps
+        )
+        and re.search(r"\d\s*[x×]|\b(fartlek|tempo|strides|hills|intervals)\b", title[1], re.I)
+    ):
+        return replace(event, structured_text="Incomplete description: main workout missing")
     # Never hide substantive instructions behind the title's shorter summary.
     return _normalize(event, details or title[1], recovery_choice)
 

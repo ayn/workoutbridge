@@ -13,3 +13,6 @@ private/
 *.sqlite*
 *tokens*.json
 *session*.json
+web/node_modules/
+web/test-results/
+web/playwright-report/

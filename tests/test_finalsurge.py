@@ -97,6 +97,12 @@ class FinalSurgeTests(unittest.TestCase):
         )
         self.assertTrue(parse(event.prescription).unresolved)
 
+    def test_warmup_only_description_does_not_hide_main_workout(self):
+        for title in ("Run: 5x800m", "Run: Fartlek", "Run: 3 mile tempo"):
+            event = self.event(title, extra="\nWarm up 1 miles")
+            with self.subTest(title=title), self.assertRaises(ValueError):
+                event_payload(normalize_finalsurge(event))
+
     def test_plain_run_and_timed_fartlek(self):
         easy = normalize_finalsurge(self.event("Run: 12 miles moderate"))
         self.assertFalse(parse(easy.prescription).unresolved)
