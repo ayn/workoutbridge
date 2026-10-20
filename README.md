@@ -29,7 +29,32 @@ python -m unittest discover -s tests -v
 For a reproducible developer setup, use `uv sync --locked --extra garmin`
 and `uv run --locked --extra garmin python -m unittest discover -s tests -v`.
 
-Output is JSON with the original prescription, normalized steps, unresolved
+To connect Garmin, run from this checkout with Python 3.12+:
+
+```bash
+uv sync --locked --extra garmin
+uv run --locked --extra garmin workoutbridge auth garmin \
+  --session-dir "$HOME/.config/garmin-sessions/workoutbridge-test"
+```
+
+Enter your email, hidden password, and MFA code if requested. Use a new session
+directory for each account; the command prints the numeric account ID needed
+for planning and publishing. Tokens stay outside the checkout. Authentication
+does not upload workouts.
+
+Verify the session with a read-only check, replacing `12345` with that account ID
+and the date with the day you want to inspect:
+
+```bash
+uv run --locked --extra garmin workoutbridge garmin-check \
+  --session-dir "$HOME/.config/garmin-sessions/workoutbridge-test" \
+  --account-id 12345 --date 2027-01-05
+```
+
+See [Calendar to Garmin](#calendar-to-garmin) for creating a review plan and
+publishing, or [Garmin Login](#garmin-login) for session renewal.
+
+The parsing example outputs JSON with the original prescription, normalized steps, unresolved
 clauses, and `requires_review: true`. Exit status 2 means unresolved input.
 Exit status 0 means parsing succeeded, **not** permission to publish.
 
