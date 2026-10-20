@@ -53,6 +53,16 @@ def main(argv=None) -> int:
     plan.add_argument("--end", required=True, type=date.fromisoformat, help="Exclusive end date")
     plan.add_argument("--account-id", required=True, help="Expected Garmin numeric profile ID")
     plan.add_argument("--uid", action="append", help="Include only these event UIDs")
+    plan.add_argument(
+        "--easy-run-range",
+        choices=["higher"],
+        help="Opt into upper distance bounds and lap warm-up/cooldown for supported easy runs",
+    )
+    plan.add_argument(
+        "--hill-recovery",
+        choices=["lap"],
+        help="Explicitly use lap recovery for otherwise unspecified hill recoveries",
+    )
     publish = sub.add_parser("publish", help="Validate review plan; dry-run by default")
     publish.add_argument("plan", type=Path)
     publish.add_argument("--account-id", required=True)
@@ -123,6 +133,21 @@ def main(argv=None) -> int:
             )
             if args.uid:
                 events = [event for event in events if event.uid in args.uid]
+            if args.easy_run_range:
+                from .reviewed import review_easy_run
+
+                reviewed = []
+                for event in events:
+                    try:
+                        event = review_easy_run(
+                            event,
+                            range_choice=args.easy_run_range,
+                            recovery_choice=args.hill_recovery,
+                        )
+                    except ValueError:
+                        pass  # Preserve unsupported prescriptions for normal review.
+                    reviewed.append(event)
+                events = reviewed
             bundle = {
                 "version": 1,
                 "account_id": args.account_id,

@@ -13,6 +13,43 @@ from workoutbridge.cli import main
 
 
 class WorkflowTests(unittest.TestCase):
+    def test_plan_can_apply_explicit_easy_run_review_policy(self):
+        self.ics.write_bytes(
+            calendar(
+                "UID:easy-synthetic\r\nDTSTART;VALUE=DATE:20270105"
+                "\r\nSUMMARY:5-7 miles easy plus 3 x 15 second hills"
+            )
+        )
+        code, output, _ = self.call(
+            [
+                "plan",
+                str(self.ics),
+                "--source",
+                "synthetic",
+                "--timezone",
+                "UTC",
+                "--start",
+                "2027-01-01",
+                "--end",
+                "2027-02-01",
+                "--account-id",
+                self.provider.account_id,
+                "--easy-run-range",
+                "higher",
+                "--hill-recovery",
+                "lap",
+            ]
+        )
+        self.assertEqual(code, 0)
+        bundle = json.loads(output)
+        self.assertNotIn("error", bundle["items"][0])
+        self.assertIn("5-7 miles easy", bundle["items"][0]["payload"]["description"])
+        args = self.publish_args(bundle) + ["--yolo"]
+        with patch("workoutbridge.cli.GarminProvider.connect", return_value=self.provider):
+            self.assertEqual(self.call(args)[0], 0)
+            self.assertEqual(self.call(args)[0], 0)
+        self.assertEqual((self.provider.uploads, self.provider.schedules), (1, 1))
+
     def setUp(self):
         self.tmp = TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)

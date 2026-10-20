@@ -4,6 +4,11 @@
 - Never commit real athlete data, calendar feeds, credentials, or session tokens.
 - Use synthetic fixtures only. Do not copy personal project history here.
 - Preserve original prescriptions. Do not invent recovery, pace, or cooldown.
+- Athlete-approved conversion preferences must be explicit, opt-in policies in
+  code, documented in the README, and covered by red/green regression tests.
+  Keep the original prescription in destination notes and distinguish added
+  steps from coach instructions. Never generalize one athlete's preferences
+  into silent defaults for everyone.
 - Unsupported or ambiguous text must require review, never silently disappear.
 - Keep parsing, source adapters, and destination adapters separate.
 - Live publishing must be opt-in, account-scoped, idempotent, and tested without

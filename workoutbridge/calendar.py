@@ -17,10 +17,11 @@ class Event:
     title: str
     description: str
     cancelled: bool = False
+    structured_text: str = ""
 
     @property
     def prescription(self) -> str:
-        return self.description.strip() or self.title.strip()
+        return self.structured_text.strip() or self.description.strip() or self.title.strip()
 
 
 def identity_time(value) -> str:
