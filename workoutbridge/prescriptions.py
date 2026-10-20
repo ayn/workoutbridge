@@ -60,7 +60,11 @@ def _normalize(event: Event, text: str, recovery_choice: str) -> Event:
             part,
             re.I,
         )
-        if distance and recovery_choice == "lap":
+        strides = re.fullmatch(r"(\d+)\s+strides", part, re.I)
+        if strides and recovery_choice == "lap":
+            canonical = f"{strides[1]} strides with lap recovery"
+            fallback_used = True
+        elif distance and recovery_choice == "lap":
             count, amount, unit, effort = distance.groups()
             canonical = f"{count} x {amount} {unit.lower()}"
             if effort:

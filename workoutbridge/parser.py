@@ -82,6 +82,16 @@ def clock_label(seconds: int) -> str:
 
 
 def interval(clause: str) -> Repeat | None:
+    strides = re.fullmatch(r"(\d+) strides with lap recovery", clause, re.IGNORECASE)
+    if strides and 1 <= int(strides[1]) <= 100:
+        return Repeat(
+            int(strides[1]),
+            (
+                Step("run", None, "lap_button", note="stride"),
+                Step("rest", None, "lap_button"),
+            ),
+            skip_last_recovery=False,
+        )
     lap = re.fullmatch(
         r"(\d+) x (\d+(?:\.\d+)?) (m|km)(?: (smooth|hard|easy|moderate))? with lap recovery",
         clause,

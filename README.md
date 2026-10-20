@@ -189,6 +189,13 @@ For example, `4 x 1' hill hard` becomes four one-minute hard hill reps with
 lap-ended recovery between them. Explicit recovery instructions take precedence.
 Use `--interval-recovery review` to disable the fallback and require review. Timed
 fartlek groups include their prescribed recovery after every repetition.
+
+Unspecified strides such as `4 strides` use four native repeats of Run until
+Lap (note: `stride`) followed by recovery until Lap, including recovery after
+the final stride. This uses the same `--interval-recovery review` opt-out.
+When title and description rep counts differ, the substantive description wins;
+the original text remains in the notes. Missing or unsupported instructions
+still require review.
 Non-running/race titles and unsupported formats require separate review.
 
 Final Surge removes past runs from the feed. A future recurring importer must
