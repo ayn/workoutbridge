@@ -78,6 +78,20 @@ Keep input files, review output, sessions, and receipts outside the checkout.
 Use a local file exported/downloaded from an authorized calendar; this version
 does not fetch remote feed URLs.
 
+For example, download a Google Calendar feed first. This URL is deliberately
+fake; replace it with your authorized calendar's iCal URL. Treat real feed URLs
+as private and keep them out of Git and shared logs.
+
+```bash
+umask 077
+mkdir -p "$HOME/.local/share/workoutbridge"
+curl --fail --location \
+  'https://calendar.google.com/calendar/ical/EXAMPLE_NOT_A_REAL_CALENDAR%40group.calendar.google.com/public/basic.ics' \
+  --output "$HOME/.local/share/workoutbridge/training.ics"
+```
+
+Use the downloaded file path in place of `/private/path/training.ics` below:
+
 ```sh
 umask 077
 workoutbridge plan /private/path/training.ics \
