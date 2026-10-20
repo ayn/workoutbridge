@@ -48,6 +48,13 @@ def main(argv=None) -> int:
     check.add_argument("--date", type=date.fromisoformat, required=True)
     plan = sub.add_parser("plan", help="Import local ICS or HTTPS feed and emit a JSON review plan")
     plan.add_argument("calendar", help="Local ICS path or authorized HTTPS feed URL")
+    plan.add_argument("--calendar-format", choices=["generic", "finalsurge"], default="generic")
+    plan.add_argument(
+        "--interval-recovery",
+        choices=["lap", "review"],
+        default="lap",
+        help="Final Surge missing distance-repeat recovery: lap (default) or require review",
+    )
     plan.add_argument("--source", required=True, help="Stable source label, not a secret feed URL")
     plan.add_argument("--timezone", required=True)
     plan.add_argument("--start", required=True, type=date.fromisoformat)
@@ -133,6 +140,13 @@ def main(argv=None) -> int:
             )
             if args.uid:
                 events = [event for event in events if event.uid in args.uid]
+            if args.calendar_format == "finalsurge":
+                from .finalsurge import normalize_finalsurge
+
+                events = [
+                    normalize_finalsurge(event, recovery_choice=args.interval_recovery)
+                    for event in events
+                ]
             if args.easy_run_range:
                 from .reviewed import review_easy_run
 

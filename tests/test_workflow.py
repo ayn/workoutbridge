@@ -13,6 +13,42 @@ from workoutbridge.cli import main
 
 
 class WorkflowTests(unittest.TestCase):
+    def test_finalsurge_title_policy_end_to_end(self):
+        self.ics.write_bytes(
+            calendar(
+                "UID:fs-synthetic\r\nDTSTART;VALUE=DATE:20270105"
+                "\r\nSUMMARY:Run: 5 miles + 3x200m smooth"
+                "\r\nDESCRIPTION:Workout: Run\\n\\nPlanned: 5.5 mi"
+            )
+        )
+        code, output, _ = self.call(
+            [
+                "plan",
+                str(self.ics),
+                "--source",
+                "synthetic-fs",
+                "--timezone",
+                "UTC",
+                "--start",
+                "2027-01-01",
+                "--end",
+                "2027-02-01",
+                "--account-id",
+                self.provider.account_id,
+                "--calendar-format",
+                "finalsurge",
+            ]
+        )
+        self.assertEqual(code, 0)
+        bundle = json.loads(output)
+        self.assertNotIn("error", bundle["items"][0])
+        self.assertIn("Planned: 5.5 mi", bundle["items"][0]["payload"]["description"])
+        with patch("workoutbridge.cli.GarminProvider.connect", return_value=self.provider):
+            args = self.publish_args(bundle) + ["--yolo"]
+            self.assertEqual(self.call(args)[0], 0)
+            self.assertEqual(self.call(args)[0], 0)
+        self.assertEqual((self.provider.uploads, self.provider.schedules), (1, 1))
+
     def test_url_plan_does_not_persist_url_or_authenticate(self):
         url = "https://example.invalid/private/synthetic-secret/basic.ics"
         args = [

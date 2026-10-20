@@ -8,7 +8,9 @@
   code, documented in the README, and covered by red/green regression tests.
   Keep the original prescription in destination notes and distinguish added
   steps from coach instructions. Never generalize one athlete's preferences
-  into silent defaults for everyone.
+  into silent defaults for everyone. The documented Final Surge format policy
+  defaults unspecified distance-repeat recovery to Lap; preserve explicit
+  recovery and provide the `--interval-recovery review` opt-out.
 - Unsupported or ambiguous text must require review, never silently disappear.
 - Keep parsing, source adapters, and destination adapters separate.
 - Live publishing must be opt-in, account-scoped, idempotent, and tested without
