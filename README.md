@@ -108,6 +108,22 @@ coordinate separate hosts/databases. A hosted service needs distributed claims.
 
 ## Intended Workflow
 
+### Publishing Modes
+
+The `publish` command accepts mutually exclusive mode flags:
+
+- `--dry-run`: validate the plan locally, without Garmin authentication, remote
+  calls, or creating the state database. This is also the default.
+- `--apply --approve HASH`: publish with the exact reviewed plan hash.
+- `--yolo`: publish without requiring hash confirmation. This can create or
+  update workouts and schedule them immediately.
+
+All modes retain plan integrity and account validation. YOLO uses the same
+durable duplicate protection and reconciliation checks as reviewed publishing;
+it does not bypass unresolved prescriptions, cancellations, or conflicts.
+Keep using the same private state database across runs. Existing required
+`--account-id`, `--session-dir`, and `--state-db` arguments remain unchanged.
+
 ### Check Garmin Before Publishing
 
 Using an existing private session and the independently verified numeric profile
@@ -148,7 +164,7 @@ its workouts.
 - Examples and tests use synthetic prescriptions only.
 - No analytics. Parsing, plans, tests, and dry runs never access accounts.
 - `garmin-check` contacts Garmin for read-only verification; `publish --apply`
-  contacts Garmin for explicitly approved publishing.
+  and `publish --yolo` contact Garmin for explicitly requested publishing.
 
 See [architecture and roadmap](docs/architecture.md),
 [contributing](CONTRIBUTING.md), and [security](SECURITY.md).
