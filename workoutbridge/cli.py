@@ -36,6 +36,10 @@ def main(argv=None) -> int:
         return 2 if draft.unresolved else 0
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
+    check = sub.add_parser("garmin-check", help="Verify existing session and read access only")
+    check.add_argument("--account-id", required=True)
+    check.add_argument("--session-dir", type=Path, required=True)
+    check.add_argument("--date", type=date.fromisoformat, required=True)
     plan = sub.add_parser("plan", help="Import local ICS and emit a JSON review plan")
     plan.add_argument("calendar", type=Path)
     plan.add_argument("--source", required=True, help="Stable source label, not a secret feed URL")
@@ -53,6 +57,27 @@ def main(argv=None) -> int:
     publish.add_argument("--approve", help="Exact review_hash of the reviewed plan")
     args = parser.parse_args(argv)
     try:
+        if args.command == "garmin-check":
+            previous = logging.root.manager.disable
+            logging.disable(logging.CRITICAL)
+            try:
+                provider = GarminProvider.connect(
+                    args.session_dir, expected_account=args.account_id
+                )
+                workouts = provider.list_workouts()
+                entries = provider.list_schedule(args.date.isoformat())
+            finally:
+                logging.disable(previous)
+            emit(
+                {
+                    "status": "read-access-verified",
+                    "account_id": provider.account_id,
+                    "date": args.date.isoformat(),
+                    "workouts": len(workouts),
+                    "scheduled_workouts": sum(e.get("workoutId") is not None for e in entries),
+                }
+            )
+            return 0
         if args.command == "plan":
             with args.calendar.open("rb") as handle:
                 data = handle.read(2_000_001)
@@ -116,6 +141,13 @@ def main(argv=None) -> int:
         print(f"Review required: {exc}", file=sys.stderr)
         return 2
     except Exception:  # noqa: BLE001 - redact arbitrary third-party authentication errors.
+        if args.command == "garmin-check":
+            print(
+                "Garmin read check failed. Check the session, expected account, and connectivity. "
+                "No workouts were changed; sensitive details suppressed.",
+                file=sys.stderr,
+            )
+            return 2
         print(
             "Operation failed. Check local input/session and retry the same plan with the "
             "same state database. Remote writes may need reconciliation; details suppressed.",

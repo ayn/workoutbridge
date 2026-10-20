@@ -108,6 +108,25 @@ coordinate separate hosts/databases. A hosted service needs distributed claims.
 
 ## Intended Workflow
 
+### Check Garmin Before Publishing
+
+Using an existing private session and the independently verified numeric profile
+ID, run this read-only check (Python 3.12+ with the `garmin` extra):
+
+```bash
+uv run --locked --extra garmin workoutbridge garmin-check \
+  --session-dir /private/garmin-session \
+  --account-id 12345 --date 2027-01-05
+```
+
+It verifies account identity, enumerates workouts, and reads the selected day's
+calendar. Output includes only the account ID, date, and counts, not workout
+titles or personal profile details. Failure returns exit code 2 without exposing
+third-party error details. Authentication may refresh the local session.
+This does not upload, edit, schedule, delete, or verify watch delivery. It also
+does not prove that Garmin will permit a subsequent write. Avoid repeated checks
+when Garmin is rate-limiting requests.
+
 1. Read an authorized calendar feed or manually supplied prescription.
 2. Preserve the full title, description, date, and source identity.
 3. Convert supported wording into a provider-neutral workout draft.
@@ -128,7 +147,8 @@ its workouts.
 - Never commit real calendar files, athlete data, feed URLs, or credentials.
 - Examples and tests use synthetic prescriptions only.
 - No analytics. Parsing, plans, tests, and dry runs never access accounts.
-- Only explicitly approved `publish --apply` operations contact Garmin.
+- `garmin-check` contacts Garmin for read-only verification; `publish --apply`
+  contacts Garmin for explicitly approved publishing.
 
 See [architecture and roadmap](docs/architecture.md),
 [contributing](CONTRIBUTING.md), and [security](SECURITY.md).
