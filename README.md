@@ -14,46 +14,85 @@ No web UI or automatic feed polling. Final Surge write-back is blocked pending
 an officially available API and permission to use it.
 Not affiliated with Garmin, Final Surge, Google, Apple, or any coach.
 
-## Try It
+## Quick Start
 
-Requires Python 3.11+ for parsing, or Python 3.12+ for the Garmin extra.
-The local publisher supports Linux/macOS and uses a single-host file lock.
+Requires [uv](https://docs.astral.sh/uv/getting-started/installation/), Python
+3.12+, and Linux/macOS. Run these commands from the repository checkout.
 
-```sh
-python -m venv .venv
-. .venv/bin/activate
-python -m pip install -e .
-printf '%s\n' 'Warm up until lap; Run 10 min easy; Cool down 5 min' | workoutbridge
-python -m unittest discover -s tests -v
-```
-
-For a reproducible developer setup, use `uv sync --locked --extra garmin`
-and `uv run --locked --extra garmin python -m unittest discover -s tests -v`.
-
-To connect Garmin, run from this checkout with Python 3.12+:
+### 1. Log In to Garmin
 
 ```bash
 uv sync --locked --extra garmin
+umask 077
+SESSION="$HOME/.config/garmin-sessions/workoutbridge"
+DATA="$HOME/.local/share/workoutbridge"
+mkdir -p "$DATA"
 uv run --locked --extra garmin workoutbridge auth garmin \
-  --session-dir "$HOME/.config/garmin-sessions/workoutbridge-test"
+  --session-dir "$SESSION"
 ```
 
-Enter your email, hidden password, and MFA code if requested. Use a new session
-directory for each account; the command prints the numeric account ID needed
-for planning and publishing. Tokens stay outside the checkout. Authentication
-does not upload workouts.
+Enter your email, hidden password, and MFA code if requested. Note the printed
+numeric account ID. The session directory must be new; keep it for subsequent
+runs and skip login while it remains valid. Tokens stay outside the checkout.
+Authentication does not upload workouts.
 
-Verify the session with a read-only check, replacing `12345` with that account ID
-and the date with the day you want to inspect:
+### 2. Import Your iCal Feed
+
+Replace the fake URL, account ID, timezone, and dates below. `--end` is exclusive.
+For a Final Surge feed, also add `--calendar-format finalsurge`.
 
 ```bash
-uv run --locked --extra garmin workoutbridge garmin-check \
-  --session-dir "$HOME/.config/garmin-sessions/workoutbridge-test" \
-  --account-id 12345 --date 2027-01-05
+ACCOUNT_ID=12345
+uv run --locked --extra garmin workoutbridge plan \
+  'https://calendar.google.com/calendar/ical/EXAMPLE_NOT_A_REAL_CALENDAR%40group.calendar.google.com/public/basic.ics' \
+  --source training-calendar --timezone Asia/Taipei \
+  --start 2027-01-01 --end 2027-01-15 --account-id "$ACCOUNT_ID" \
+  > "$DATA/review.json"
 ```
 
-See [Calendar to Garmin](#calendar-to-garmin) for creating a review plan and
-publishing, or [Garmin Login](#garmin-login) for session renewal.
+Keep real feed URLs private; command arguments can appear in shell history and
+process listings. A local `.ics` path works instead of a URL. Keep the same
+`--source` label for future imports of this calendar.
+
+### 3. Review and Publish
+
+Inspect `review.json`, including the original instructions and structured steps.
+Unresolved or cancelled events block publishing; select supported runs with
+`--uid` or resolve their instructions before continuing.
+
+First validate without contacting Garmin:
+
+```bash
+uv run --locked --extra garmin workoutbridge publish "$DATA/review.json" \
+  --account-id "$ACCOUNT_ID" --session-dir "$SESSION" \
+  --state-db "$DATA/publishing.sqlite" --dry-run
+```
+
+After reviewing, replace `REVIEW_HASH` with the hash printed by the dry run:
+
+```bash
+uv run --locked --extra garmin workoutbridge publish "$DATA/review.json" \
+  --account-id "$ACCOUNT_ID" --session-dir "$SESSION" \
+  --state-db "$DATA/publishing.sqlite" --apply --approve REVIEW_HASH
+```
+
+This uploads structured workouts and schedules them on Garmin Connect. For
+later syncs, repeat import, review, and publish using the **same state database**;
+unchanged events are verified without creating duplicates. This is a manual
+sync, not a background schedule.
+
+See [publishing modes](#publishing-modes) for `--yolo`,
+[Calendar to Garmin](#calendar-to-garmin) for feed options, and
+[Garmin Login](#garmin-login) for session renewal.
+
+## Try the Parser
+
+Parsing alone requires Python 3.11+ and no Garmin login:
+
+```bash
+printf '%s\n' 'Warm up until lap; Run 10 min easy; Cool down 5 min' \
+  | uv run --locked workoutbridge
+```
 
 The parsing example outputs JSON with the original prescription, normalized steps, unresolved
 clauses, and `requires_review: true`. Exit status 2 means unresolved input.
@@ -115,15 +154,17 @@ argument. No Final Surge API credentials or login are required for a feed URL
 that already grants calendar access:
 
 ```bash
-uv run --locked --extra garmin workoutbridge plan "$FINAL_SURGE_CALENDAR_URL" \
+uv run --locked --extra garmin workoutbridge plan \
+  'https://log.finalsurge.com/delivery/ical/EXAMPLE123456789' \
   --calendar-format finalsurge \
   --source finalsurge-calendar --timezone Asia/Taipei \
   --start 2027-01-01 --end 2027-02-01 --account-id 12345 \
   > /private/path/finalsurge-review.json
 ```
 
-Set the variable privately to your actual HTTPS subscription URL, never in a
-committed file. Then inspect the review and use the same Garmin `publish`
+The URL above uses Final Surge's feed format but has a fake token. Replace it
+with your own subscription URL; never put the real URL in a committed file.
+Then inspect the review and use the same Garmin `publish`
 workflow below. This reads the feed and writes to Garmin only; it does not add
 structured steps back to Final Surge or sync through its other destinations.
 Feed descriptions can be incomplete and history can roll off: compare the
@@ -347,6 +388,18 @@ it does not grant permission or ability to edit Final Surge workouts.
 
 See [architecture and roadmap](docs/architecture.md),
 [contributing](CONTRIBUTING.md), and [security](SECURITY.md).
+
+## Development
+
+For a reproducible developer setup and the test suite, run from the checkout
+with Python 3.12+:
+
+```bash
+uv sync --locked --extra garmin
+uv run --locked --extra garmin python -m unittest discover -s tests -v
+```
+
+See [contributing](CONTRIBUTING.md) for the required red/green TDD workflow.
 
 ## Hosting and Funding
 
