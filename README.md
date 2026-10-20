@@ -24,11 +24,7 @@ python -m venv .venv
 . .venv/bin/activate
 python -m pip install -e .
 printf '%s\n' 'Warm up until lap; Run 10 min easy; Cool down 5 min' | workoutbridge
-python -m unittest discover -s tests -v
 ```
-
-For a reproducible developer setup, use `uv sync --locked --extra garmin`
-and `uv run --locked --extra garmin python -m unittest discover -s tests -v`.
 
 To connect Garmin, run from this checkout with Python 3.12+:
 
@@ -347,6 +343,18 @@ it does not grant permission or ability to edit Final Surge workouts.
 
 See [architecture and roadmap](docs/architecture.md),
 [contributing](CONTRIBUTING.md), and [security](SECURITY.md).
+
+## Development
+
+For a reproducible developer setup and the test suite, run from the checkout
+with Python 3.12+:
+
+```bash
+uv sync --locked --extra garmin
+uv run --locked --extra garmin python -m unittest discover -s tests -v
+```
+
+See [contributing](CONTRIBUTING.md) for the required red/green TDD workflow.
 
 ## Hosting and Funding
 
