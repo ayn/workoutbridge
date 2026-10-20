@@ -1,3 +1,5 @@
+import json
+import sqlite3
 import unittest
 from copy import deepcopy
 from dataclasses import replace
@@ -243,6 +245,50 @@ class PublishingTests(unittest.TestCase):
         with self.assertRaises(ReviewRequired):
             self.publish(replace(self.event, source="another-feed"))
         self.assertEqual(self.provider.uploads, 1)
+
+    def test_pending_upload_blocks_equivalent_second_feed(self):
+        self.provider.fail_upload = True
+        with self.assertRaises(TimeoutError):
+            self.publish()
+        self.provider.fail_upload = False
+        with self.assertRaises(ReviewRequired):
+            self.publish(replace(self.event, source="second-feed"))
+        self.publish()
+        self.assertEqual((self.provider.uploads, self.provider.schedules), (1, 1))
+
+    def test_legacy_receipt_requires_migration_not_duplicate_creation(self):
+        self.provider.fail_upload = True
+        with self.assertRaises(TimeoutError):
+            self.publish()
+        with sqlite3.connect(self.db) as db:
+            key, stored = db.execute("SELECT identity, record FROM publications").fetchone()
+            record = json.loads(stored)
+            for field in ("account_id", "title_key", "steps_hash"):
+                del record[field]
+            db.execute(
+                "UPDATE publications SET record=? WHERE identity=?", (json.dumps(record), key)
+            )
+        self.provider.fail_upload = False
+        with self.assertRaises(ReviewRequired):
+            self.publish(replace(self.event, source="second-feed"))
+        with self.assertRaises(ReviewRequired):
+            self.publish()
+        self.assertEqual(self.provider.uploads, 1)
+
+    def test_recovered_upload_rechecks_foreign_calendar_overlap(self):
+        self.provider.fail_upload = True
+        with self.assertRaises(TimeoutError):
+            self.publish()
+        self.provider.fail_upload = False
+        self.provider.workouts["outside"] = {
+            **deepcopy(self.provider.workouts["1"]),
+            "workoutId": "outside",
+            "description": "Created independently",
+        }
+        self.provider.calendar.append({"workoutId": "outside", "date": self.event.date})
+        with self.assertRaises(ReviewRequired):
+            self.publish()
+        self.assertEqual(self.provider.schedules, 0)
 
     def test_preexisting_calendar_workout_blocks(self):
         self.provider.workouts["existing"] = {"workoutName": "Easy", "workoutId": "existing"}

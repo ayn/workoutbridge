@@ -94,6 +94,7 @@ Each successful event prints a verified destination workout ID and date.
 - Lost responses are reconciled using remote identity markers and calendar
   read-back. Uncertain outcomes stop for review, rather than blindly retrying.
 - Moved/cancelled events and suspected cross-feed overlap require reconciliation.
+- Overlap checks include pending local intents, not only completed uploads.
 
 **Do not delete the state database or change source labels to force a retry.**
 Back it up alongside sessions, with private permissions. If a run stops, rerun

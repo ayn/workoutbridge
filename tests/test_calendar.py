@@ -47,6 +47,44 @@ class CalendarTests(unittest.TestCase):
         event = self.load(calendar("UID:a\r\nDTSTART:20270105T230000"))[0]
         self.assertEqual(event.date, "2027-01-05")
 
+    def test_unknown_explicit_timezone_is_not_floating(self):
+        with self.assertRaises(ValueError):
+            self.load(calendar("UID:a\r\nDTSTART;TZID=Not/AZone:20270105T230000"))
+
+    def test_unknown_exclusion_timezone_is_rejected(self):
+        with self.assertRaises(ValueError):
+            self.load(
+                calendar(
+                    "UID:a\r\nDTSTART;TZID=America/New_York:20270105T230000"
+                    "\r\nRRULE:FREQ=WEEKLY;COUNT=2"
+                    "\r\nEXDATE;TZID=Not/AZone:20270112T230000"
+                )
+            )
+
+    def test_unknown_recurrence_identity_timezone_is_rejected(self):
+        with self.assertRaises(ValueError):
+            self.load(
+                calendar(
+                    "UID:a\r\nDTSTART;TZID=America/New_York:20270106T230000"
+                    "\r\nRECURRENCE-ID;TZID=Not/AZone:20270105T230000"
+                )
+            )
+
+    def test_valid_named_timezone_preserved(self):
+        event = self.load(calendar("UID:a\r\nDTSTART;TZID=America/New_York:20270105T230000"))[0]
+        self.assertEqual(event.date, "2027-01-06")
+
+    def test_custom_vtimezone_preserved(self):
+        data = calendar("UID:a\r\nDTSTART;TZID=Synthetic/Eastern:20270105T230000").replace(
+            b"BEGIN:VEVENT",
+            (
+                b"BEGIN:VTIMEZONE\r\nTZID:Synthetic/Eastern\r\nBEGIN:STANDARD\r\n"
+                b"DTSTART:19700101T000000\r\nTZOFFSETFROM:-0500\r\nTZOFFSETTO:-0500\r\n"
+                b"END:STANDARD\r\nEND:VTIMEZONE\r\nBEGIN:VEVENT"
+            ),
+        )
+        self.assertEqual(self.load(data)[0].date, "2027-01-06")
+
     def test_recurrence_exclusion_and_moved_exception(self):
         events = self.load(
             calendar(

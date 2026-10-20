@@ -53,6 +53,13 @@ def import_calendar(
             uid = str(component.get("UID", "")).strip()
             if not uid or "DTSTART" not in component or component.errors:
                 raise ValueError("Event requires valid UID and DTSTART")
+            for name in ("DTSTART", "DTEND", "RECURRENCE-ID", "RDATE", "EXDATE"):
+                fields = component.get(name, [])
+                for field in fields if isinstance(fields, list) else [fields]:
+                    if field.params.get("TZID"):
+                        for value in getattr(field, "dts", [field]):
+                            if not isinstance(value.dt, datetime) or value.dt.tzinfo is None:
+                                raise ValueError("Unresolved explicit event timezone")
             rid = component.get("RECURRENCE-ID")
             key = (uid, identity_time(rid.dt) if rid else "")
             if key in seen:

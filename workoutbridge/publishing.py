@@ -96,6 +96,8 @@ class Publisher:
             raise ReviewRequired("Review and approve this exact account and prescription")
         payload = event_payload(event)
         content_hash = digest(payload)
+        title_key = event.title.strip().casefold()
+        steps_hash = digest(payload["workoutSegments"])
         key = event_key(account, event)
         marker = f"[WorkoutBridge:{key}]"
         payload["description"] = f"{payload['description']}\n\n{marker}".strip()
@@ -103,6 +105,7 @@ class Publisher:
         with self.locked_database() as db:
 
             def save(record):
+                record.update(account_id=account, title_key=title_key, steps_hash=steps_hash)
                 db.execute(
                     "INSERT INTO publications VALUES (?, ?) "
                     "ON CONFLICT(identity) DO UPDATE SET record=excluded.record",
@@ -114,32 +117,54 @@ class Publisher:
                 "SELECT record FROM publications WHERE identity=?", (key,)
             ).fetchone()
             record = json.loads(found[0]) if found else None
+            identity_fields = {"account_id", "title_key", "steps_hash"}
+            if record and not identity_fields.issubset(record):
+                raise ReviewRequired("Legacy receipt requires manual migration; do not reset it")
             if record and record["date"] != event.date:
                 raise ReviewRequired("Event moved; reconcile the previous scheduled entry")
             if record and record["phase"].endswith("_pending") and record["hash"] != content_hash:
                 raise ReviewRequired("Resolve the earlier pending write before applying edits")
+            for (stored,) in db.execute(
+                "SELECT record FROM publications WHERE identity != ?", (key,)
+            ):
+                other = json.loads(stored)
+                if not identity_fields.issubset(other):
+                    raise ReviewRequired(
+                        "Legacy receipt requires manual migration; do not reset it"
+                    )
+                if (
+                    other.get("account_id") == account
+                    and other["date"] == event.date
+                    and (
+                        other.get("title_key") == title_key or other.get("steps_hash") == steps_hash
+                    )
+                ):
+                    raise ReviewRequired("Another source identity has an overlapping local intent")
 
             workouts = self.provider.list_workouts()
             marked = [w for w in workouts if marker in (w.get("description") or "")]
             if len(marked) > 1:
                 raise ReviewRequired("Multiple destination workouts have this identity")
             entries = self.provider.list_schedule(event.date)
+            own_id = record["workout_id"] if record else None
+            if own_id is None and marked:
+                own_id = str(marked[0]["workoutId"])
+            ids = {str(e.get("workoutId")) for e in entries}
+            conflicts = [
+                w
+                for w in workouts
+                if str(w.get("workoutId")) in ids
+                and str(w.get("workoutId")) != own_id
+                and (
+                    (w.get("workoutName") or "").strip().casefold() == title_key
+                    or matches(payload["workoutSegments"], w.get("workoutSegments"))
+                )
+            ]
+            if conflicts:
+                raise ReviewRequired("Possible existing workout or overlapping source feed")
             if record is None:
                 if marked:
                     raise ReviewRequired("Remote identity exists but local receipt is missing")
-                ids = {str(e.get("workoutId")) for e in entries}
-                conflicts = [
-                    w
-                    for w in workouts
-                    if str(w.get("workoutId")) in ids
-                    and (
-                        (w.get("workoutName") or "").strip().casefold()
-                        == event.title.strip().casefold()
-                        or matches(payload["workoutSegments"], w.get("workoutSegments"))
-                    )
-                ]
-                if conflicts:
-                    raise ReviewRequired("Possible existing workout or overlapping source feed")
                 record = {
                     "date": event.date,
                     "hash": content_hash,

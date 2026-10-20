@@ -12,10 +12,18 @@ Commands below were run from the repository directory.
 | Garmin adapter | `uv run --locked python -m unittest discover -s tests -p test_garmin_adapter.py -v`: GarminProvider missing | Full suite: 47 passed |
 | CLI workflow | `uv run --locked python -m unittest discover -s tests -p test_workflow.py -v`: six errors because the CLI did not accept command arguments | 6 workflow tests passed |
 | Additional safety cases | Full suite: three failures for malformed calendar response, nonfinite interval, and overwrite of a workout without the recorded identity marker | Full suite: 61 passed |
+| Independent review regressions | Full suite: three expected failures for pending cross-feed upload overlap, recovery overlooking a foreign scheduled entry, and unknown explicit DTSTART timezone | Full suite: 66 passed |
+| Timezone exclusions/identity | Calendar suite: two expected failures for unknown EXDATE and RECURRENCE-ID timezones | Full suite: 68 passed |
+| Legacy receipt safety | Publishing suite: expected ReviewRequired was not raised for an older pending receipt lacking overlap metadata | Full suite: 69 passed |
 
 Existing passing tests remained regression coverage. Tests added for already-safe
 behavior (process death, pending edits, remote edits) passed on first execution;
 they are not presented as red phases or as evidence for a new implementation.
+
+Ruff initially reported import ordering and deliberate broad exception handling.
+Imports were mechanically formatted, and redaction/thread-error boundaries were
+documented with targeted suppressions. `ruff check` and `ruff format --check`
+pass. Wheel and source-distribution builds also succeeded.
 
 ## Remaining Verification
 
