@@ -16,6 +16,9 @@ class WebTests(unittest.TestCase):
         self.app = create_app(self.root, "https://bridge.example", "a" * 40, poll=False)
         self.client = TestClient(self.app, base_url="https://bridge.example")
         self.headers = {"Origin": "https://bridge.example"}
+        fetch = patch("workoutbridge.web.read_calendar", side_effect=ValueError("Offline fixture"))
+        fetch.start()
+        self.addCleanup(fetch.stop)
 
     def login(self):
         r = self.client.post("/api/login", json={"password": "a" * 40}, headers=self.headers)
@@ -54,6 +57,9 @@ class WebTests(unittest.TestCase):
         from workoutbridge.calendar import Event
 
         rule, source, profile = self.automatic_rule()
+        other = self.client.post(
+            "/api/syncs", json={"source": source, "profile": "other"}, headers=self.headers
+        ).json()["id"]
         provider = FakeGarmin()
         provider.account_id = "123"
         events = [
@@ -80,6 +86,9 @@ class WebTests(unittest.TestCase):
                 ).status_code,
                 200,
             )
+            self.assertEqual((provider.uploads, provider.schedules), (1, 1))
+            checks = self.client.get("/api/state").json()["history"]
+            self.assertEqual(sum(h["sync"] == other for h in checks), 1)
             self.app.state.poll_once()
             self.app.state.poll_once()
             self.assertEqual((provider.uploads, provider.schedules), (1, 1))
@@ -87,7 +96,8 @@ class WebTests(unittest.TestCase):
             connect.reset_mock()
             self.app.state.poll_once()
             connect.assert_not_called()
-            self.assertTrue(self.client.get("/api/state").json()["syncs"][0]["auto_blocked"])
+            rules = self.client.get("/api/state").json()["syncs"]
+            self.assertTrue(next(s for s in rules if s["id"] == rule)["auto_blocked"])
 
     def test_automatic_failure_latches_across_restart_and_requires_acknowledgment(self):
         from workoutbridge.calendar import Event
@@ -155,8 +165,8 @@ class WebTests(unittest.TestCase):
                 self.app.state.poll_once()
                 self.client.post(f"/api/syncs/{rule}/preview", json={}, headers=self.headers)
             history = self.client.get("/api/state").json()["history"]
-            self.assertEqual(len(history), 3)
-            for entry in history[1:]:
+            self.assertEqual(len(history), 4)
+            for entry in history[2:]:
                 self.assertEqual(entry["status"], "Checked successfully")
                 self.assertEqual(entry["upcoming_count"], 0)
                 self.assertEqual(entry["results"], [])
@@ -166,6 +176,11 @@ class WebTests(unittest.TestCase):
                 f"/api/syncs/{rule}/pause", json={"paused": True}, headers=self.headers
             )
             with patch("workoutbridge.web.read_calendar") as fetch:
+                self.client.post(
+                    f"/api/syncs/{rule}/automatic",
+                    json={"enabled": True, "account": "123"},
+                    headers=self.headers,
+                )
                 self.app.state.poll_once()
                 fetch.assert_not_called()
             self.assertEqual(self.client.get("/api/state").json()["history"], history)

@@ -128,11 +128,13 @@ def create_app(root: Path, origin: str, password: str, *, poll=True) -> FastAPI:
         put("sync", rule_id, rule)
         return plan
 
-    def poll_once():
+    def poll_once(rule_id=None):
         if not operation.acquire(blocking=False):
             return
         try:
             for rule in values("sync"):
+                if rule_id is not None and rule["id"] != rule_id:
+                    continue
                 if rule.get("paused"):
                     continue
                 try:
@@ -451,6 +453,8 @@ def create_app(root: Path, origin: str, password: str, *, poll=True) -> FastAPI:
                 rule.update(auto_account=profile["account_id"], auto_blocked=False, error=None)
             rule["automatic"] = body["enabled"]
             put("sync", key, rule)
+            if body["enabled"]:
+                poll_once(key)
             return {"ok": True}
         finally:
             operation.release()
