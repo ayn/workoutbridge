@@ -874,3 +874,8 @@ footer {
 @media (max-width: 600px) { .page-heading:has(.provider-actions) { align-items: stretch; flex-direction: column; } .provider-actions > button { flex: 1; white-space: nowrap; } }
 
 .form-help { font-size: 13px; line-height: 1.6; color: var(--muted); }
+.connection-status { display: flex; align-items: flex-start; gap: 14px; padding: 20px; margin: 12px 0; border: 1px solid #cbd9d1; border-radius: 8px; background: #f0f6f2; color: #244d3e; }
+.connection-status > svg { flex-shrink: 0; margin-top: 2px; }
+.connection-status strong { display: block; font-size: 16px; line-height: 1.5; }
+.connection-status p { margin: 6px 0 0; font-size: 13px; line-height: 1.6; color: var(--muted); }
+@media (prefers-reduced-motion: reduce) { .connection-status .spin { animation: none; } }

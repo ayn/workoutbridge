@@ -1116,6 +1116,11 @@ function GarminForm({
     }
     close();
   }
+  const connected = job.status === "complete";
+  const statusTitle = connected ? "Garmin connected" : job.status === "mfa" ? "Verifying your code" : "Connecting to Garmin";
+  const statusDetail = connected
+    ? error ? "Your connection is saved. Close this dialog and refresh Connections." : "Refreshing your connections…"
+    : "This may take a moment. If Garmin needs a verification code, we’ll ask for it here.";
   return (
     <Modal
       title="Connect Garmin"
@@ -1123,7 +1128,12 @@ function GarminForm({
         void dismiss();
       }}
     >
-      {busy && <Progress />}
+      {(busy || job.status === "signing_in" || connected) && (
+        <div className="connection-status" role="status" aria-label={statusTitle}>
+          {connected ? <CheckCircle2 size={24} aria-hidden="true" /> : <LoaderCircle size={24} className="spin" aria-hidden="true" />}
+          <div><strong>{statusTitle}</strong><p>{statusDetail}</p></div>
+        </div>
+      )}
       {error && (
         <p role="alert" className="error-text">
           {error}
@@ -1134,7 +1144,7 @@ function GarminForm({
           {job.error}
         </p>
       )}
-      {["idle", "failed", "cancelled"].includes(job.status) && (
+      {!busy && ["idle", "failed", "cancelled"].includes(job.status) && (
         <form
           onSubmit={(e) => {
             e.preventDefault();
@@ -1189,10 +1199,7 @@ function GarminForm({
           </button>
         </form>
       )}
-      {job.status === "signing_in" && (
-        <Progress label="Signing in to Garmin..." />
-      )}
-      {job.status === "mfa" && (
+      {!busy && job.status === "mfa" && (
         <form
           onSubmit={(e) => {
             e.preventDefault();
