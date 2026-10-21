@@ -1,6 +1,7 @@
 """Private, single-owner server with explicitly enabled hourly publishing."""
 
 import hashlib
+import hmac
 import json
 import logging
 import os
@@ -28,6 +29,8 @@ from .profiles import load_profile, profile_path
 from .publishing import Publisher, digest
 from .web_auth import GarminLogin
 
+SESSION_SECONDS = 30 * 86400
+
 
 def create_app(root: Path, origin: str, password: str, *, poll=True) -> FastAPI:
     if len(password) < 32 or urlsplit(origin).scheme not in ("https", "http"):
@@ -38,7 +41,6 @@ def create_app(root: Path, origin: str, password: str, *, poll=True) -> FastAPI:
     fd = os.open(database, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
     os.fchmod(fd, 0o600)
     os.close(fd)
-    sessions = {}
     attempts = []
     operation = threading.RLock()
     garmin_login = GarminLogin(operation)
@@ -55,6 +57,23 @@ def create_app(root: Path, origin: str, password: str, *, poll=True) -> FastAPI:
     with db() as conn:
         conn.execute(
             "CREATE TABLE IF NOT EXISTS objects (kind TEXT, id TEXT, body TEXT, PRIMARY KEY(kind,id))"
+        )
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS owner_sessions (token_hash TEXT PRIMARY KEY, expires REAL)"
+        )
+
+    def session_hash(token):
+        # Bind persistent sessions to the configured password without storing bearer tokens.
+        return hmac.new(password.encode(), token.encode(), hashlib.sha256).hexdigest()
+
+    def session_cookie(response, token):
+        response.set_cookie(
+            "wb_session",
+            token,
+            httponly=True,
+            secure=origin.startswith("https:"),
+            samesite="strict",
+            max_age=SESSION_SECONDS,
         )
 
     def put(kind, key, value):
@@ -192,6 +211,7 @@ def create_app(root: Path, origin: str, password: str, *, poll=True) -> FastAPI:
 
     @app.middleware("http")
     async def protect(request: Request, call_next):
+        authenticated_session = None
         if request.headers.get("host") != urlsplit(origin).netloc:
             return JSONResponse({"detail": "Invalid host"}, status_code=400)
         if request.url.path.startswith("/api/"):
@@ -199,7 +219,13 @@ def create_app(root: Path, origin: str, password: str, *, poll=True) -> FastAPI:
                 return JSONResponse({"detail": "Invalid origin"}, status_code=403)
             if request.url.path != "/api/login":
                 token = request.cookies.get("wb_session", "")
-                if sessions.get(token, 0) < time.time():
+                authenticated_session = session_hash(token)
+                with db() as conn:
+                    session = conn.execute(
+                        "SELECT expires FROM owner_sessions WHERE token_hash=?",
+                        (authenticated_session,),
+                    ).fetchone()
+                if not session or session[0] <= time.time():
                     return JSONResponse({"detail": "Sign in required"}, status_code=401)
             if request.method == "POST":
                 # Bound actual bodies, including requests without Content-Length.
@@ -212,6 +238,20 @@ def create_app(root: Path, origin: str, password: str, *, poll=True) -> FastAPI:
                     chunks.append(chunk)
                 request._body = b"".join(chunks)
         response = await call_next(request)
+        if (
+            authenticated_session
+            and request.url.path != "/api/logout"
+            and response.status_code < 400
+        ):
+            now = time.time()
+            with db() as conn:
+                renewed = conn.execute(
+                    "UPDATE owner_sessions SET expires=? WHERE token_hash=? AND expires>?",
+                    (now + SESSION_SECONDS, authenticated_session, now),
+                ).rowcount
+            # Do not recreate a session revoked by a concurrent logout.
+            if renewed:
+                session_cookie(response, token)
         response.headers.update(
             {
                 "Cache-Control": "no-store",
@@ -250,27 +290,28 @@ def create_app(root: Path, origin: str, password: str, *, poll=True) -> FastAPI:
         ):
             raise HTTPException(401, "Incorrect password")
         attempts.clear()
-        for key in list(sessions):
-            if sessions[key] < now:
-                del sessions[key]
-        if len(sessions) >= 100:
-            sessions.clear()
         token = secrets.token_urlsafe(32)
-        sessions[token] = now + 43200
+        with db() as conn:
+            conn.execute("DELETE FROM owner_sessions WHERE expires<=?", (now,))
+            conn.execute(
+                "DELETE FROM owner_sessions WHERE token_hash IN "
+                "(SELECT token_hash FROM owner_sessions ORDER BY expires DESC LIMIT -1 OFFSET 99)"
+            )
+            conn.execute(
+                "INSERT INTO owner_sessions VALUES (?,?)",
+                (session_hash(token), now + SESSION_SECONDS),
+            )
         response = JSONResponse({"ok": True})
-        response.set_cookie(
-            "wb_session",
-            token,
-            httponly=True,
-            secure=origin.startswith("https:"),
-            samesite="strict",
-            max_age=43200,
-        )
+        session_cookie(response, token)
         return response
 
     @app.post("/api/logout")
     def logout(request: Request):
-        sessions.pop(request.cookies.get("wb_session", ""), None)
+        with db() as conn:
+            conn.execute(
+                "DELETE FROM owner_sessions WHERE token_hash=?",
+                (session_hash(request.cookies.get("wb_session", "")),),
+            )
         response = JSONResponse({"ok": True})
         response.delete_cookie("wb_session")
         return response

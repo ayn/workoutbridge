@@ -1,4 +1,5 @@
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -50,6 +51,65 @@ class WebTests(unittest.TestCase):
             "/api/syncs", json={"source": source, "profile": "test"}, headers=self.headers
         ).json()["id"]
         return rule, source, profile
+
+    def test_owner_session_survives_restart_without_storing_bearer_token(self):
+        self.login()
+        token = self.client.cookies.get("wb_session")
+        restarted = TestClient(
+            create_app(self.root, "https://bridge.example", "a" * 40, poll=False),
+            base_url="https://bridge.example",
+        )
+        response = restarted.get("/api/state", headers={"Cookie": f"wb_session={token}"})
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn(token.encode(), (self.root / "web.sqlite").read_bytes())
+        self.assertEqual((self.root / "web.sqlite").stat().st_mode & 0o777, 0o600)
+
+    def test_owner_session_rolls_for_30_days_and_expires_after_inactivity(self):
+        now = time.time()
+        with patch("workoutbridge.web.time.time", return_value=now):
+            self.login()
+        token = self.client.cookies.get("wb_session")
+        headers = {"Cookie": f"wb_session={token}"}
+        with patch("workoutbridge.web.time.time", return_value=now + 29 * 86400):
+            response = self.client.get("/api/state", headers=headers)
+            self.assertEqual(response.status_code, 200)
+            self.assertIn("Max-Age=2592000", response.headers["set-cookie"])
+            self.assertIn("HttpOnly", response.headers["set-cookie"])
+            self.assertIn("Secure", response.headers["set-cookie"])
+            self.assertIn("SameSite=strict", response.headers["set-cookie"])
+        with patch("workoutbridge.web.time.time", return_value=now + 31 * 86400):
+            self.assertEqual(self.client.get("/api/state", headers=headers).status_code, 200)
+        with patch("workoutbridge.web.time.time", return_value=now + 62 * 86400):
+            self.assertEqual(self.client.get("/api/state", headers=headers).status_code, 401)
+
+    def test_owner_logout_revokes_persistent_session_and_password_change_invalidates(self):
+        self.login()
+        token = self.client.cookies.get("wb_session")
+        headers = {"Cookie": f"wb_session={token}"}
+        changed = TestClient(
+            create_app(self.root, "https://bridge.example", "b" * 40, poll=False),
+            base_url="https://bridge.example",
+        )
+        self.assertEqual(changed.get("/api/state", headers=headers).status_code, 401)
+        self.client.post("/api/logout", headers=self.headers)
+        restarted = TestClient(
+            create_app(self.root, "https://bridge.example", "a" * 40, poll=False),
+            base_url="https://bridge.example",
+        )
+        self.assertEqual(restarted.get("/api/state", headers=headers).status_code, 401)
+
+    def test_rejected_requests_do_not_extend_owner_session(self):
+        now = time.time()
+        with patch("workoutbridge.web.time.time", return_value=now):
+            self.login()
+        token = self.client.cookies.get("wb_session")
+        headers = {"Cookie": f"wb_session={token}", "Origin": "https://evil.example"}
+        with patch("workoutbridge.web.time.time", return_value=now + 29 * 86400):
+            response = self.client.post("/api/logout", headers=headers)
+            self.assertEqual(response.status_code, 403)
+            self.assertNotIn("set-cookie", response.headers)
+        with patch("workoutbridge.web.time.time", return_value=now + 31 * 86400):
+            self.assertEqual(self.client.get("/api/state", headers=headers).status_code, 401)
 
     def test_hourly_publish_is_opt_in_account_bound_and_idempotent(self):
         from test_publishing import FakeGarmin
