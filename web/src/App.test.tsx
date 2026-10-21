@@ -75,6 +75,47 @@ const initial = {
   history: [],
 };
 
+test("hosted setup checklist guides an empty workspace to sources, connections and syncs", async () => {
+  const empty = {...initial, sources: [], connections: [], syncs: [], plans: []};
+  vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify(empty)));
+  render(<App multiuser />);
+  const checklist = await screen.findByRole("group", {name: "Setup checklist"});
+  expect(checklist).toHaveTextContent("0 of 3 complete");
+  expect(within(checklist).getByRole("progressbar", {name: "Setup progress"})).toHaveAttribute("value", "0");
+  await userEvent.click(within(checklist).getByRole("button", {name: "Add a calendar source"}));
+  expect(screen.getByRole("heading", {name: "Sources"})).toBeInTheDocument();
+  await userEvent.click(within(checklist).getByRole("button", {name: "Connect Garmin or COROS"}));
+  expect(screen.getByRole("heading", {name: "Connections"})).toBeInTheDocument();
+  await userEvent.click(within(checklist).getByRole("button", {name: "Create your first sync"}));
+  expect(screen.getByRole("heading", {name: "Syncs"})).toBeInTheDocument();
+});
+
+test("setup checklist strikes through saved progress and recognizes complete setup", async () => {
+  vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({...initial, syncs: []})));
+  const {unmount} = render(<App multiuser />);
+  const checklist = await screen.findByRole("group", {name: "Setup checklist"});
+  expect(checklist).toHaveTextContent("2 of 3 complete");
+  expect(within(checklist).getByText("Add a calendar source").tagName).toBe("S");
+  expect(within(checklist).getByText("Connect Garmin or COROS").tagName).toBe("S");
+  expect(within(checklist).getByRole("button", {name: "Create your first sync"})).toBeEnabled();
+  unmount();
+  vi.mocked(fetch).mockResolvedValue(new Response(JSON.stringify(initial)));
+  render(<App multiuser />);
+  const complete = await screen.findByRole("group", {name: "Setup checklist"});
+  expect(complete).toHaveTextContent("3 of 3 complete");
+  expect(complete).toHaveTextContent("You’re all set");
+  expect(complete.querySelector("details")).not.toHaveAttribute("open");
+  await userEvent.click(within(complete).getByText("You’re all set"));
+  expect(complete.querySelectorAll("s")).toHaveLength(3);
+});
+
+test("DIY workspaces do not show the hosted setup checklist", async () => {
+  vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify(initial)));
+  render(<App />);
+  await screen.findByText("Upcoming workouts");
+  expect(screen.queryByRole("group", {name: "Setup checklist"})).not.toBeInTheDocument();
+});
+
 test("Garmin sign-in suggests a supplied email but stays editable and explains storage", async () => {
   vi.spyOn(globalThis, "fetch").mockImplementation(async (url) => new Response(JSON.stringify(String(url).endsWith("/garmin/login") ? { status: "idle" } : initial)));
   render(<App suggestedEmail="athlete@example.invalid" />);
@@ -390,6 +431,20 @@ test("Garmin web sign-in clears credentials and accepts requested MFA", async ()
   expect(localStorage.length).toBe(0);
 });
 
+
+test("sync destinations show the actual provider and stay on Syncs after creation", async () => {
+  const state = {...initial, connections: [{id: "coros", provider: "COROS", account: "synthetic-coros"}]};
+  const fetcher = vi.spyOn(globalThis, "fetch").mockImplementation(async url => new Response(JSON.stringify(String(url).endsWith("/syncs") ? {id: "new-sync"} : state)));
+  render(<App multiuser />);
+  await userEvent.click(await screen.findByRole("button", {name: "Syncs"}));
+  await userEvent.click(screen.getByRole("button", {name: "Add sync"}));
+  expect(screen.getByRole("option", {name: "COROS - Coros"})).toBeInTheDocument();
+  await userEvent.click(screen.getByRole("button", {name: "Connect"}));
+  await screen.findByRole("button", {name: "Keep manual publishing"});
+  expect(screen.getByText("COROS account synthetic-coros")).toBeInTheDocument();
+  expect(screen.getByRole("heading", {name: "Syncs"})).toBeInTheDocument();
+  expect(fetcher.mock.calls.some(([url]) => String(url).includes("/automatic"))).toBe(false);
+});
 
 test("Garmin completion stays visible while the connection list refreshes", async () => {
   let reads = 0;

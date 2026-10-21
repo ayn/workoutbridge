@@ -188,6 +188,28 @@ function Progress({ label = "Working..." }: { label?: string }) {
 
 const api = defaultApi;
 
+function SetupChecklist({state, navigate}: {state: State; navigate: (view: View) => void}) {
+  const steps: {label: string; detail: string; done: boolean; view: View}[] = [
+    {label: "Add a calendar source", detail: "Bring in the workouts your coach prescribed.", done: state.sources.length > 0, view: "Sources"},
+    {label: "Connect Garmin or COROS", detail: "Choose where your workouts will go.", done: state.connections.length > 0, view: "Connections"},
+    {label: "Create your first sync", detail: "Link a source and destination, then review your workouts.", done: state.syncs.some(sync => state.sources.some(source => source.id === sync.source) && state.connections.some(connection => connection.id === sync.profile)), view: "Syncs"},
+  ];
+  const count = steps.filter(step => step.done).length;
+  return <section className="setup-checklist" role="group" aria-label="Setup checklist">
+    <details open={count < steps.length}>
+      <summary>
+        <div><p className="eyebrow">GETTING STARTED</p><h2>{count === steps.length ? "You’re all set" : "Let’s connect your workouts"}</h2></div>
+        <span className="setup-count" aria-live="polite">{count} of {steps.length} complete <ChevronDown size={16} aria-hidden="true" /></span>
+        <progress aria-label="Setup progress" value={count} max={steps.length} />
+      </summary>
+      <ol>{steps.map((step, index) => <li key={step.view} className={step.done ? "complete" : ""}>
+        <span className="setup-step" aria-label={step.done ? "Completed" : `Step ${index + 1}`}>{step.done ? <Check size={16} aria-hidden="true" /> : index + 1}</span>
+        <div>{step.done ? <s>{step.label}</s> : <button onClick={() => navigate(step.view)}>{step.label}<ArrowRight size={15} aria-hidden="true" /></button>}<p>{step.detail}</p></div>
+      </li>)}</ol>
+    </details>
+  </section>;
+}
+
 export function App({ brand = "WorkoutBridge", multiuser = false, suggestedEmail = "", onLogout, request = defaultApi, view: externalView, onViewChange }: { brand?: string; multiuser?: boolean; suggestedEmail?: string; onLogout?: () => void; request?: typeof defaultApi; view?: View; onViewChange?: (view: View) => void }) {
   const api = request;
   const [state, setState] = useState<State | null>(null);
@@ -370,6 +392,7 @@ export function App({ brand = "WorkoutBridge", multiuser = false, suggestedEmail
         </header>
         <main className="content">
           {alert}
+          {multiuser && state && <SetupChecklist state={state} navigate={setView} />}
           {message && (
             <div className="success" role="status">
               <CheckCircle2 size={16} />
@@ -826,7 +849,7 @@ export function App({ brand = "WorkoutBridge", multiuser = false, suggestedEmail
                 await load();
                 changeSync(result.id);
                 setSyncForm(false);
-                setView("Workouts");
+                setView("Syncs");
                 setAcknowledged(false);
                 setAutoConfirm({
                   id: result.id,
@@ -853,7 +876,7 @@ export function App({ brand = "WorkoutBridge", multiuser = false, suggestedEmail
               <select name="profile">
                 {state?.connections.map((c) => (
                   <option key={c.id} value={c.id}>
-                    {c.id} · Garmin {c.account}
+                    {c.provider === "COROS" ? "COROS" : "Garmin"} - {c.id.charAt(0).toUpperCase() + c.id.slice(1)}
                   </option>
                 ))}
               </select>
@@ -892,7 +915,7 @@ export function App({ brand = "WorkoutBridge", multiuser = false, suggestedEmail
             <strong>{autoConfirm.profile}</strong>
           </p>
           <p>
-            Garmin account{" "}
+            {state?.connections.find((c) => c.id === autoConfirm.profile)?.provider === "COROS" ? "COROS" : "Garmin"} account{" "}
             {
               state?.connections.find((c) => c.id === autoConfirm.profile)
                 ?.account
