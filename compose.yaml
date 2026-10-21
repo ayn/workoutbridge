@@ -39,6 +39,8 @@ services:
       - ${WORKOUTBRIDGE_PRIVATE_DIR:?Set private data directory}/tailscale:/var/lib/tailscale
     environment:
       TS_AUTH_ONCE: "true"
+      # Allow interactive authorization without rotating the login URL every minute.
+      TS_BOOT_TIMEOUT: "30m"
       TS_ACCEPT_DNS: "false"
       TS_HOSTNAME: workoutbridge
       TS_STATE_DIR: /var/lib/tailscale
