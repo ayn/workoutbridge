@@ -8,6 +8,7 @@ import {
   ChevronDown,
   ChevronRight,
   Clock3,
+  Github,
   History,
   Link2,
   LogOut,
@@ -733,6 +734,9 @@ export function App() {
         <footer>
           <Route size={14} />
           <span>WorkoutBridge</span>
+          <a href="https://github.com/ayn/workoutbridge" target="_blank" rel="noopener noreferrer">
+            <Github size={14} aria-hidden="true" /> GitHub
+          </a>
           <span className="footer-status">
             <span className="dot" />
             Private instance

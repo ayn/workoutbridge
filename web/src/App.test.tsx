@@ -118,6 +118,9 @@ test("footer keeps voluntary dependency acknowledgments in the README", async ()
   await screen.findByText("Upcoming workouts");
   expect(screen.queryByRole("link", { name: "python-garminconnect" })).not.toBeInTheDocument();
   expect(screen.queryByRole("link", { name: "Credits" })).not.toBeInTheDocument();
+  expect(screen.getByRole("link", { name: "GitHub" })).toHaveAttribute(
+    "href", "https://github.com/ayn/workoutbridge",
+  );
 });
 
 test("review shows native repeats and requires confirmation before publishing", async () => {
