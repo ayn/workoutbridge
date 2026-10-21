@@ -469,7 +469,7 @@ The hash binds approval to the account and exact reviewed content, not a generic
 "yes". It is a confirmation mechanism, not cryptographic authentication.
 Each successful event prints a verified destination workout ID and date.
 
-## Duplicate Protection
+### Duplicate Protection
 
 - SQLite receipts bind an event UID/recurrence instance and stable source label
   to a Garmin account, workout ID, and scheduled date.
