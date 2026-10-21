@@ -464,6 +464,18 @@ and no hosted service or payment collection is live yet. Sponsorship setup is
 pending; no funding link is active.
 See the [hosted service model](docs/hosting-model.md).
 
+## Acknowledgments
+
+WorkoutBridge's Garmin integration is built on
+[python-garminconnect](https://github.com/cyberjunky/python-garminconnect).
+It provides the authentication, session handling, and Garmin Connect API access
+we rely on to publish and schedule structured workouts. Thank you to
+[cyberjunky](https://github.com/cyberjunky) and the project's contributors for
+maintaining this essential library.
+
+WorkoutBridge is an independent project, not affiliated with or endorsed by
+Garmin or the python-garminconnect maintainers.
+
 ## License
 
 MIT. See [LICENSE](LICENSE).
