@@ -53,9 +53,13 @@ hosted-service account is required. Prefer a terminal-only workflow? See [CLI](#
 
 ### 1. Prepare Your Server
 
-You need Docker Engine with Compose, a Tailscale account, a private HTTPS hostname,
-and a Cloudflare-managed DNS zone for the included Caddy DNS-01 setup. This Compose
-deployment is intended for Linux and should remain accessible only on your LAN/tailnet.
+For the **included custom-domain recipe**, you need Docker Engine with Compose,
+a Tailscale account, a private HTTPS hostname, and a Cloudflare-managed DNS zone
+for Caddy DNS-01. Cloudflare is not an application requirement: an existing HTTPS
+reverse proxy can be used instead with the exact configured Host/Origin preserved.
+Tailscale Serve can provide `.ts.net` HTTPS without a custom domain, but a ready-to-use
+Serve recipe has not yet been integration-tested here. This Compose deployment
+is intended for Linux and should remain accessible only on your LAN/tailnet.
 
 ```bash
 git clone https://github.com/ayn/workoutbridge.git
