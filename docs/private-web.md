@@ -17,7 +17,9 @@ Set `WORKOUTBRIDGE_DOMAIN` to that hostname and `WORKOUTBRIDGE_ORIGIN` to its
 exact HTTPS origin. The DNS challenge token needs access to that domain's zone.
 On first startup, authorize the new sidecar interactively using
 `docker compose --env-file "$HOME/.config/workoutbridge-deploy.env" exec tailscale tailscale up --accept-dns=false`.
-Keep the resulting login URL private. Authentication state persists under
+Keep the resulting login URL private. The sidecar allows 30 minutes for initial
+authorization; the default one-minute boot timeout restarts it and invalidates
+pending links. Authentication state persists under
 `tailscale/` in the private directory. Do not share another node's state.
 
 Store the following **outside the checkout** in a private directory mounted as

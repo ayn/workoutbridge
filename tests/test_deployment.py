@@ -9,6 +9,7 @@ class DeploymentTests(unittest.TestCase):
         compose = (ROOT / "compose.yaml").read_text()
         self.assertIn("network_mode: service:caddy", compose)
         self.assertIn('TS_ACCEPT_DNS: "false"', compose)
+        self.assertIn('TS_BOOT_TIMEOUT: "30m"', compose)
         self.assertIn("WORKOUTBRIDGE_DOMAIN", compose)
         caddy = (ROOT / "Caddyfile").read_text()
         self.assertIn("reverse_proxy web:8000", caddy)
