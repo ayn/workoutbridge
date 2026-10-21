@@ -890,3 +890,7 @@ footer {
     animation: none;
   }
 }
+.access-badges { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+.access-badge { display: inline-flex; align-items: center; gap: 4px; padding: 3px 7px; border: 1px solid #cfd8d4; border-radius: 4px; font-size: 12px; line-height: 18px; color: #315144; background: #f0f5f2; }
+.access-badge-gifted { color: #76571a; border-color: #e5d5a7; background: #fcf7e8; }
+.access-badge-trial { color: #315d83; border-color: #bed2e3; background: #edf5fb; }

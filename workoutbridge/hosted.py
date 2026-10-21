@@ -34,12 +34,21 @@ from .web import API_PREFIX, create_app
 
 
 def create_hosted_app(
-    root, origin, *, send_email, poll=True, commercial=True, vault_key=None, admin_email=None
+    root,
+    origin,
+    *,
+    send_email,
+    poll=True,
+    commercial=True,
+    vault_key=None,
+    admin_email=None,
+    billing_factory=None,
 ):
     root = Path(root)
     if urlsplit(origin).scheme != "https" or not urlsplit(origin).hostname:
         raise ValueError("Multi-user authentication requires an HTTPS origin")
     accounts = Accounts(root, plans=commercial)
+    billing = billing_factory(accounts) if commercial and billing_factory else None
     rp = urlsplit(origin).hostname
     tenants = {}
     tenant_lock = threading.RLock()
@@ -90,6 +99,8 @@ def create_hosted_app(
         def dispatch():
             while not stop.is_set():
                 scheduler.tick()
+                if billing:
+                    billing.reconcile_due()
                 stop.wait(30)
 
         worker = threading.Thread(target=dispatch, daemon=True)
@@ -107,6 +118,7 @@ def create_hosted_app(
     app.state.accounts = accounts
     app.state.tenant = tenant
     app.state.scheduler = scheduler
+    app.state.billing = billing
 
     def cookie(response, name, value, age=MONTH):
         response.set_cookie(name, value, max_age=age, secure=True, httponly=True, samesite="strict")
@@ -116,18 +128,19 @@ def create_hosted_app(
         if request.headers.get("host") != urlsplit(origin).netloc:
             return JSONResponse({"detail": "Invalid host"}, status_code=400)
         if request.url.path.startswith("/api/"):
-            if request.method != "GET" and request.headers.get("origin") != origin:
+            webhook = request.url.path == API_PREFIX + "/billing/webhook"
+            if not webhook and request.method != "GET" and request.headers.get("origin") != origin:
                 return JSONResponse({"detail": "Invalid origin"}, status_code=403)
             size, chunks = 0, []
             async for chunk in request.stream():
                 size += len(chunk)
-                if size > 16384:
+                if size > (1048576 if webhook else 16384):
                     return JSONResponse({"detail": "Request too large"}, status_code=413)
                 chunks.append(chunk)
             request._body = b"".join(chunks)
             user = accounts.session_user(request.cookies.get("prescribed_session", ""))
             request.state.hosted_user = user
-            public = request.url.path.startswith(API_PREFIX + "/auth/")
+            public = request.url.path.startswith(API_PREFIX + "/auth/") or webhook
             if not public and request.url.path != API_PREFIX + "/config":
                 if (
                     user is None
@@ -140,7 +153,7 @@ def create_hosted_app(
                     # Remote address is the direct peer, never an untrusted forwarded header.
                     # Apache must preserve per-client limits separately at the edge.
                     peer = request.client.host if request.client else "unknown"
-                    if public:
+                    if public and not webhook:
                         accounts.throttle("auth:" + peer, limit=30, seconds=300)
                     elif request.url.path.endswith(("/preview", "/publish")):
                         accounts.throttle(
@@ -292,6 +305,8 @@ def create_hosted_app(
             result.sign_count,
             initial=saved["initial"],
         )
+        if saved["initial"]:
+            accounts.start_trial(user)
         if admin_email and accounts.user(user)["email"] == admin_email.strip().lower():
             accounts.set_admin(user, True)
         response = JSONResponse({"ok": True})
@@ -362,7 +377,56 @@ def create_hosted_app(
             "invite_url": origin + "/?invite=" + accounts.invite(user),
             "passkeys": len(accounts.credential_ids(user)),
             "schedule": scheduler.status(user),
+            "referrals": accounts.referral_tracker(user),
+            "billing": billing_status(user),
         }
+
+    def billing_status(user):
+        row = billing.status(user) if billing else None
+        return {
+            "enabled": bool(billing),
+            "connected": bool(row),
+            "status": row["status"] if row else None,
+            "paid_until": row["paid_until"] if row else None,
+            "cancel_pending": bool(row and row["cancel_pending"]),
+            "checked": row["checked"] if row else None,
+            "plan": row["plan"] if row else None,
+        }
+
+    @app.post(API_PREFIX + "/billing/webhook")
+    async def billing_webhook(request: Request):
+        if not billing:
+            raise HTTPException(503, "Billing is not configured")
+        # Signature verification requires the original bytes, never parsed/re-encoded JSON.
+        from starlette.concurrency import run_in_threadpool
+
+        try:
+            await run_in_threadpool(
+                billing.webhook, await request.body(), request.headers.get("stripe-signature", "")
+            )
+        except RuntimeError:
+            raise HTTPException(503, "Billing temporarily unavailable") from None
+        return {"ok": True}
+
+    @app.post(API_PREFIX + "/billing/{action}")
+    def billing_action(request: Request, action: str, body: dict):
+        if not billing:
+            raise HTTPException(503, "Billing is not configured")
+        user = request.state.hosted_user
+        try:
+            if action == "checkout":
+                return {"url": billing.checkout(user, body.get("plan", "monthly"))}
+            if action == "portal":
+                return {"url": billing.portal(user)}
+            if action == "change-plan":
+                return {"url": billing.portal(user, change=True)}
+            if action == "refresh":
+                accounts.throttle("billing-refresh:" + user, limit=1, seconds=60)
+                billing.reconcile(user)
+                return billing_status(user)
+        except RuntimeError:
+            raise HTTPException(503, "Billing temporarily unavailable") from None
+        raise HTTPException(404, "Unknown billing action")
 
     @app.post(API_PREFIX + "/account/resume")
     def resume(request: Request, body: dict):

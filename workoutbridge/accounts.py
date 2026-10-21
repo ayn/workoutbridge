@@ -71,7 +71,30 @@ class Accounts:
                 CREATE TABLE IF NOT EXISTS throttles (
                     key TEXT PRIMARY KEY, count INTEGER, expires REAL
                 );
+                CREATE TABLE IF NOT EXISTS billing (
+                    user TEXT PRIMARY KEY REFERENCES users(id), customer TEXT UNIQUE,
+                    livemode INTEGER NOT NULL, status TEXT DEFAULT 'none',
+                    paid_until REAL DEFAULT 0, cancel_pending INTEGER DEFAULT 0,
+                    checked REAL DEFAULT 0, checkout_key TEXT, checkout_url TEXT,
+                    checkout_expires REAL DEFAULT 0, checkout_plan TEXT
+                );
+                CREATE TABLE IF NOT EXISTS billing_events (id TEXT PRIMARY KEY, at REAL);
+                CREATE TABLE IF NOT EXISTS referral_billing_adjustments (
+                    id TEXT PRIMARY KEY REFERENCES grants(id), user TEXT REFERENCES users(id),
+                    invitee TEXT REFERENCES users(id), subscription TEXT,
+                    status TEXT NOT NULL DEFAULT 'pending', desired_until REAL, created REAL
+                );
+                CREATE UNIQUE INDEX IF NOT EXISTS one_trial_per_user
+                    ON grants(user) WHERE kind='trial';
             """)
+            columns = {r[1] for r in db.execute("PRAGMA table_info(billing)")}
+            for name, kind in (
+                ("subscription", "TEXT"),
+                ("plan", "TEXT"),
+                ("checkout_trial_end", "REAL"),
+            ):
+                if name not in columns:
+                    db.execute(f"ALTER TABLE billing ADD COLUMN {name} {kind}")
 
     @contextmanager
     def db(self):
@@ -248,24 +271,56 @@ class Accounts:
                 "interval": 900,
                 "until": None,
                 "multiple_destinations": True,
+                "badges": ["self-hosted"],
             }
-        active = [
-            r[0]
-            for r in db.execute(
-                "SELECT until FROM grants WHERE user=? AND revoked=0 AND (until IS NULL OR until>?)",
+        grants = list(
+            db.execute(
+                "SELECT until,kind FROM grants WHERE user=? AND revoked=0 AND (until IS NULL OR until>?)",
                 (user, self.clock()),
             )
-        ]
+        )
+        active = [r[0] for r in grants]
+        sources = {r[1] for r in grants}
+        paid = db.execute(
+            "SELECT paid_until,status FROM billing WHERE user=? AND paid_until>?",
+            (user, self.clock()),
+        ).fetchone()
+        if paid:
+            active.append(paid[0])
+        badges = []
+        if paid and paid[1] == "active":
+            badges.append("paid")
+        if "gift" in sources:
+            badges.append("gifted")
+        if "trial" in sources or (paid and paid[1] == "trialing"):
+            badges.append("trial")
         return {
             "plan": "supporter" if active else "free",
             "interval": 900 if active else 10800,
             "until": (None if None in active else max(active)) if active else None,
             "multiple_destinations": bool(active),
+            "badges": badges or (["supporter"] if active else ["free"]),
         }
 
     def entitlements(self, user):
         with self.db() as db:
             return self._entitlements(db, user)
+
+    def start_trial(self, user):
+        if not self.plans:
+            return False
+        with self.db() as db:
+            if not db.execute(
+                "SELECT 1 FROM users WHERE id=? AND verified=1 AND disabled=0 AND EXISTS(SELECT 1 FROM credentials WHERE user=users.id)",
+                (user,),
+            ).fetchone():
+                raise PermissionError("Verify email and enroll a passkey first")
+            if db.execute("SELECT 1 FROM grants WHERE user=? AND kind='trial'", (user,)).fetchone():
+                return False
+            self._grant(
+                db, "system", user, "trial", 30, "Cardless 30-day trial; no automatic charge"
+            )
+            return True
 
     def set_admin(self, user, enabled):
         # Local administrator bootstrap only; never expose this method as a web API.
@@ -325,6 +380,49 @@ class Accounts:
             db.execute("INSERT INTO invites VALUES (?,?)", (key, user))
             return key
 
+    def _referral_tracker(self, db, user):
+        rows = list(
+            db.execute(
+                """
+            SELECT r.rewarded,u.created,u.verified,
+                   EXISTS(SELECT 1 FROM referral_billing_adjustments a WHERE a.user=? AND a.invitee=r.invitee AND a.status!='applied') AS billing_pending,
+                   EXISTS(SELECT 1 FROM credentials c WHERE c.user=u.id) AS passkey,
+                   EXISTS(SELECT 1 FROM destinations d WHERE d.user=u.id) AS connected
+            FROM referrals r JOIN users u ON u.id=r.invitee
+            WHERE r.inviter=? ORDER BY u.created,r.rowid
+        """,
+                (user, user),
+            )
+        )
+        earned = sum(bool(r["rewarded"]) for r in rows)
+        referrals = []
+        for number, row in enumerate(rows, 1):
+            state = (
+                "reward_pending"
+                if row["rewarded"] and row["billing_pending"]
+                else "reward_applied"
+                if row["rewarded"]
+                else "limit_reached"
+                if earned >= 3
+                else "verify_account"
+                if not row["verified"] or not row["passkey"]
+                else "connect_destination"
+                if not row["connected"]
+                else "sync_first_workout"
+            )
+            referrals.append({"number": number, "joined": row["created"], "status": state})
+        return {
+            "invited": len(rows),
+            "earned_months": earned,
+            "remaining": max(0, 3 - earned),
+            "cap": 3,
+            "referrals": referrals,
+        }
+
+    def referral_tracker(self, user):
+        with self.db() as db:
+            return self._referral_tracker(db, user)
+
     def accept_invite(self, user, code):
         with self.db() as db:
             row = db.execute("SELECT user FROM invites WHERE code=?", (code,)).fetchone()
@@ -353,7 +451,22 @@ class Accounts:
                 return False
             db.execute("UPDATE referrals SET rewarded=1 WHERE invitee=?", (user,))
             for target in (row[0], user):
-                self._grant(db, "referral", target, "referral", 30, "Activated invitation")
+                grant = self._grant(db, "referral", target, "referral", 30, "Activated invitation")
+                billing = db.execute(
+                    "SELECT subscription,status FROM billing WHERE user=?", (target,)
+                ).fetchone()
+                if (
+                    billing
+                    and billing["subscription"]
+                    and billing["status"] not in {"none", "canceled", "incomplete_expired"}
+                ):
+                    until = db.execute("SELECT until FROM grants WHERE id=?", (grant,)).fetchone()[
+                        0
+                    ]
+                    db.execute(
+                        "INSERT INTO referral_billing_adjustments(id,user,invitee,subscription,desired_until,created) VALUES (?,?,?,?,?,?)",
+                        (grant, target, user, billing["subscription"], until, self.clock()),
+                    )
             return True
 
     def provider_allowed(self, user, provider):
@@ -401,12 +514,24 @@ class Accounts:
             ):
                 value = dict(row)
                 value["entitlements"] = self._entitlements(db, row["id"])
+                value["referrals"] = self._referral_tracker(db, row["id"])
+                billing = db.execute(
+                    "SELECT status,plan,paid_until,cancel_pending,checked FROM billing WHERE user=?",
+                    (row["id"],),
+                ).fetchone()
+                value["billing"] = dict(billing) if billing else None
                 value["destinations"] = db.execute(
                     "SELECT count(*) FROM destinations WHERE user=?", (row["id"],)
                 ).fetchone()[0]
                 users.append(value)
             return {
                 "users": users,
+                "billing_adjustments": [
+                    dict(r)
+                    for r in db.execute(
+                        "SELECT id,user,status,desired_until,created FROM referral_billing_adjustments ORDER BY created DESC LIMIT 1000"
+                    )
+                ],
                 "grants": [
                     dict(r)
                     for r in db.execute(

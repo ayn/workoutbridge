@@ -45,6 +45,19 @@ class DeploymentTests(unittest.TestCase):
         for path in ("Dockerfile", ".github/workflows/tests.yml"):
             self.assertIn("--extra coros", (ROOT / path).read_text())
 
+    def test_stripe_override_requires_private_secret_files_and_defaults_to_test(self):
+        compose = (ROOT / "deploy/compose.stripe.yaml").read_text()
+        for value in (
+            "STRIPE_ENABLED",
+            "STRIPE_LIVE_MODE:-false",
+            "/run/secrets/stripe_key",
+            "/run/secrets/stripe_webhook",
+            "STRIPE_MONTHLY_PRICE_ID",
+            "STRIPE_YEARLY_PRICE_ID",
+        ):
+            self.assertIn(value, compose)
+        self.assertNotIn("sk_live_", compose)
+
     def test_private_https_sidecar(self):
         compose = (ROOT / "compose.yaml").read_text()
         self.assertIn("network_mode: service:caddy", compose)

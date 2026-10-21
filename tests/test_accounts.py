@@ -31,6 +31,72 @@ class AccountTests(unittest.TestCase):
         with self.assertRaises(PermissionError):
             self.store.revoke(self.b, grant)
 
+    def test_cardless_trial_is_verified_one_time_and_expires_without_billing(self):
+        with self.assertRaises(PermissionError):
+            self.store.start_trial(self.a)
+        self.store.verify_email(self.a)
+        self.store.add_credential(self.a, "trial-key", b"public", 0)
+        self.assertTrue(self.store.start_trial(self.a))
+        self.assertFalse(self.store.start_trial(self.a))
+        self.assertEqual(self.store.entitlements(self.a)["interval"], 900)
+        self.now += 31 * 86400
+        self.assertFalse(self.store.start_trial(self.a))
+        self.assertEqual(self.store.entitlements(self.a)["plan"], "free")
+
+    def test_access_badges_distinguish_paid_gift_and_trial_without_mislabeling(self):
+        self.store.set_admin(self.a, True)
+        self.store.gift(self.a, self.b, days=30, reason="Tester")
+        self.assertEqual(self.store.entitlements(self.b)["badges"], ["gifted"])
+        with self.store.db() as db:
+            db.execute(
+                "INSERT INTO billing(user,customer,livemode,status,paid_until) VALUES (?,?,0,'active',?)",
+                (self.b, "cus_synthetic", self.now + 86400),
+            )
+        self.assertEqual(self.store.entitlements(self.b)["badges"], ["paid", "gifted"])
+        self.now += 2 * 86400
+        self.assertEqual(self.store.entitlements(self.b)["badges"], ["gifted"])
+
+    def test_referral_tracker_reports_progress_without_disclosing_invitee_details(self):
+        self.store.accept_invite(self.b, self.store.invite(self.a))
+        report = self.store.referral_tracker(self.a)
+        self.assertEqual(report["invited"], 1)
+        self.assertEqual(report["earned_months"], 0)
+        self.assertEqual(report["referrals"][0]["status"], "verify_account")
+        self.assertNotIn("two@example.invalid", str(report))
+        self.assertNotIn(self.b, str(report))
+        self.store.verify_email(self.b)
+        self.store.add_credential(self.b, "referral-key", b"public", 0)
+        self.store.claim_destination(self.b, "garmin", "synthetic")
+        self.assertEqual(
+            self.store.referral_tracker(self.a)["referrals"][0]["status"], "sync_first_workout"
+        )
+        self.store.activate(self.b, source=True, destination=True, publication=True)
+        report = self.store.referral_tracker(self.a)
+        self.assertEqual(report["earned_months"], 1)
+        self.assertEqual(report["remaining"], 2)
+        self.assertEqual(report["referrals"][0]["status"], "reward_applied")
+
+    def test_paid_referral_adjustment_is_queued_and_cancellation_keeps_bonus_access(self):
+        self.store.set_admin(self.a, True)
+        with self.store.db() as db:
+            db.execute(
+                "INSERT INTO billing(user,customer,livemode,status,paid_until,subscription) VALUES (?,?,0,'active',?,'sub_synthetic')",
+                (self.a, "cus_synthetic", self.now + 30 * 86400),
+            )
+        for number in range(2):
+            user = self.store.create_user(f"invite{number}@example.invalid")
+            self.store.verify_email(user)
+            self.store.add_credential(user, str(number), b"public", 0)
+            self.store.accept_invite(user, self.store.invite(self.a))
+            self.store.activate(user, source=True, destination=True, publication=True)
+        report = self.store.referral_tracker(self.a)
+        self.assertEqual(report["earned_months"], 2)
+        self.assertEqual(report["referrals"][0]["status"], "reward_pending")
+        self.assertEqual(len(self.store.admin_users(self.a)["billing_adjustments"]), 2)
+        with self.store.db() as db:
+            db.execute("UPDATE billing SET status='canceled',paid_until=0 WHERE user=?", (self.a,))
+        self.assertEqual(self.store.entitlements(self.a)["until"], self.now + 90 * 86400)
+
     def test_referral_needs_verified_identity_and_real_activation_and_awards_once(self):
         code = self.store.invite(self.a)
         self.store.accept_invite(self.b, code)

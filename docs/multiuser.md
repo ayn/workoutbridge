@@ -84,10 +84,13 @@ requested interval but clamp the effective interval to the plan minimum. Retain
 connections, workouts, and receipts; the user can choose the active Free service.
 In-flight provider writes are not forcibly cancelled by a plan change.
 
-No payment processing or automatic sponsor-to-plan mapping is implemented.
-Supporter can currently be granted by the administrator. Do not advertise active
-checkout or automated billing until it exists. No trial automatically becomes a
-paid subscription.
+New hosted accounts receive a one-time 30-day Supporter trial after verified
+email and initial passkey enrollment. No card or Stripe customer is created at
+signup. Trial expiry returns the account to Free unless another grant or paid
+subscription is active. No trial automatically becomes a paid subscription.
+Hosted subscriptions use [Stripe](billing.md) at $3/month or $25/year, disabled
+until explicitly configured. GitHub sponsorships are optional project donations,
+not a way to buy hosted access. Administrator gifts remain available.
 
 ## Gifts and Referrals
 
@@ -100,6 +103,12 @@ Invitation acceptance alone earns nothing. Both inviter and invitee receive
 30 days after the invitee has verified email, a passkey, a calendar source, a
 connected destination, and a server-observed verified workout publication.
 The grant is atomic and once per invitee, including concurrent callbacks.
+Account includes a privacy-preserving referral progress tracker. Admin sees the
+same counts plus billing status, access badges/expiry, grants, audit events and
+pending referral billing adjustments. Invitees' emails and workout details are
+not returned in the inviter's tracker. Paid referral billing deferrals are still
+a release gate; see [billing](billing.md). A pending adjustment is not a receipt
+that Stripe has moved a renewal.
 Same-account self-invites are rejected; provider account ownership prevents
 reusing the same destination across accounts. The pilot caps rewards at three
 activated referrals per inviter. This is basic abuse resistance, not proof that

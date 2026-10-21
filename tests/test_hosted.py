@@ -2,7 +2,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from fastapi.testclient import TestClient
 
@@ -86,6 +86,9 @@ class HostedTests(unittest.TestCase):
         self.assertEqual(self.client.get("/api/v1/state").status_code, 200)
         self.assertTrue(self.client.get("/api/v1/account").json()["admin"])
         self.assertEqual(
+            self.client.get("/api/v1/account").json()["entitlements"]["plan"], "supporter"
+        )
+        self.assertEqual(
             self.client.post(
                 "/api/v1/auth/register/finish", json={"credential": {}}, headers=self.headers
             ).status_code,
@@ -162,5 +165,47 @@ class HostedTests(unittest.TestCase):
         response = client.post(
             "/api/v1/auth/signup", json={"email": "failure@example.invalid"}, headers=self.headers
         )
+        self.assertEqual(response.status_code, 503)
+        self.assertNotIn("SECRET", response.text)
+
+    def test_billing_is_account_scoped_and_only_webhook_bypasses_origin_and_login(self):
+        billing = MagicMock()
+        billing.status.return_value = None
+        billing.checkout.return_value = "https://checkout.stripe.com/c/pay/synthetic"
+        app = create_hosted_app(
+            Path(self.tmp.name) / "billing",
+            "https://bridge.example",
+            send_email=lambda *_: None,
+            poll=False,
+            billing_factory=lambda accounts: billing,
+        )
+        self.addCleanup(app.state.scheduler.close)
+        client = TestClient(app, base_url="https://bridge.example")
+        self.assertEqual(client.post("/api/v1/billing/checkout", json={}).status_code, 403)
+        self.assertEqual(
+            client.post("/api/v1/billing/checkout", json={}, headers=self.headers).status_code, 401
+        )
+        self.assertEqual(
+            client.post(
+                "/api/v1/billing/webhook",
+                content=b"synthetic",
+                headers={"stripe-signature": "signed"},
+            ).status_code,
+            200,
+        )
+        billing.webhook.assert_called_once_with(b"synthetic", "signed")
+        user = app.state.accounts.create_user("billing@example.invalid")
+        app.state.accounts.verify_email(user)
+        app.state.accounts.add_credential(user, "billing-key", b"public", 0)
+        client.cookies.set("prescribed_session", app.state.accounts.new_session(user))
+        response = client.post(
+            "/api/v1/billing/checkout",
+            json={"plan": "yearly", "user": "victim"},
+            headers=self.headers,
+        )
+        self.assertEqual(response.status_code, 200)
+        billing.checkout.assert_called_once_with(user, "yearly")
+        billing.checkout.side_effect = RuntimeError("SECRET")
+        response = client.post("/api/v1/billing/checkout", json={}, headers=self.headers)
         self.assertEqual(response.status_code, 503)
         self.assertNotIn("SECRET", response.text)

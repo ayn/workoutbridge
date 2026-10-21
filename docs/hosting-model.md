@@ -47,58 +47,17 @@ surface reauthentication requirements rather than retrying indefinitely.
 
 ## Sponsorship and Donations
 
-GitHub Sponsors and a donation channel are intended funding options.
-Enable public funding links only once the owner's receiving accounts are ready.
-Paid hosted access must not depend on a GitHub account or sponsorship. Evaluate
-a dedicated hosted checkout (initial shortlist: Polar and Lemon Squeezy, with
-Stripe Payment Links as another option). Prefer a merchant-of-record service
-when it reduces sales-tax/VAT administration. Verify seller-country eligibility,
-payout arrangements, approval requirements and total fees before choosing one.
-No billing provider has been selected or activated.
+Hosted paid access uses Stripe Checkout and Billing, not GitHub Sponsors.
+Supporter costs USD $3/month or $25/year. New verified accounts get a 30-day
+cardless trial; without an explicit subscription they return to Free with no
+charge. [Stripe configuration and activation](billing.md) is required before
+checkout is available. Payments are disabled by default.
 
-For direct subscriptions, create checkout server-side for the authenticated
-Prescribed user, bind the customer to its internal ID, and grant access only
-after verified, idempotent webhook processing and authoritative reconciliation.
-Never treat a browser checkout-success redirect as proof of payment. Keep paid,
-sponsorship, gifted and referral entitlements independent; cancellation should
-remove only the relevant entitlement after its effective access period.
-
-Automatic sponsor upgrades are not implemented yet. Until they are, an
-administrator can verify sponsorship in GitHub and issue an audited, expiring
-Supporter grant. Never grant access based only on a claimed GitHub username,
-matching email, screenshot, or return from a checkout URL.
-
-### Planned Sponsor Activation
-
-1. An authenticated Prescribed user links GitHub through an OAuth authorization
-   flow. Bind its state to that user and store the verified, stable GitHub user
-   ID, not an email match. This links benefits; it does not replace passkey login.
-2. Check the linked identity's sponsorship of the configured recipient on the
-   server. Map explicitly configured qualifying tiers to Supporter access.
-   Check existing sponsorships immediately, including those predating signup.
-3. Receive GitHub Sponsors webhooks, verify their HMAC signature before parsing,
-   and durably deduplicate deliveries. Verify the recipient and sponsor identity;
-   ignore unrelated sponsorships. Reconcile with authoritative API state rather
-   than trusting webhook ordering.
-4. Reconcile periodically and offer a rate-limited "Check sponsorship" action.
-   Failures must be visible and must not immediately revoke existing access.
-5. Pending cancellation retains benefits through the paid period. End the
-   sponsorship grant only when cancellation takes effect. Gift and referral
-   grants remain independent, so ending one source does not erase another.
-6. Account and admin views show access source, status, last verification and
-   expiry. Record entitlement changes in the audit log without payment details.
-
-Recurring sponsorship eligibility, qualifying tiers, and any fixed-duration
-benefit for one-time donations must be published before activation. One-time
-donations must not silently grant permanent access. Keep other funding providers
-behind the same entitlement boundary rather than special-casing scheduler limits.
-
-GitHub documents [sponsored-account webhooks](https://docs.github.com/en/sponsors/integrating-with-github-sponsors/configuring-webhooks-for-events-in-your-sponsored-account)
-and [sponsorship event semantics](https://docs.github.com/en/webhooks/webhook-events-and-payloads#sponsorship).
-Production automation also needs GitHub application credentials, a private
-webhook secret, least-privilege sponsorship API access, and red/green tests for
-identity linking, signatures, retries, duplicate/out-of-order events, tier changes,
-cancellation, provider outages, and coexistence with gifts/referrals.
+GitHub Sponsors may remain an optional donation channel for people supporting
+the open-source/self-hosted project. Sponsorship confers no hosted entitlement,
+does not require GitHub account linking, and is not a billing dependency.
+Administrator gifts and activated referral rewards remain separate from Stripe
+access and survive cancellation of a paid subscription.
 
 ## Before Launch
 
@@ -109,7 +68,8 @@ Prescribed price commitment; measure our own costs before choosing pricing.
 
 - Measure per-account polling, container runtime, storage, and support costs.
 - Validate provider terms and the feasibility of hosted Garmin authentication.
-- Select a payment/donation provider and complete GitHub Sponsors enrollment.
+- Configure Stripe, verify checkout/renewals in its test environment, and review
+  seller eligibility, payout setup, taxes and customer communications.
 - Define fair-use limits, spend caps, billing behavior, and cancellation/export.
 - Publish privacy, retention, and service terms.
 - Keep self-hosted configuration independent from hosted billing.

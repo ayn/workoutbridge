@@ -780,6 +780,8 @@ def application():
 
         origin = os.environ["WORKOUTBRIDGE_ORIGIN"]
         vault_key = read_private_secret(os.environ["WORKOUTBRIDGE_VAULT_KEY_FILE"])
+        from .billing import billing_factory
+
         return create_hosted_app(
             Path(os.environ["WORKOUTBRIDGE_DATA_DIR"]),
             origin,
@@ -791,6 +793,7 @@ def application():
             commercial=os.environ.get("WORKOUTBRIDGE_HOSTED_PLANS") == "true",
             vault_key=vault_key,
             admin_email=os.environ.get("WORKOUTBRIDGE_ADMIN_EMAIL"),
+            billing_factory=billing_factory(origin),
         )
     return create_app(
         Path(os.environ["WORKOUTBRIDGE_DATA_DIR"]),

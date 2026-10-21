@@ -1,0 +1,18 @@
+services:
+  web:
+    environment:
+      STRIPE_ENABLED: "true"
+      STRIPE_LIVE_MODE: ${STRIPE_LIVE_MODE:-false}
+      STRIPE_MONTHLY_PRICE_ID: ${STRIPE_MONTHLY_PRICE_ID:?Set monthly recurring price}
+      STRIPE_YEARLY_PRICE_ID: ${STRIPE_YEARLY_PRICE_ID:?Set yearly recurring price}
+      STRIPE_PORTAL_CONFIGURATION_ID: ${STRIPE_PORTAL_CONFIGURATION_ID:?Set reviewed portal configuration}
+      STRIPE_SECRET_KEY_FILE: /run/secrets/stripe_key
+      STRIPE_WEBHOOK_SECRET_FILE: /run/secrets/stripe_webhook
+    secrets:
+      - stripe_key
+      - stripe_webhook
+secrets:
+  stripe_key:
+    file: ${STRIPE_SECRET_KEY_SOURCE:?Set private Stripe key path}
+  stripe_webhook:
+    file: ${STRIPE_WEBHOOK_SECRET_SOURCE:?Set private webhook secret path}
