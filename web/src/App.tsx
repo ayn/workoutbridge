@@ -188,7 +188,7 @@ function Progress({ label = "Working..." }: { label?: string }) {
 
 const api = defaultApi;
 
-function SetupChecklist({state, navigate}: {state: State; navigate: (view: View) => void}) {
+function SetupChecklist({state, navigate, dismiss, busy}: {state: State; navigate: (view: View) => void; dismiss: () => void; busy: boolean}) {
   const steps: {label: string; detail: string; done: boolean; view: View}[] = [
     {label: "Add a calendar source", detail: "Bring in the workouts your coach prescribed.", done: state.sources.length > 0, view: "Sources"},
     {label: "Connect Garmin or COROS", detail: "Choose where your workouts will go.", done: state.connections.length > 0, view: "Connections"},
@@ -196,6 +196,7 @@ function SetupChecklist({state, navigate}: {state: State; navigate: (view: View)
   ];
   const count = steps.filter(step => step.done).length;
   return <section className="setup-checklist" role="group" aria-label="Setup checklist">
+    <button type="button" className="setup-dismiss" aria-label="Dismiss getting started" title="Dismiss getting started" disabled={busy} onClick={dismiss}><X size={18} aria-hidden="true" /></button>
     <details open={count < steps.length}>
       <summary>
         <div><p className="eyebrow">GETTING STARTED</p><h2>{count === steps.length ? "You’re all set" : "Let’s connect your workouts"}</h2></div>
@@ -210,8 +211,9 @@ function SetupChecklist({state, navigate}: {state: State; navigate: (view: View)
   </section>;
 }
 
-export function App({ brand = "WorkoutBridge", multiuser = false, suggestedEmail = "", onLogout, request = defaultApi, view: externalView, onViewChange }: { brand?: string; multiuser?: boolean; suggestedEmail?: string; onLogout?: () => void; request?: typeof defaultApi; view?: View; onViewChange?: (view: View) => void }) {
+export function App({ brand = "WorkoutBridge", multiuser = false, suggestedEmail = "", onLogout, request = defaultApi, view: externalView, onViewChange, showSetupChecklist = true, onDismissSetup }: { brand?: string; multiuser?: boolean; suggestedEmail?: string; onLogout?: () => void; request?: typeof defaultApi; view?: View; onViewChange?: (view: View) => void; showSetupChecklist?: boolean; onDismissSetup?: () => Promise<void> }) {
   const api = request;
+  const [setupDismissed, setSetupDismissed] = useState(false);
   const [state, setState] = useState<State | null>(null);
   const [signedIn, setSignedIn] = useState<boolean | null>(null);
   const [localView, setLocalView] = useState<View>("Workouts");
@@ -392,7 +394,7 @@ export function App({ brand = "WorkoutBridge", multiuser = false, suggestedEmail
         </header>
         <main className="content">
           {alert}
-          {multiuser && state && <SetupChecklist state={state} navigate={setView} />}
+          {multiuser && state && showSetupChecklist && !setupDismissed && <SetupChecklist state={state} navigate={setView} busy={busy} dismiss={() => void perform(async () => { await onDismissSetup?.(); setSetupDismissed(true); })} />}
           {message && (
             <div className="success" role="status">
               <CheckCircle2 size={16} />
