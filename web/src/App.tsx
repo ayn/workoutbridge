@@ -238,6 +238,13 @@ export function App({ brand = "WorkoutBridge", multiuser = false, suggestedEmail
   const plan = state?.plans.find((p) => p.id === active);
   const source = state?.sources.find((s) => s.id === rule?.source);
   const connection = state?.connections.find((c) => c.id === rule?.profile);
+  function availableProfile(base: string) {
+    const used = new Set(state?.connections.map(c => c.id));
+    if (!used.has(base)) return base;
+    let index = 2;
+    while (used.has(`${base}-${index}`)) index++;
+    return `${base}-${index}`;
+  }
   const destinationName = connection?.provider === "COROS" ? "COROS" : "Garmin";
   const item = plan?.items[expanded ?? -1];
   const ready = plan?.items.filter((i) => !i.error).length || 0;
@@ -399,8 +406,8 @@ export function App({ brand = "WorkoutBridge", multiuser = false, suggestedEmail
             )}
             {view === "Connections" && (
               <div className="provider-actions" role="group" aria-label="Connect a destination">
-                <button className="primary" onClick={() => setGarminForm("personal")}><Plus size={16} /> Connect Garmin</button>
-                <button className="primary" onClick={() => setCorosForm("coros")}><Plus size={16} /> Connect COROS</button>
+                <button className="primary" onClick={() => setGarminForm(availableProfile("personal"))}><Plus size={16} /> {state?.connections.some(c => c.provider !== "COROS") ? "Connect another Garmin account" : "Connect Garmin"}</button>
+                <button className="primary" onClick={() => setCorosForm(availableProfile("coros"))}><Plus size={16} /> {state?.connections.some(c => c.provider === "COROS") ? "Connect another COROS account" : "Connect COROS"}</button>
               </div>
             )}
             {view === "Syncs" && (
