@@ -26,8 +26,6 @@ See [COROS setup and limitations](docs/coros.md). A synthetic workout was verifi
 in a dedicated test account; watch delivery has not been verified. Edits, moved
 events, and untracked workouts on the same day require manual reconciliation.
 
-## Deployment Options
-
 ## Supported Destinations
 
 | Destination | Status | Notes |
