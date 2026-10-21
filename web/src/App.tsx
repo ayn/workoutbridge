@@ -75,7 +75,7 @@ type State = {
     results: { title: string; date: string; workout_id: string }[];
   }[];
 };
-type View = "Workouts" | "Sources" | "Connections" | "Syncs" | "History";
+export type View = "Workouts" | "Sources" | "Connections" | "Syncs" | "History";
 const independenceDisclaimer =
   "WorkoutBridge is an independent project, not affiliated with, endorsed by, or sponsored by Garmin, Final Surge, COROS, Suunto, Google, Apple, or any other platform provider. All trademarks belong to their respective owners.";
 const tabs = [
@@ -188,11 +188,13 @@ function Progress({ label = "Working..." }: { label?: string }) {
 
 const api = defaultApi;
 
-export function App({ brand = "WorkoutBridge", multiuser = false, suggestedEmail = "", onLogout, request = defaultApi }: { brand?: string; multiuser?: boolean; suggestedEmail?: string; onLogout?: () => void; request?: typeof defaultApi }) {
+export function App({ brand = "WorkoutBridge", multiuser = false, suggestedEmail = "", onLogout, request = defaultApi, view: externalView, onViewChange }: { brand?: string; multiuser?: boolean; suggestedEmail?: string; onLogout?: () => void; request?: typeof defaultApi; view?: View; onViewChange?: (view: View) => void }) {
   const api = request;
   const [state, setState] = useState<State | null>(null);
   const [signedIn, setSignedIn] = useState<boolean | null>(null);
-  const [view, setView] = useState<View>("Workouts");
+  const [localView, setLocalView] = useState<View>("Workouts");
+  const view = externalView ?? localView;
+  function setView(next: View) { setLocalView(next); onViewChange?.(next); }
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
@@ -236,6 +238,13 @@ export function App({ brand = "WorkoutBridge", multiuser = false, suggestedEmail
   const plan = state?.plans.find((p) => p.id === active);
   const source = state?.sources.find((s) => s.id === rule?.source);
   const connection = state?.connections.find((c) => c.id === rule?.profile);
+  function availableProfile(base: string) {
+    const used = new Set(state?.connections.map(c => c.id));
+    if (!used.has(base)) return base;
+    let index = 2;
+    while (used.has(`${base}-${index}`)) index++;
+    return `${base}-${index}`;
+  }
   const destinationName = connection?.provider === "COROS" ? "COROS" : "Garmin";
   const item = plan?.items[expanded ?? -1];
   const ready = plan?.items.filter((i) => !i.error).length || 0;
@@ -396,12 +405,10 @@ export function App({ brand = "WorkoutBridge", multiuser = false, suggestedEmail
               </button>
             )}
             {view === "Connections" && (
-              <button
-                className="primary"
-                onClick={() => setGarminForm("personal")}
-              >
-                <Plus size={16} /> Connect Garmin
-              </button>
+              <div className="provider-actions" role="group" aria-label="Connect a destination">
+                <button className="primary" onClick={() => setGarminForm(availableProfile("personal"))}><Plus size={16} /> {state?.connections.some(c => c.provider !== "COROS") ? "Connect another Garmin account" : "Connect Garmin"}</button>
+                <button className="primary" onClick={() => setCorosForm(availableProfile("coros"))}><Plus size={16} /> {state?.connections.some(c => c.provider === "COROS") ? "Connect another COROS account" : "Connect COROS"}</button>
+              </div>
             )}
             {view === "Syncs" && (
               <button
@@ -629,18 +636,7 @@ export function App({ brand = "WorkoutBridge", multiuser = false, suggestedEmail
                   </button>
                 </article>
               ))}
-              <article className="record">
-                <div className="record-icon">
-                  <Watch size={23} />
-                </div>
-                <div>
-                  <h2>COROS</h2>
-                  <p>Training calendar</p>
-                </div>
-                <button className="secondary" onClick={() => setCorosForm("coros")}>
-                  <Plus size={16} /> Connect COROS
-                </button>
-              </article>
+
             </section>
           )}
           {view === "Syncs" && (
@@ -1076,7 +1072,10 @@ function GarminForm({
     const timer = setTimeout(() => {
       api("garmin/login")
         .then((value) => {
-          if (active) setJob(value);
+          if (active) {
+            if (value && ["idle", "failed", "cancelled", "signing_in", "mfa", "complete"].includes(value.status)) setJob(value);
+            else { setJob({status: "failed"}); setError("Unexpected Garmin sign-in response. Please try again."); }
+          }
         })
         .catch(() => {
           if (active) setError("Unable to check Garmin login status");
@@ -1091,7 +1090,12 @@ function GarminForm({
     setBusy(true);
     setError("");
     try {
-      setJob(await api(path, body));
+      const result = await api(path, body);
+      if (!result || !["idle", "failed", "cancelled", "signing_in", "mfa", "complete"].includes(result.status)) {
+        setJob({status: "failed"});
+        throw new Error("Unexpected Garmin sign-in response. Please try again.");
+      }
+      setJob(result);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Sign-in failed");
     } finally {
@@ -1119,7 +1123,6 @@ function GarminForm({
         void dismiss();
       }}
     >
-      <p>We do not save your Garmin email or password. We keep your Garmin account ID and session tokens for future syncs. An embedding application's own account details are separate.</p>
       {busy && <Progress />}
       {error && (
         <p role="alert" className="error-text">
@@ -1146,6 +1149,7 @@ function GarminForm({
             void request("garmin/login", body);
           }}
         >
+          <p className="form-help">Your password isn’t stored. We save your account ID and session tokens for syncing.</p>
           <label>
             Profile name
             <input
