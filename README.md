@@ -40,8 +40,10 @@ provisional during the private pilot and will stabilize at public launch.
   hosted service and its pricing when available.
 - **Local CLI:** use the Quick Start below without running the web interface.
 
-The [DigitalOcean staging runbook](docs/digitalocean.md) describes the private,
-localhost-only deployment foundation for the future multi-user service.
+This public repository contains the single-owner DIY app and CLI. Managed
+Prescribed accounts, billing, referrals, administration, and production hosting
+are developed separately; they are not required to run this project. Existing
+DIY deployments retain the Tailscale sidecar and their own configuration.
 
 ## Quick Start
 
@@ -480,12 +482,12 @@ See [contributing](CONTRIBUTING.md) for the required red/green TDD workflow.
 
 ## Hosting and Funding
 
-The planned hosted service will have a useful free tier, voluntary donations
-and GitHub Sponsors, and optional paid capacity such as more frequent polling.
-The code remains MIT-licensed and self-hostable. Prices and limits are not set,
-and no hosted service or payment collection is live yet. Sponsorship setup is
-pending; no funding link is active.
-See the [hosted service model](docs/hosting-model.md).
+The planned managed service is [Prescribed](https://prescribed.fit). It is
+developed separately from this MIT-licensed, single-owner self-hosted project.
+The hosted service is not yet publicly available. DIY deployments do not need
+billing, email-provider credentials, subscription configuration, or managed
+hosting infrastructure. GitHub sponsorship is optional support for the public
+project, not a way to buy hosted access.
 
 ## Acknowledgments
 
