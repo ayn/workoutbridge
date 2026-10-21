@@ -45,6 +45,7 @@ def create_app(
     authenticate_request=None,
     on_publication=None,
     vault=None,
+    operation=None,
 ) -> FastAPI:
     if len(password) < 32 or urlsplit(origin).scheme not in ("https", "http"):
         raise ValueError("Set an origin and a random password of at least 32 characters")
@@ -55,7 +56,7 @@ def create_app(
     os.fchmod(fd, 0o600)
     os.close(fd)
     attempts = []
-    operation = threading.RLock()
+    operation = operation if operation is not None else threading.RLock()
     garmin_login = GarminLogin(
         operation, config_root=config_root, claim_account=claim_account, vault=vault
     )
@@ -766,6 +767,16 @@ def create_app(
         finally:
             operation.release()
 
+    def run_action(action, key, body):
+        if action == "preview":
+            return refresh(key)
+        if action == "publish":
+            return publish(key, body)
+        if action == "automatic":
+            return automatic(key, body)
+        raise ValueError("Unsupported application action")
+
+    app.state.run_action = run_action
     static = Path(os.environ.get("WORKOUTBRIDGE_STATIC_DIR", "web/dist"))
     if static.is_dir():
         app.mount("/", StaticFiles(directory=static, html=True), name="ui")

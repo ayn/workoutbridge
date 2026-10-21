@@ -26,18 +26,29 @@ See [COROS setup and limitations](docs/coros.md). A synthetic workout was verifi
 in a dedicated test account; watch delivery has not been verified. Edits, moved
 events, and untracked workouts on the same day require manual reconciliation.
 
+## Supported Destinations
+
+| Destination | Status | Notes |
+| --- | --- | --- |
+| Garmin Connect | Supported (pilot) | Structured running workouts and calendar scheduling; device delivery not yet verified. |
+| COROS | Supported (pilot) | OAuth, structured running workouts and calendar scheduling; [limitations](docs/coros.md) apply. |
+| Suunto | Planned | Not implemented; no connection or publishing support yet. |
+
+Want another destination? See [adding a destination adapter](docs/adding-destinations.md)
+for the architecture, safety requirements, tests, and PR checklist.
+
 ## Deployment Options
 
 The web app uses the [versioned `/api/v1` API](docs/web-api.md). Its contract is
 provisional during the private pilot and will stabilize at public launch.
 
-- **Self-host today:** follow the [single-owner web deployment runbook](docs/private-web.md)
-  for setup, persistent storage, authentication, scheduling, and updates. Keep the
-  pilot private; it is not yet a public multi-user service.
 - **Hosted service (planned):** a managed option is intended for people who do not
   want to run their own instance. Public availability, service URL, and paid or
   freemium limits are not yet announced. This section will link to the default
   hosted service and its pricing when available.
+- **Self-host today:** follow the [single-owner web deployment runbook](docs/private-web.md)
+  for setup, persistent storage, authentication, scheduling, and updates. Keep the
+  pilot private; it is not yet a public multi-user service.
 - **Local CLI:** use the [CLI guide](#cli) without running the web interface.
 
 This public repository contains the single-owner DIY app and CLI. Managed
@@ -101,6 +112,13 @@ Follow the private authorization link. Point your private DNS hostname to the
 sidecar's Tailscale address and open the configured HTTPS origin from a tailnet
 device. Do not publish the app through Funnel or port forwarding. Sign in using
 the generated `access-password` file from your private data directory.
+
+For this always-on sidecar, disable **device key expiry** in the Tailscale admin
+console: **Machines → sidecar's menu → Disable key expiry**. Confirm that expiry
+is disabled rather than assuming it is. This is separate from the auth key used
+to enroll the device; see [Tailscale's key documentation](https://tailscale.com/docs/features/access-control/auth-keys).
+Keep the persisted Tailscale state private and revoke the device if compromised
+or retired. Do not disable expiry for every personal device.
 
 **Optional: split-horizon DNS with AdGuard Home.** A private DNS rewrite makes
 your custom hostname resolve to the sidecar's Tailscale address for your devices,

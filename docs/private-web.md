@@ -30,6 +30,15 @@ authorization; the default one-minute boot timeout restarts it and invalidates
 pending links. Authentication state persists under
 `tailscale/` in the private directory. Do not share another node's state.
 
+For unattended operation, open the Tailscale admin console's **Machines** page,
+find this sidecar, and select **Disable key expiry** from its menu. Verify the
+device shows expiry disabled. This controls the device's node key, not the
+enrollment auth key; an enrollment key expiring does not itself disconnect an
+already enrolled device. See [Tailscale's key documentation](https://tailscale.com/docs/features/access-control/auth-keys).
+Keep the state directory protected and revoke the device when retiring it or if
+compromised. This recommendation applies to the dedicated server sidecar, not
+all personal devices.
+
 Store the following **outside the checkout** in a private directory mounted as
 `/data` (owner-only directories, files 0600):
 
