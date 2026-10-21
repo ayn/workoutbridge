@@ -42,13 +42,13 @@ for the architecture, safety requirements, tests, and PR checklist.
 The web app uses the [versioned `/api/v1` API](docs/web-api.md). Its contract is
 provisional during the private pilot and will stabilize at public launch.
 
-- **Self-host today:** follow the [single-owner web deployment runbook](docs/private-web.md)
-  for setup, persistent storage, authentication, scheduling, and updates. Keep the
-  pilot private; it is not yet a public multi-user service.
 - **Hosted service (planned):** a managed option is intended for people who do not
   want to run their own instance. Public availability, service URL, and paid or
   freemium limits are not yet announced. This section will link to the default
   hosted service and its pricing when available.
+- **Self-host today:** follow the [single-owner web deployment runbook](docs/private-web.md)
+  for setup, persistent storage, authentication, scheduling, and updates. Keep the
+  pilot private; it is not yet a public multi-user service.
 - **Local CLI:** use the [CLI guide](#cli) without running the web interface.
 
 This public repository contains the single-owner DIY app and CLI. Managed
