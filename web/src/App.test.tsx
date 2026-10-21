@@ -98,18 +98,14 @@ test("sign in does not store credentials in browser storage", async () => {
   expect(localStorage.length).toBe(0);
 });
 
-test("footer credits the Garmin library and links to acknowledgments", async () => {
+test("footer keeps voluntary dependency acknowledgments in the README", async () => {
   vi.spyOn(globalThis, "fetch").mockImplementation(
     async () => new Response(JSON.stringify(initial)),
   );
   render(<App />);
   await screen.findByText("Upcoming workouts");
-  expect(screen.getByRole("link", { name: "python-garminconnect" })).toHaveAttribute(
-    "href", "https://github.com/cyberjunky/python-garminconnect",
-  );
-  expect(screen.getByRole("link", { name: "Credits" })).toHaveAttribute(
-    "href", "https://github.com/ayn/workoutbridge#acknowledgments",
-  );
+  expect(screen.queryByRole("link", { name: "python-garminconnect" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("link", { name: "Credits" })).not.toBeInTheDocument();
 });
 
 test("review shows native repeats and requires confirmation before publishing", async () => {
