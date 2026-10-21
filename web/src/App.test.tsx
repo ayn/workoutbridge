@@ -391,6 +391,26 @@ test("Garmin web sign-in clears credentials and accepts requested MFA", async ()
 });
 
 
+test("Garmin completion stays visible while the connection list refreshes", async () => {
+  let reads = 0;
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (url, options) => {
+    if (String(url).endsWith("/garmin/login")) return new Response(JSON.stringify(
+      options?.method === "POST" ? {status: "complete", profile: "personal"} : {status: "idle"}
+    ));
+    if (String(url).endsWith("/state") && reads++ > 0) return new Promise<Response>(() => {});
+    return new Response(JSON.stringify(initial));
+  });
+  render(<App />);
+  await userEvent.click(await screen.findByRole("button", {name: "Connections"}));
+  await userEvent.click(screen.getByRole("button", {name: "Connect another Garmin account"}));
+  await userEvent.type(screen.getByLabelText("Garmin email"), "member@example.invalid");
+  await userEvent.type(screen.getByLabelText("Garmin password"), "synthetic-password");
+  await userEvent.click(screen.getByRole("button", {name: "Sign in to Garmin"}));
+  const status = await screen.findByRole("status", {name: "Garmin connected"});
+  expect(status).toHaveTextContent("Refreshing your connections");
+  expect(screen.queryByDisplayValue("synthetic-password")).not.toBeInTheDocument();
+});
+
 test("Garmin and COROS connect actions are peers in one provider group", async () => {
   vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify(initial)));
   render(<App />);
