@@ -25,9 +25,14 @@ def validate(profile: dict) -> dict:
         not isinstance(profile, dict)
         or set(profile) != {"version", "destination", "account_id", "session_dir", "state_db"}
         or profile["version"] != 1
-        or profile["destination"] != "garmin"
+        or profile["destination"] not in {"garmin", "coros"}
         or not isinstance(profile["account_id"], str)
-        or not re.fullmatch(r"[1-9]\d*", profile["account_id"])
+        or not re.fullmatch(
+            r"[1-9]\d*"
+            if profile["destination"] == "garmin"
+            else r"coros:(?:us|eu|cn):[^\s]{1,256}",
+            profile["account_id"],
+        )
     ):
         raise ValueError("Invalid or unsupported connection profile")
     for field in ("session_dir", "state_db"):
@@ -52,7 +57,12 @@ def load_profile(name: str) -> dict:
 
 
 def authenticate_profile(
-    name: str, session: Path | None = None, state_db: Path | None = None, *, authenticator=None
+    name: str,
+    session: Path | None = None,
+    state_db: Path | None = None,
+    *,
+    authenticator=None,
+    destination="garmin",
 ) -> dict:
     from .auth import authenticate
 
@@ -66,6 +76,8 @@ def authenticate_profile(
     with os.fdopen(fd, "r+") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         old = load_profile(name) if path.exists() or path.is_symlink() else None
+        if destination not in {"garmin", "coros"} or (old and old["destination"] != destination):
+            raise ValueError("Cannot change a profile's destination provider")
         if state_db is not None:
             state_db = state_db.expanduser().absolute()
             if old and str(state_db) != old["state_db"]:
@@ -81,7 +93,7 @@ def authenticate_profile(
         profile = validate(
             {
                 "version": 1,
-                "destination": "garmin",
+                "destination": destination,
                 "account_id": account,
                 "session_dir": str(session),
                 "state_db": old["state_db"]

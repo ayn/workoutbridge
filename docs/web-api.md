@@ -30,6 +30,8 @@ All paths below are relative to `/api/v1`:
 | GET / POST | `/garmin/login` | Read or start a Garmin sign-in job |
 | POST | `/garmin/login/mfa` | Submit a requested verification code |
 | POST | `/garmin/login/cancel` | Cancel a sign-in job |
+| POST | `/coros/login` | Start browser OAuth using profile and region |
+| POST | `/coros/login/finish` | Claim authorization and save a verified profile |
 | POST | `/sources` | Add a calendar source |
 | POST | `/syncs` | Connect a source to a destination profile |
 | POST | `/syncs/{key}/preview` | Refresh the feed without publishing |
@@ -47,7 +49,8 @@ remain on the server.
 
 `tests/test_web.py` sends real HTTP-shaped requests through FastAPI's TestClient,
 middleware, routes, and temporary SQLite storage. Calendar network access and
-Garmin are replaced with fakes: tests must not publish to real accounts.
+destination services are replaced with fakes: tests must not publish to real accounts.
+`tests/test_web_coros.py` covers the COROS browser-login and preview/publish routes.
 
 Coverage includes version boundaries, authentication and Origin checks, rolling
 session persistence/revocation, private sources, preview-to-publish workflows,
@@ -56,6 +59,6 @@ Frontend tests verify that the client calls v1 routes. CI runs both suites befor
 deployment; live smoke checks verify health and authenticated reads only.
 
 ```bash
-uv run --locked --extra garmin --extra web python -m unittest discover -s tests
+uv run --locked --extra garmin --extra coros --extra web python -m unittest discover -s tests
 npm --prefix web test
 ```

@@ -23,7 +23,14 @@ def emit(value):
 def review_item(account: str, event: Event) -> dict:
     result = {"event": asdict(event), "draft": parse(event.prescription).to_dict()}
     try:
-        result.update(payload=event_payload(event), approval=approval_token(account, event))
+        if account.startswith("coros:"):
+            from .coros_publishing import approval_token as coros_approval
+            from .coros_publishing import event_values
+
+            values = event_values(event)
+            result.update(payload=values["course"], approval=coros_approval(account, **values))
+        else:
+            result.update(payload=event_payload(event), approval=approval_token(account, event))
     except ValueError:
         result["error"] = "Cancelled event or unresolved prescription; review required"
     return result
@@ -38,7 +45,13 @@ def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
     auth = sub.add_parser("auth", help="Interactively authenticate; no workout changes")
-    auth.add_argument("provider", choices=["garmin"])
+    auth.add_argument("provider", choices=["garmin", "coros"])
+    auth.add_argument(
+        "--region", choices=["us", "eu", "cn"], default="us", help="COROS account region"
+    )
+    auth.add_argument(
+        "--finish", action="store_true", help="Finish pending COROS browser authorization"
+    )
     auth.add_argument("--session-dir", type=Path, help="New private session directory")
     auth.add_argument(
         "--state-db",
@@ -98,6 +111,47 @@ def main(argv=None) -> int:
         command.add_argument("--profile", help="Named private connection saved during login")
     args = parser.parse_args(argv)
     try:
+        if args.command == "auth" and args.provider == "coros":
+            from .coros_auth import begin_login, finish_login
+            from .profiles import authenticate_profile, load_profile, profile_path
+
+            if args.profile is None or args.session_dir is None:
+                raise ReviewRequired("COROS login requires --profile and a new --session-dir")
+            path = profile_path(args.profile)
+            if path.exists() and load_profile(args.profile)["destination"] != "coros":
+                raise ReviewRequired("Profile belongs to another provider")
+            if not args.finish:
+                emit({"status": "pending", **begin_login(args.session_dir, args.region)})
+                return 0
+
+            class Pending(Exception):
+                pass
+
+            def authenticate_coros(session):
+                account = finish_login(session)
+                if account is None:
+                    raise Pending
+                return account
+
+            try:
+                profile = authenticate_profile(
+                    args.profile,
+                    args.session_dir,
+                    args.state_db,
+                    destination="coros",
+                    authenticator=authenticate_coros,
+                )
+            except Pending:
+                emit({"status": "pending"})
+                return 0
+            emit(
+                {
+                    "status": "authenticated",
+                    "profile": args.profile,
+                    "account_id": profile["account_id"],
+                }
+            )
+            return 0
         if args.command != "auth":
             if args.profile is not None:
                 from .profiles import load_profile
@@ -235,13 +289,29 @@ def main(argv=None) -> int:
         # Third-party auth logs may contain session details; never expose them here.
         previous = logging.root.manager.disable
         logging.disable(logging.CRITICAL)
+        coros_client = None
         try:
-            provider = GarminProvider.connect(args.session_dir, expected_account=args.account_id)
-            publisher = Publisher(args.state_db, provider)
+            if args.account_id.startswith("coros:"):
+                from .coros_client import CorosClient
+                from .coros_publishing import CorosEventPublisher
+
+                coros_client = CorosClient(
+                    args.session_dir,
+                    args.account_id.split(":")[1],
+                    expected_account=args.account_id,
+                )
+                publisher = CorosEventPublisher(args.state_db, coros_client)
+            else:
+                provider = GarminProvider.connect(
+                    args.session_dir, expected_account=args.account_id
+                )
+                publisher = Publisher(args.state_db, provider)
             for event, item in zip(events, bundle["items"]):
                 wid = publisher.publish(event, item["approval"])
                 emit({"date": event.date, "workout_id": wid, "status": "verified"})
         finally:
+            if coros_client is not None:
+                coros_client.close()
             logging.disable(previous)
         return 0
     except ReviewRequired as exc:

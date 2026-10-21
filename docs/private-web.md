@@ -1,9 +1,9 @@
 # Private web deployment
 
 This is a **single-owner, private pilot**, not a public multi-user service.
-The TypeScript UI and Python API use the same parser, Garmin adapter, approval
-tokens, and durable publishing receipts as the CLI. COROS is not implemented.
-Multiple saved Garmin profiles can be connected to a source through separate
+The TypeScript UI and Python API use the same parser, destination adapters, approval
+tokens, and durable publishing receipts as the CLI.
+Multiple saved Garmin or COROS profiles can be connected to a source through separate
 sync rules. Each profile must retain its own original publishing database.
 
 ## Access and state
@@ -27,7 +27,7 @@ Store the following **outside the checkout** in a private directory mounted as
 
 - `access-password`: a randomly generated password of at least 32 characters.
 - `config/profiles/`: private CLI connection profiles.
-- `config/sessions/`: Garmin sessions; paths in profiles must be container paths.
+- `config/sessions/`: Garmin and COROS sessions; paths in profiles must be container paths.
 - `config/state/`: account-scoped publishing receipts.
 - `web/web.sqlite`: sources, sync rules, current review plans, publish history.
 - `web/archive/`: content-addressed private ICS snapshots.
@@ -80,19 +80,32 @@ Use SQLite backup for a consistent snapshot and stop the old publisher first.
 Do not run publishers on two hosts with copied databases: locks are host-local.
 Do not delete receipts to resolve a duplicate or uncertain outcome.
 
+## COROS authentication
+
+In Connections, select **Connect COROS**, choose a profile name and account region,
+then **Continue to COROS**. Open the COROS sign-in link, authorize in that browser
+tab, then return and select **Finish connection**. COROS handles credentials;
+WorkoutBridge stores only private OAuth/session data. The link expires after ten
+minutes. Three starts per 15 minutes are allowed. Reconnecting a profile must
+return the same verified account and preserves its receipts.
+
+Use a separate sync rule to connect an existing source to this profile. Connecting
+alone does not enable publishing. See [COROS](coros.md) for conversion details,
+current restrictions, and CLI authentication.
+
 ## Review workflow
 
 1. Sign in with the private instance access password.
 2. Add a Final Surge or Google Calendar HTTPS feed under Sources. URLs are
    stored privately and are not returned in state responses. Other feed hosts
    are deliberately unsupported during this pilot; redirects are refused.
-3. Connect the source to the desired saved Garmin profile under Syncs.
+3. Connect the source to the desired saved Garmin or COROS profile under Syncs.
 4. Refresh its preview. Review the next 15 calendar days, source text, steps,
    recovery, notes, and destination account. Unsupported workouts cannot be selected.
    A warm-up-only description beneath an interval/tempo/fartlek title is also
    blocked rather than silently dropping its main set.
 5. Select workouts and confirm publication. The backend requires the exact
-   current preview, verifies the connected account, and reads back Garmin writes.
+   current preview, verifies the connected account, and reads back destination writes.
 
 Hourly refresh preserves feed snapshots and updates previews. **Automatic
 publishing is off by default.** In Syncs, enable Publish hourly and confirm the
@@ -107,8 +120,9 @@ syncs remain paused. Existing automatic settings are not changed on upgrade.
 Each hourly pass uses a fresh
 feed and publishes only fully parsed items within the next 15 calendar days;
 unresolved and cancelled items stay in review. Existing receipts prevent duplicate
-uploads/schedules, and changed prescriptions go through the same update checks as
-manual publishing. No deletions are propagated.
+uploads/schedules. Garmin applies its existing update checks; changed or moved
+COROS prescriptions stop for manual reconciliation in this first version.
+No deletions are propagated.
 
 Before any automatic write, a durable stop flag is saved. Failed/uncertain writes,
 process interruption, or changed account identity stop unattended publishing until
@@ -171,8 +185,8 @@ without automatic pruning; monitor disk use. Do not expose archives publicly.
 ## Local verification
 
 ```sh
-uv sync --locked --extra garmin --extra web
-uv run --locked --extra garmin --extra web python -m unittest discover -s tests
+uv sync --locked --extra garmin --extra coros --extra web
+uv run --locked --extra garmin --extra coros --extra web python -m unittest discover -s tests
 uv run --locked --extra web ruff check workoutbridge tests
 uv run --locked --extra web ruff format --check workoutbridge tests
 cd web

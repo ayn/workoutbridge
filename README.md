@@ -1,13 +1,13 @@
 # WorkoutBridge
 
-The private web pilot provides calendar sources, saved Garmin connections,
-web sign-in/MFA, structured-workout previews, and manual or opt-in hourly publishing. See the
+The private web pilot provides calendar sources, saved Garmin and COROS connections,
+web sign-in, structured-workout previews, and manual or opt-in hourly publishing. See the
 [private deployment runbook](docs/private-web.md). It is not a public multi-user
 service. Scheduled refresh archives feeds; automatic publishing must be enabled
 and confirmed separately for each destination account.
 
 Turn plain-text running and coaching prescriptions into reviewable structured
-workouts for Garmin Connect. Designed for training calendars from Final Surge,
+workouts for Garmin Connect and COROS. Designed for training calendars from Final Surge,
 Google Calendar, iCloud Calendar, and other iCalendar (ICS) sources.
 
 **Early development, not a hosted service.** The web app is the intended product;
@@ -19,6 +19,12 @@ watch delivery has not been verified.
 The single-owner web pilot includes hourly feed polling. Final Surge write-back is blocked pending
 an officially available API and permission to use it.
 Not affiliated with Garmin, Final Surge, Google, Apple, or any coach.
+
+**COROS pilot:** browser OAuth, native running repeats, lap steps, pace targets,
+direct calendar creation, verified read-back, and repeat-publish reuse are supported.
+See [COROS setup and limitations](docs/coros.md). A synthetic workout was verified
+in a dedicated test account; watch delivery has not been verified. Edits, moved
+events, and untracked workouts on the same day require manual reconciliation.
 
 ## Deployment Options
 

@@ -67,6 +67,35 @@ const initial = {
   history: [],
 };
 
+test("COROS browser sign-in saves a connection after authorization", async () => {
+  const fetcher = vi.spyOn(globalThis, "fetch").mockImplementation(async (url) => {
+    const path = String(url);
+    if (path.endsWith("/coros/login")) return new Response(JSON.stringify({ id: "coros-job", status: "pending", login_url: "https://mcpus.coros.com/cli/login/synthetic" }));
+    if (path.endsWith("/coros/login/finish")) return new Response(JSON.stringify({ status: "complete" }));
+    return new Response(JSON.stringify(initial));
+  });
+  render(<App />);
+  await screen.findByText("Upcoming workouts");
+  await userEvent.click(screen.getByRole("button", { name: "Connections" }));
+  await userEvent.click(screen.getByRole("button", { name: "Connect COROS" }));
+  await userEvent.click(screen.getByRole("button", { name: "Continue to COROS" }));
+  expect(await screen.findByRole("link", { name: "Open COROS sign-in" })).toHaveAttribute("href", "https://mcpus.coros.com/cli/login/synthetic");
+  await userEvent.click(screen.getByRole("button", { name: "Finish connection" }));
+  await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  expect(fetcher.mock.calls.some(([url]) => String(url).endsWith("/coros/login/finish"))).toBe(true);
+});
+
+test("COROS publication confirms the selected destination", async () => {
+  const state = { ...initial, connections: [{ id: "test", provider: "COROS", account: "coros:us:synthetic" }] };
+  vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify(state)));
+  render(<App />);
+  await screen.findByText("Upcoming workouts");
+  await userEvent.click(screen.getByLabelText("Select Run: 4 strides"));
+  await userEvent.click(screen.getByRole("button", { name: "Review publication" }));
+  expect(screen.getByRole("button", { name: "Publish to COROS" })).toBeInTheDocument();
+  expect(screen.getByText("COROS · test")).toBeInTheDocument();
+});
+
 test.each([true, false])("publishing shows progress until request settles (success=%s)", async (success) => {
   let finish!: (response: Response) => void;
   const pending = new Promise<Response>((resolve) => { finish = resolve; });

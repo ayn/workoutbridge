@@ -13,6 +13,20 @@ from workoutbridge.cli import main
 
 
 class WorkflowTests(unittest.TestCase):
+    def test_coros_plan_publish_and_duplicate_prevention(self):
+        from test_coros_publishing import FakeClient
+
+        self.provider.account_id = "coros:us:synthetic"
+        client = FakeClient()
+        client.close = lambda: None
+        args = self.publish_args(self.plan())
+        with patch("workoutbridge.coros_client.CorosClient", return_value=client) as connect:
+            self.assertEqual(self.call(args + ["--dry-run"])[0], 0)
+            connect.assert_not_called()
+            self.assertEqual(self.call(args + ["--yolo"])[0], 0)
+            self.assertEqual(self.call(args + ["--yolo"])[0], 0)
+        self.assertEqual(client.writes, 1)
+
     def test_generic_calendar_title_uses_lap_recovery_default(self):
         self.ics.write_bytes(
             calendar(
