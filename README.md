@@ -488,11 +488,13 @@ See [contributing](CONTRIBUTING.md) for the required red/green TDD workflow.
 
 ## Hosting and Funding
 
-The planned hosted service will have a useful free tier, voluntary donations
-and GitHub Sponsors, and optional paid capacity such as more frequent polling.
-The code remains MIT-licensed and self-hostable. Prices and limits are not set,
-and no hosted service or payment collection is live yet. Sponsorship setup is
-pending; no funding link is active.
+The planned hosted service has a useful free tier and optional Supporter access
+at USD $3/month or $25/year through Stripe-hosted Checkout. A 30-day trial needs
+no payment details and never starts billing without explicit subscription.
+Billing is disabled by default and not live; see the [activation gates](docs/billing.md).
+GitHub Sponsors is optional support for the open-source project, not a hosted
+entitlement. The code remains MIT-licensed and self-hostable without paid limits.
+No funding link is active while receiving-account setup is pending.
 See the [hosted service model](docs/hosting-model.md).
 
 ## Acknowledgments
