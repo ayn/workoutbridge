@@ -20,6 +20,17 @@ The single-owner web pilot includes hourly feed polling. Final Surge write-back 
 an officially available API and permission to use it.
 Not affiliated with Garmin, Final Surge, Google, Apple, or any coach.
 
+## Deployment Options
+
+- **Self-host today:** follow the [single-owner web deployment runbook](docs/private-web.md)
+  for setup, persistent storage, authentication, scheduling, and updates. Keep the
+  pilot private; it is not yet a public multi-user service.
+- **Hosted service (planned):** a managed option is intended for people who do not
+  want to run their own instance. Public availability, service URL, and paid or
+  freemium limits are not yet announced. This section will link to the default
+  hosted service and its pricing when available.
+- **Local CLI:** use the Quick Start below without running the web interface.
+
 ## Quick Start
 
 Requires [uv](https://docs.astral.sh/uv/getting-started/installation/), Python
