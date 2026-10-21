@@ -37,6 +37,18 @@ button {
 button:hover {
   background: #e9efeb;
 }
+.coros-auth-link {
+  color: #176c53;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px;
+  margin-bottom: 16px;
+  border: 1px solid currentColor;
+  border-radius: 6px;
+  text-decoration: none;
+}
 button:disabled {
   opacity: 0.45;
   cursor: not-allowed;

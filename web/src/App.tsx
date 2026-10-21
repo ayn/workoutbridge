@@ -200,6 +200,7 @@ export function App() {
   const [sourceForm, setSourceForm] = useState(false);
   const [syncForm, setSyncForm] = useState(false);
   const [garminForm, setGarminForm] = useState<string | null>(null);
+  const [corosForm, setCorosForm] = useState<string | null>(null);
   const [autoConfirm, setAutoConfirm] = useState<Sync | null>(null);
   const [acknowledged, setAcknowledged] = useState(false);
   async function load() {
@@ -231,6 +232,8 @@ export function App() {
   const rule = state?.syncs.find((s) => s.id === active);
   const plan = state?.plans.find((p) => p.id === active);
   const source = state?.sources.find((s) => s.id === rule?.source);
+  const connection = state?.connections.find((c) => c.id === rule?.profile);
+  const destinationName = connection?.provider === "COROS" ? "COROS" : "Garmin";
   const item = plan?.items[expanded ?? -1];
   const ready = plan?.items.filter((i) => !i.error).length || 0;
   function changeSync(value: string) {
@@ -600,7 +603,7 @@ export function App() {
               {!state?.connections.length && (
                 <div className="empty">
                   <Watch size={32} />
-                  <h2>No Garmin profiles connected</h2>
+                  <h2>No accounts connected</h2>
                 </div>
               )}
               {state?.connections.map((c) => (
@@ -616,20 +619,23 @@ export function App() {
                   </div>
                   <button
                     className="secondary"
-                    onClick={() => setGarminForm(c.id)}
+                    onClick={() => c.provider === "COROS" ? setCorosForm(c.id) : setGarminForm(c.id)}
                   >
                     <RefreshCw size={16} /> Sign in again
                   </button>
                 </article>
               ))}
-              <article className="record disabled">
+              <article className="record">
                 <div className="record-icon">
                   <Watch size={23} />
                 </div>
                 <div>
                   <h2>COROS</h2>
-                  <p>Not available yet</p>
+                  <p>Training calendar</p>
                 </div>
+                <button className="secondary" onClick={() => setCorosForm("coros")}>
+                  <Plus size={16} /> Connect COROS
+                </button>
               </article>
             </section>
           )}
@@ -871,6 +877,13 @@ export function App() {
           }}
         />
       )}
+      {corosForm !== null && (
+        <CorosForm profile={corosForm} close={() => setCorosForm(null)} complete={async () => {
+          await load();
+          setCorosForm(null);
+          setMessage("COROS connection saved. Choose its sync separately.");
+        }} />
+      )}
       {autoConfirm && (
         <Modal title="Automatic publishing" close={() => !busy && setAutoConfirm(null)}>
           <p>
@@ -932,7 +945,7 @@ export function App() {
           <div className="destination">
             <Watch size={22} />
             <div>
-              <strong>Garmin Connect · {rule?.profile}</strong>
+              <strong>{connection?.provider || "Garmin Connect"} · {rule?.profile}</strong>
               <p>Account {plan.account}</p>
             </div>
           </div>
@@ -962,7 +975,7 @@ export function App() {
               })
             }
           >
-            {busy ? "Publishing..." : "Publish to Garmin"}
+            {busy ? "Publishing..." : `Publish to ${destinationName}`}
             {busy ? <LoaderCircle size={16} className="spin" aria-hidden="true" /> : <ArrowRight size={16} />}
           </button>
         </Modal>
@@ -976,6 +989,45 @@ type LoginJob = {
   profile?: string;
   error?: string;
 };
+
+function CorosForm({ profile, close, complete }: { profile: string; close: () => void; complete: () => Promise<void> }) {
+  const [job, setJob] = useState<{ id: string; login_url: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [pending, setPending] = useState(false);
+  async function request(path: string, body: object) {
+    setBusy(true);
+    setError("");
+    try {
+      const result = await api(path, body);
+      if (result.status === "complete") await complete();
+      else if (result.login_url) setJob(result);
+      else setPending(true);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "COROS sign-in failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+  return <Modal title="Connect COROS" close={() => !busy && close()}>
+    {job ? <div>
+      <a className="coros-auth-link" href={job.login_url} target="_blank" rel="noopener noreferrer">Open COROS sign-in <ArrowRight size={16} /></a>
+      {pending && <p role="status">Waiting for COROS authorization</p>}
+      {error && <p role="alert">{error}</p>}
+      <button className="primary full" disabled={busy} onClick={() => void request("coros/login/finish", { id: job.id })}>
+        {busy ? "Connecting..." : "Finish connection"} {busy && <LoaderCircle size={16} className="spin" />}
+      </button>
+    </div> : <form onSubmit={(e) => {
+      e.preventDefault();
+      void request("coros/login", Object.fromEntries(new FormData(e.currentTarget)));
+    }}>
+      <label>Profile name<input name="profile" defaultValue={profile} required pattern="[A-Za-z0-9][A-Za-z0-9_-]{0,63}" /></label>
+      <label>Account region<select name="region" defaultValue="us"><option value="us">United States / Global</option><option value="eu">Europe</option><option value="cn">China</option></select></label>
+      {error && <p role="alert">{error}</p>}
+      <button className="primary" disabled={busy}>{busy ? "Connecting..." : "Continue to COROS"} {busy ? <LoaderCircle size={16} className="spin" /> : <ArrowRight size={16} />}</button>
+    </form>}
+  </Modal>;
+}
 
 function GarminForm({
   profile,

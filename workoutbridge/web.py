@@ -331,7 +331,9 @@ def create_app(root: Path, origin: str, password: str, *, poll=True) -> FastAPI:
                 connections.append(
                     {
                         "id": path.stem,
-                        "provider": "Garmin Connect",
+                        "provider": "COROS"
+                        if profile.get("destination") == "coros"
+                        else "Garmin Connect",
                         "account": profile["account_id"],
                     }
                 )
@@ -348,6 +350,101 @@ def create_app(root: Path, origin: str, password: str, *, poll=True) -> FastAPI:
             "plans": values("plan"),
             "history": sorted(values("history"), key=lambda entry: entry["at"])[-50:],
         }
+
+    @app.post(API_PREFIX + "/coros/login")
+    def coros_login_start(body: dict):
+        from .coros_auth import begin_login
+
+        if not origin.startswith("https://"):
+            raise HTTPException(403, "COROS sign-in requires HTTPS")
+        if not operation.acquire(blocking=False):
+            raise HTTPException(409, "Another operation is running")
+        try:
+            name = body.get("profile", "")
+            path = profile_path(name)
+            if path.exists() and load_profile(name)["destination"] != "coros":
+                raise ValueError("Profile belongs to another provider")
+            recent = [job for job in values("coros_login") if job["created"] > time.time() - 900]
+            if len(recent) >= 3:
+                raise ValueError("Sign-in rate limit")
+            key = uuid4().hex
+            session = path.parent.parent / "sessions" / ("coros-" + key)
+            put(
+                "coros_login",
+                key,
+                {
+                    "id": key,
+                    "profile": name,
+                    "session": str(session),
+                    "created": time.time(),
+                    "status": "starting",
+                },
+            )
+            result = begin_login(session, body.get("region", "us"))
+            put(
+                "coros_login",
+                key,
+                {
+                    "id": key,
+                    "profile": name,
+                    "session": str(session),
+                    "created": time.time(),
+                    "status": "pending",
+                },
+            )
+            return {"id": key, "status": "pending", **result}
+        except Exception:  # noqa: BLE001 - OAuth details must remain private.
+            raise HTTPException(
+                409,
+                "COROS sign-in could not start. Check profile, region and connection; three attempts per 15 minutes are allowed.",
+            ) from None
+        finally:
+            operation.release()
+
+    @app.post(API_PREFIX + "/coros/login/finish")
+    def coros_login_finish(body: dict):
+        from .coros_auth import finish_login
+        from .profiles import authenticate_profile
+
+        if not origin.startswith("https://"):
+            raise HTTPException(403, "COROS sign-in requires HTTPS")
+        if not operation.acquire(blocking=False):
+            raise HTTPException(409, "Another operation is running")
+        try:
+            job = get("coros_login", body.get("id", ""))
+            if job["status"] == "complete":
+                return {"status": "complete", "profile": job["profile"]}
+            if job["status"] != "pending" or job["created"] < time.time() - 600:
+                raise ValueError("Login expired")
+
+            class Pending(Exception):
+                pass
+
+            def authenticate(session):
+                account = finish_login(session)
+                if account is None:
+                    raise Pending
+                return account
+
+            try:
+                authenticate_profile(
+                    job["profile"],
+                    Path(job["session"]),
+                    destination="coros",
+                    authenticator=authenticate,
+                )
+            except Pending:
+                return {"status": "pending"}
+            job["status"] = "complete"
+            put("coros_login", job["id"], job)
+            return {"status": "complete", "profile": job["profile"]}
+        except Exception:  # noqa: BLE001 - do not return OAuth responses.
+            raise HTTPException(
+                409,
+                "COROS sign-in could not finish. Complete browser authorization or restart sign-in.",
+            ) from None
+        finally:
+            operation.release()
 
     @app.get(API_PREFIX + "/garmin/login")
     def garmin_login_status():
@@ -541,11 +638,23 @@ def create_app(root: Path, origin: str, password: str, *, poll=True) -> FastAPI:
                 put("sync", key, rule)
             previous = logging.root.manager.disable
             logging.disable(logging.CRITICAL)
+            coros_client = None
             try:
-                provider = GarminProvider.connect(
-                    Path(profile["session_dir"]), expected_account=profile["account_id"]
-                )
-                publisher = Publisher(Path(profile["state_db"]), provider)
+                if profile.get("destination") == "coros":
+                    from .coros_client import CorosClient
+                    from .coros_publishing import CorosEventPublisher
+
+                    coros_client = CorosClient(
+                        Path(profile["session_dir"]),
+                        profile["account_id"].split(":")[1],
+                        expected_account=profile["account_id"],
+                    )
+                    publisher = CorosEventPublisher(Path(profile["state_db"]), coros_client)
+                else:
+                    provider = GarminProvider.connect(
+                        Path(profile["session_dir"]), expected_account=profile["account_id"]
+                    )
+                    publisher = Publisher(Path(profile["state_db"]), provider)
                 for item in items:
                     wid = publisher.publish(Event(**item["event"]), item["approval"])
                     results.append(
@@ -569,6 +678,8 @@ def create_app(root: Path, origin: str, password: str, *, poll=True) -> FastAPI:
                     "Publish stopped. Some writes may have succeeded. Receipts preserved; reconcile before retrying",
                 ) from None
             finally:
+                if coros_client is not None:
+                    coros_client.close()
                 logging.disable(previous)
             record = {
                 "id": uuid4().hex,

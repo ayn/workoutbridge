@@ -11,7 +11,7 @@ COPY --from=ghcr.io/astral-sh/uv:0.12.21 /uv /usr/local/bin/uv
 WORKDIR /app
 COPY pyproject.toml uv.lock README.md ./
 COPY workoutbridge/ ./workoutbridge/
-RUN uv sync --locked --no-dev --extra garmin --extra web
+RUN uv sync --locked --no-dev --extra garmin --extra coros --extra web
 COPY --from=frontend /web/dist /app/web/dist
 ENV PATH="/app/.venv/bin:$PATH" PYTHONDONTWRITEBYTECODE=1
 EXPOSE 8000

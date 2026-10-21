@@ -153,6 +153,16 @@ try {
       fullPage: true,
     });
     await page.getByRole("button", { name: "Close dialog" }).click();
+    await page.getByRole("button", { name: "Connect COROS", exact: true }).click();
+    await page.getByLabel("Account region").waitFor();
+    modal = await page.getByRole("dialog").boundingBox();
+    assert(modal && modal.x >= 0 && modal.x + modal.width <= width);
+    await page.screenshot({ path: `${directory}/coros-${width}.png`, fullPage: true });
+    await page.route("**/api/v1/coros/login", (route) => route.fulfill({ json: { id: "synthetic", status: "pending", login_url: "https://mcpus.coros.com/cli/login/synthetic" } }));
+    await page.getByRole("button", { name: "Continue to COROS" }).click();
+    await page.getByRole("link", { name: "Open COROS sign-in" }).waitFor();
+    await page.screenshot({ path: `${directory}/coros-browser-${width}.png`, fullPage: true });
+    await page.getByRole("button", { name: "Close dialog" }).click();
     await page.getByRole("button", { name: "Syncs", exact: true }).click();
     await page.getByLabel("Automatic publishing for sample").click();
     await page
