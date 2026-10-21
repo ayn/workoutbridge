@@ -71,6 +71,12 @@ label {
   font-weight: 600;
   font-size: 13px;
 }
+.inline-check {
+  flex-direction: row;
+  align-items: center;
+  margin-top: 12px;
+  line-height: 1.5;
+}
 h1,
 h2,
 p {
@@ -589,6 +595,9 @@ footer {
   align-items: center;
   justify-content: space-between;
   margin-bottom: 25px;
+}
+.modal > p {
+  margin-bottom: 12px;
 }
 .modal form,
 .login form {

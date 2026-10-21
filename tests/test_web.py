@@ -23,6 +23,169 @@ class WebTests(unittest.TestCase):
         self.assertIn("HttpOnly", r.headers["set-cookie"])
         self.assertIn("Secure", r.headers["set-cookie"])
 
+    def automatic_rule(self):
+        self.login()
+        profile = {
+            "account_id": "123",
+            "session_dir": str(self.root / "session"),
+            "state_db": str(self.root / "pub.sqlite"),
+        }
+        patcher = patch("workoutbridge.web.load_profile", return_value=profile)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        source = self.client.post(
+            "/api/sources",
+            json={
+                "name": "Training",
+                "url": "https://log.finalsurge.com/delivery/ical/EXAMPLE",
+                "format": "finalsurge",
+                "timezone": "UTC",
+            },
+            headers=self.headers,
+        ).json()["id"]
+        rule = self.client.post(
+            "/api/syncs", json={"source": source, "profile": "test"}, headers=self.headers
+        ).json()["id"]
+        return rule, source, profile
+
+    def test_hourly_publish_is_opt_in_account_bound_and_idempotent(self):
+        from test_publishing import FakeGarmin
+
+        from workoutbridge.calendar import Event
+
+        rule, source, profile = self.automatic_rule()
+        provider = FakeGarmin()
+        provider.account_id = "123"
+        events = [
+            Event(source, "run", "", "2030-01-01", "Run: 20 min", ""),
+            Event(source, "unclear", "", "2030-01-02", "Run: mysterious exercise", ""),
+        ]
+        with (
+            patch("workoutbridge.web.read_calendar", return_value=b"synthetic"),
+            patch("workoutbridge.web.import_calendar", return_value=events),
+            patch("workoutbridge.web.GarminProvider.connect", return_value=provider) as connect,
+        ):
+            self.app.state.poll_once()
+            connect.assert_not_called()
+            endpoint = f"/api/syncs/{rule}/automatic"
+            self.assertEqual(
+                self.client.post(
+                    endpoint, json={"enabled": True, "account": "999"}, headers=self.headers
+                ).status_code,
+                409,
+            )
+            self.assertEqual(
+                self.client.post(
+                    endpoint, json={"enabled": True, "account": "123"}, headers=self.headers
+                ).status_code,
+                200,
+            )
+            self.app.state.poll_once()
+            self.app.state.poll_once()
+            self.assertEqual((provider.uploads, provider.schedules), (1, 1))
+            profile["account_id"] = "999"
+            connect.reset_mock()
+            self.app.state.poll_once()
+            connect.assert_not_called()
+            self.assertTrue(self.client.get("/api/state").json()["syncs"][0]["auto_blocked"])
+
+    def test_automatic_failure_latches_across_restart_and_requires_acknowledgment(self):
+        from workoutbridge.calendar import Event
+
+        rule, source, _ = self.automatic_rule()
+        endpoint = f"/api/syncs/{rule}/automatic"
+        self.assertEqual(
+            self.client.post(
+                endpoint, json={"enabled": True, "account": "123"}, headers=self.headers
+            ).status_code,
+            200,
+        )
+        with (
+            patch("workoutbridge.web.read_calendar", return_value=b"synthetic"),
+            patch(
+                "workoutbridge.web.import_calendar",
+                return_value=[Event(source, "run", "", "2030-01-01", "Run: 20 min", "")],
+            ),
+            patch(
+                "workoutbridge.web.GarminProvider.connect", side_effect=RuntimeError("PRIVATE")
+            ) as connect,
+        ):
+            self.app.state.poll_once()
+            restarted = create_app(self.root, "https://bridge.example", "a" * 40, poll=False)
+            restarted.state.poll_once()
+            connect.assert_called_once()
+        state = self.client.get("/api/state")
+        self.assertNotIn("PRIVATE", state.text)
+        self.assertTrue(state.json()["syncs"][0]["auto_blocked"])
+        self.assertEqual(
+            self.client.post(
+                endpoint, json={"enabled": True, "account": "123"}, headers=self.headers
+            ).status_code,
+            409,
+        )
+        self.assertEqual(
+            self.client.post(
+                endpoint,
+                json={"enabled": True, "account": "123", "acknowledge_review": True},
+                headers=self.headers,
+            ).status_code,
+            200,
+        )
+
+    def test_automatic_empty_failed_fetch_and_paused_do_not_connect(self):
+        rule, _, _ = self.automatic_rule()
+        self.assertEqual(
+            self.client.post(
+                f"/api/syncs/{rule}/automatic",
+                json={"enabled": True, "account": "123"},
+                headers=self.headers,
+            ).status_code,
+            200,
+        )
+        with patch("workoutbridge.web.GarminProvider.connect") as connect:
+            with patch("workoutbridge.web.read_calendar", side_effect=ValueError("PRIVATE")):
+                self.app.state.poll_once()
+            with (
+                patch("workoutbridge.web.read_calendar", return_value=b"synthetic"),
+                patch("workoutbridge.web.import_calendar", return_value=[]),
+            ):
+                self.app.state.poll_once()
+            self.client.post(
+                f"/api/syncs/{rule}/pause", json={"paused": True}, headers=self.headers
+            )
+            with patch("workoutbridge.web.read_calendar") as fetch:
+                self.app.state.poll_once()
+                fetch.assert_not_called()
+            connect.assert_not_called()
+
+    def test_manual_failure_also_stops_enabled_automatic_publishing(self):
+        from workoutbridge.calendar import Event
+
+        rule, source, _ = self.automatic_rule()
+        self.client.post(
+            f"/api/syncs/{rule}/automatic",
+            json={"enabled": True, "account": "123"},
+            headers=self.headers,
+        )
+        with (
+            patch("workoutbridge.web.read_calendar", return_value=b"synthetic"),
+            patch(
+                "workoutbridge.web.import_calendar",
+                return_value=[Event(source, "run", "", "2030-01-01", "Run: 20 min", "")],
+            ),
+        ):
+            plan = self.client.post(f"/api/syncs/{rule}/preview", headers=self.headers).json()
+        with patch("workoutbridge.web.GarminProvider.connect", side_effect=RuntimeError("PRIVATE")):
+            self.assertEqual(
+                self.client.post(
+                    f"/api/syncs/{rule}/publish",
+                    json={"hash": plan["hash"], "selected": [0]},
+                    headers=self.headers,
+                ).status_code,
+                409,
+            )
+        self.assertTrue(self.client.get("/api/state").json()["syncs"][0]["auto_blocked"])
+
     def test_auth_and_csrf(self):
         self.assertEqual(self.client.get("/api/state").status_code, 401)
         self.assertEqual(
@@ -36,6 +199,42 @@ class WebTests(unittest.TestCase):
         )
         self.client.post("/api/logout", headers=self.headers)
         self.assertEqual(self.client.get("/api/state").status_code, 401)
+
+    def test_garmin_login_api_requires_owner_origin_and_https(self):
+        path = "/api/garmin/login"
+        self.assertEqual(self.client.post(path, json={}, headers=self.headers).status_code, 401)
+        self.login()
+        with patch(
+            "workoutbridge.web_auth.GarminLogin.start",
+            return_value={"id": "job", "status": "signing_in"},
+        ) as start:
+            body = {
+                "profile": "personal",
+                "email": "example@example.invalid",
+                "password": "PRIVATE",
+            }
+            self.assertEqual(self.client.post(path, json=body).status_code, 403)
+            response = self.client.post(path, json=body, headers=self.headers)
+            self.assertEqual(response.status_code, 200)
+            self.assertNotIn("PRIVATE", response.text)
+            start.assert_called_once_with("personal", "example@example.invalid", "PRIVATE")
+        self.assertEqual(self.client.get(path).status_code, 200)
+        self.assertEqual(
+            self.client.post(
+                path + "/mfa", json={"id": "wrong", "code": "123456"}, headers=self.headers
+            ).status_code,
+            409,
+        )
+        http = TestClient(
+            create_app(self.root / "http", "http://bridge.example", "a" * 40, poll=False),
+            base_url="http://bridge.example",
+        )
+        http.post(
+            "/api/login", json={"password": "a" * 40}, headers={"Origin": "http://bridge.example"}
+        )
+        self.assertEqual(
+            http.post(path, json=body, headers={"Origin": "http://bridge.example"}).status_code, 403
+        )
 
     def test_sources_private_and_restricted(self):
         self.login()

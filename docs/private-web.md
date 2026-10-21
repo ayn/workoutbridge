@@ -42,7 +42,21 @@ No passwords or private feeds belong in Git, build contexts, or Actions logs.
 
 ## Garmin authentication
 
-Login occurs in an interactive terminal, not a web credential form:
+In Connections, select **Connect Garmin**, enter a profile name, email and
+password, then enter the verification code only if Garmin requests it. Use
+**Sign in again** on an existing connection to renew it without replacing its
+publishing receipts. Creating a connection does not change any sync destination.
+
+Web authentication requires HTTPS and the existing owner session and Origin
+checks. Passwords and MFA codes are used in memory, not stored in the database
+or logs. Only session tokens and the verified account profile are persisted.
+One login can run at a time, with three attempts per 15 minutes and five minutes
+to finish. Cancellation/expiry rejects the result and removes the fresh session;
+an in-flight provider network request may take longer to return. A restart clears
+the pending conversation. The form supports Garmin's email/SMS verification code,
+not an OAuth grant or a bypass of Garmin security checks.
+
+CLI authentication remains available in an interactive terminal:
 
 ```sh
 cd /opt/workoutbridge
@@ -72,9 +86,26 @@ Do not delete receipts to resolve a duplicate or uncertain outcome.
 5. Select workouts and confirm publication. The backend requires the exact
    current preview, verifies the connected account, and reads back Garmin writes.
 
-Hourly refresh preserves feed snapshots and updates previews. **There is no
-automatic publishing.** Pausing a sync stops its scheduled refresh and prevents
-publishing. Unlinked sources are not polled. Failed refreshes retain the previous
+Hourly refresh preserves feed snapshots and updates previews. **Automatic
+publishing is off by default.** In Syncs, enable Publish hourly and confirm the
+specific destination profile/account to opt in. Each hourly pass uses a fresh
+feed and publishes only fully parsed items within the next 15 calendar days;
+unresolved and cancelled items stay in review. Existing receipts prevent duplicate
+uploads/schedules, and changed prescriptions go through the same update checks as
+manual publishing. No deletions are propagated.
+
+Before any automatic write, a durable stop flag is saved. Failed/uncertain writes,
+process interruption, or changed account identity stop unattended publishing until
+you reconcile History and Garmin and explicitly acknowledge re-enabling it.
+Manual publication failures also stop enabled automatic publishing. Expired Garmin
+authentication requires sign-in again and an explicit resume; credentials are never
+retried automatically. Empty feeds do not contact Garmin. A failed feed fetch
+never publishes a stale preview, but is retried on the next hourly poll.
+
+The worker runs every 3600 seconds while the single-worker service is running;
+its first check is one hour after startup. Manual Refresh feed only previews,
+even for automatic syncs. Pausing a sync stops scheduled refresh and publishing.
+Unlinked sources are not polled. Failed refreshes retain the previous
 preview and surface an error; previews expire after 24 hours. Refreshing changes
 the approval hash, so an old browser view cannot accidentally approve new content.
 Final Surge removes past entries; hourly polling reduces but cannot eliminate

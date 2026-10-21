@@ -1,4 +1,4 @@
-"""Private, single-owner review server. Never schedules unattended publication."""
+"""Private, single-owner server with explicitly enabled hourly publishing."""
 
 import hashlib
 import json
@@ -26,6 +26,7 @@ from .garmin import GarminProvider
 from .prescriptions import normalize_finalsurge, normalize_workout
 from .profiles import load_profile, profile_path
 from .publishing import Publisher, digest
+from .web_auth import GarminLogin
 
 
 def create_app(root: Path, origin: str, password: str, *, poll=True) -> FastAPI:
@@ -39,7 +40,8 @@ def create_app(root: Path, origin: str, password: str, *, poll=True) -> FastAPI:
     os.close(fd)
     sessions = {}
     attempts = []
-    operation = threading.Lock()
+    operation = threading.RLock()
+    garmin_login = GarminLogin(operation)
 
     @contextmanager
     def db():
@@ -117,7 +119,32 @@ def create_app(root: Path, origin: str, password: str, *, poll=True) -> FastAPI:
                 if rule.get("paused"):
                     continue
                 try:
-                    preview(rule["id"])
+                    plan = preview(rule["id"])
+                    rule = get("sync", rule["id"])
+                    if not rule.get("automatic") or rule.get("auto_blocked"):
+                        continue
+                    if rule.get("auto_account") != plan["account"]:
+                        rule.update(
+                            auto_blocked=True,
+                            error="Destination changed. Review automatic publishing.",
+                        )
+                        put("sync", rule["id"], rule)
+                        continue
+                    selected = [i for i, item in enumerate(plan["items"]) if "error" not in item]
+                    if not selected:
+                        continue
+                    # Persist before any remote request: crashes must also stop unattended retries.
+                    rule["auto_blocked"] = True
+                    put("sync", rule["id"], rule)
+                    try:
+                        publish(rule["id"], {"hash": plan["hash"], "selected": selected})
+                    except Exception:  # noqa: BLE001 - preserve the stop latch and redact remote errors.
+                        rule["error"] = (
+                            "Automatic publishing stopped. Reconcile history before re-enabling."
+                        )
+                    else:
+                        rule.update(auto_blocked=False, last_publish=stamp(), error=None)
+                    put("sync", rule["id"], rule)
                 except Exception:  # noqa: BLE001 - private feed/session details must not leak.
                     rule["error"] = "Feed refresh failed. Check feed access and connection profile."
                     put("sync", rule["id"], rule)
@@ -137,6 +164,7 @@ def create_app(root: Path, origin: str, password: str, *, poll=True) -> FastAPI:
             thread.start()
         yield
         stop.set()
+        garmin_login.close()
         if poll:
             thread.join(timeout=35)
 
@@ -255,6 +283,43 @@ def create_app(root: Path, origin: str, password: str, *, poll=True) -> FastAPI:
             "history": values("history")[-50:],
         }
 
+    @app.get("/api/garmin/login")
+    def garmin_login_status():
+        return garmin_login.status()
+
+    @app.post("/api/garmin/login")
+    def garmin_login_start(body: dict):
+        if not origin.startswith("https://"):
+            raise HTTPException(403, "Garmin sign-in requires HTTPS")
+        try:
+            return garmin_login.start(
+                body.get("profile", ""), body.get("email"), body.get("password")
+            )
+        except (ValueError, TypeError):
+            raise HTTPException(
+                409,
+                "Check profile and credentials; only one login and three attempts per 15 minutes are allowed",
+            ) from None
+
+    @app.post("/api/garmin/login/mfa")
+    def garmin_login_code(body: dict):
+        if not origin.startswith("https://"):
+            raise HTTPException(403, "Garmin sign-in requires HTTPS")
+        try:
+            return garmin_login.submit(body.get("id"), body.get("code"))
+        except ValueError:
+            raise HTTPException(
+                409, "Use the current login and a six-digit verification code"
+            ) from None
+
+    @app.post("/api/garmin/login/cancel")
+    def garmin_login_cancel(body: dict):
+        try:
+            garmin_login.cancel(body.get("id"))
+            return {"ok": True}
+        except ValueError:
+            raise HTTPException(409, "No matching login") from None
+
     @app.post("/api/sources")
     def source(body: dict):
         url = body.get("url", "")
@@ -350,6 +415,29 @@ def create_app(root: Path, origin: str, password: str, *, poll=True) -> FastAPI:
         finally:
             operation.release()
 
+    @app.post("/api/syncs/{key}/automatic")
+    def automatic(key: str, body: dict):
+        if type(body.get("enabled")) is not bool:
+            raise HTTPException(422, "Choose an automatic publishing state")
+        if not operation.acquire(blocking=False):
+            raise HTTPException(409, "Another operation is running")
+        try:
+            rule = get("sync", key)
+            if body["enabled"]:
+                profile = load_profile(rule["profile"])
+                if body.get("account") != profile["account_id"]:
+                    raise HTTPException(409, "Confirm the destination account")
+                if rule.get("auto_blocked") and body.get("acknowledge_review") is not True:
+                    raise HTTPException(
+                        409, "Reconcile history and acknowledge review before resuming"
+                    )
+                rule.update(auto_account=profile["account_id"], auto_blocked=False, error=None)
+            rule["automatic"] = body["enabled"]
+            put("sync", key, rule)
+            return {"ok": True}
+        finally:
+            operation.release()
+
     @app.post("/api/syncs/{key}/publish")
     def publish(key: str, body: dict):
         if not operation.acquire(blocking=False):
@@ -380,6 +468,9 @@ def create_app(root: Path, origin: str, password: str, *, poll=True) -> FastAPI:
             if any("error" in item for item in items):
                 raise HTTPException(409, "Unresolved workouts cannot be published")
             results = []
+            if rule.get("automatic"):
+                rule["auto_blocked"] = True
+                put("sync", key, rule)
             previous = logging.root.manager.disable
             logging.disable(logging.CRITICAL)
             try:
@@ -419,6 +510,9 @@ def create_app(root: Path, origin: str, password: str, *, poll=True) -> FastAPI:
                 "results": results,
             }
             put("history", record["id"], record)
+            if rule.get("automatic"):
+                rule.update(auto_blocked=False, last_publish=stamp())
+                put("sync", key, rule)
             return record
         finally:
             operation.release()

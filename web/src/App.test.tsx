@@ -152,3 +152,84 @@ test("calendar source dialog receives focus and submits a private URL", async ()
     ),
   );
 });
+
+test("hourly publishing requires destination confirmation", async () => {
+  const fetcher = vi
+    .spyOn(globalThis, "fetch")
+    .mockImplementation(async () => new Response(JSON.stringify(initial)));
+  render(<App />);
+  await screen.findByText("Upcoming workouts");
+  await userEvent.click(screen.getByRole("button", { name: "Syncs" }));
+  await userEvent.click(screen.getByLabelText("Automatic publishing for test"));
+  expect(
+    fetcher.mock.calls.some(([url]) => url === "/api/syncs/r/automatic"),
+  ).toBe(false);
+  await userEvent.click(
+    screen.getByRole("button", { name: "Enable hourly publishing" }),
+  );
+  await waitFor(() =>
+    expect(
+      fetcher.mock.calls.some(([url]) => url === "/api/syncs/r/automatic"),
+    ).toBe(true),
+  );
+  const request = fetcher.mock.calls.find(
+    ([url]) => url === "/api/syncs/r/automatic",
+  )![1];
+  expect(JSON.parse(request!.body as string)).toEqual({
+    enabled: true,
+    account: "123",
+    acknowledge_review: false,
+  });
+});
+
+test("Garmin web sign-in clears credentials and accepts requested MFA", async () => {
+  const fetcher = vi
+    .spyOn(globalThis, "fetch")
+    .mockImplementation(async (url, options) => {
+      if (url === "/api/garmin/login" && options?.method === "POST")
+        return new Response(
+          JSON.stringify({ id: "job", status: "mfa", profile: "personal" }),
+        );
+      if (url === "/api/garmin/login/mfa")
+        return new Response(
+          JSON.stringify({
+            id: "job",
+            status: "complete",
+            profile: "personal",
+            account: "456",
+          }),
+        );
+      if (url === "/api/garmin/login")
+        return new Response(JSON.stringify({ status: "idle" }));
+      return new Response(JSON.stringify(initial));
+    });
+  render(<App />);
+  await screen.findByText("Upcoming workouts");
+  await userEvent.click(screen.getByRole("button", { name: "Connections" }));
+  await userEvent.click(screen.getByRole("button", { name: "Connect Garmin" }));
+  await userEvent.type(
+    await screen.findByLabelText("Garmin email"),
+    "example@example.invalid",
+  );
+  await userEvent.type(
+    screen.getByLabelText("Garmin password"),
+    "synthetic-password",
+  );
+  await userEvent.click(
+    screen.getByRole("button", { name: "Sign in to Garmin" }),
+  );
+  await userEvent.type(
+    await screen.findByLabelText("Verification code"),
+    "123456",
+  );
+  expect(
+    screen.queryByDisplayValue("synthetic-password"),
+  ).not.toBeInTheDocument();
+  await userEvent.click(screen.getByRole("button", { name: "Verify code" }));
+  await waitFor(() =>
+    expect(
+      fetcher.mock.calls.some(([url]) => url === "/api/garmin/login/mfa"),
+    ).toBe(true),
+  );
+  expect(localStorage.length).toBe(0);
+});
