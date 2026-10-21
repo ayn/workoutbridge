@@ -1,7 +1,9 @@
 import tempfile
+import threading
 import unittest
 from pathlib import Path
 
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
 from workoutbridge.profiles import authenticate_profile, load_profile
@@ -9,6 +11,17 @@ from workoutbridge.web import create_app
 
 
 class WebExtensionTests(unittest.TestCase):
+    def test_embedding_supplies_operation_lock_and_runs_only_whitelisted_actions(self):
+        with tempfile.TemporaryDirectory() as directory:
+            operation = threading.RLock()
+            app = create_app(Path(directory), "https://bridge.example", "a" * 40,
+                poll=False, operation=operation)
+            self.assertIs(app.state.operation, operation)
+            with self.assertRaises(ValueError):
+                app.state.run_action("delete_everything", "unknown", {})
+            with self.assertRaises(HTTPException):
+                app.state.run_action("preview", "missing", {})
+
     def test_explicit_profile_roots_do_not_change_process_environment(self):
         with tempfile.TemporaryDirectory() as directory:
             first, second = Path(directory) / "first", Path(directory) / "second"

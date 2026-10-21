@@ -88,7 +88,7 @@ const tabs = [
 
 const API_BASE = "/api/v1/";
 
-async function api(path: string, data?: unknown) {
+async function defaultApi(path: string, data?: unknown) {
   let response: Response;
   try {
     response = await fetch(
@@ -186,7 +186,10 @@ function Progress({ label = "Working..." }: { label?: string }) {
   </div>;
 }
 
-export function App({ brand = "WorkoutBridge", multiuser = false, suggestedEmail = "", onLogout }: { brand?: string; multiuser?: boolean; suggestedEmail?: string; onLogout?: () => void }) {
+const api = defaultApi;
+
+export function App({ brand = "WorkoutBridge", multiuser = false, suggestedEmail = "", onLogout, request = defaultApi }: { brand?: string; multiuser?: boolean; suggestedEmail?: string; onLogout?: () => void; request?: typeof defaultApi }) {
+  const api = request;
   const [state, setState] = useState<State | null>(null);
   const [signedIn, setSignedIn] = useState<boolean | null>(null);
   const [view, setView] = useState<View>("Workouts");

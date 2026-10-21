@@ -7,6 +7,14 @@ afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
 });
+
+test("embedding can supply an asynchronous request transport", async () => {
+  const fallback = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", {status: 401}));
+  const request = vi.fn().mockResolvedValue(initial);
+  render(<App request={request} />);
+  await waitFor(() => expect(request).toHaveBeenCalledWith("state"));
+  expect(fallback).not.toHaveBeenCalled();
+});
 const initial = {
   sources: [
     { id: "s", name: "Training", format: "finalsurge", timezone: "UTC" },

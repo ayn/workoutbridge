@@ -102,6 +102,13 @@ sidecar's Tailscale address and open the configured HTTPS origin from a tailnet
 device. Do not publish the app through Funnel or port forwarding. Sign in using
 the generated `access-password` file from your private data directory.
 
+For this always-on sidecar, disable **device key expiry** in the Tailscale admin
+console: **Machines → sidecar's menu → Disable key expiry**. Confirm that expiry
+is disabled rather than assuming it is. This is separate from the auth key used
+to enroll the device; see [Tailscale's key documentation](https://tailscale.com/docs/features/access-control/auth-keys).
+Keep the persisted Tailscale state private and revoke the device if compromised
+or retired. Do not disable expiry for every personal device.
+
 **Optional: split-horizon DNS with AdGuard Home.** A private DNS rewrite makes
 your custom hostname resolve to the sidecar's Tailscale address for your devices,
 while Cloudflare's authoritative zone is used for the DNS-01 certificate challenge.
