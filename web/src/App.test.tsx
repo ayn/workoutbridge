@@ -221,6 +221,19 @@ test("hourly publishing requires destination confirmation", async () => {
   });
 });
 
+test("dialog dismisses on backdrop taps but not inside taps", async () => {
+  vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response(JSON.stringify(initial)));
+  render(<App />);
+  await screen.findByText("Upcoming workouts");
+  await userEvent.click(screen.getByRole("button", { name: "Syncs" }));
+  await userEvent.click(screen.getByLabelText("Automatic publishing for test"));
+  const dialog = screen.getByRole("dialog");
+  await userEvent.click(screen.getByText("Garmin account 123"));
+  expect(dialog).toBeInTheDocument();
+  await userEvent.click(dialog.parentElement!);
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+});
+
 test("new sync offers automatic publishing with an explicit manual choice", async () => {
   const fetcher = vi.spyOn(globalThis, "fetch").mockImplementation(async (url) =>
     new Response(JSON.stringify(url === "/api/syncs" ? { id: "new" } : initial)),

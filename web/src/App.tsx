@@ -1183,7 +1183,9 @@ function Modal({
     };
   }, []);
   return (
-    <div className="overlay">
+    <div className="overlay" onClick={(event) => {
+      if (event.target === event.currentTarget) close();
+    }}>
       <section
         ref={dialog}
         className="modal"
