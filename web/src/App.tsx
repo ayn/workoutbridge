@@ -74,6 +74,8 @@ type State = {
   }[];
 };
 type View = "Workouts" | "Sources" | "Connections" | "Syncs" | "History";
+const independenceDisclaimer =
+  "WorkoutBridge is an independent project, not affiliated with, endorsed by, or sponsored by Garmin, Final Surge, COROS, Suunto, Google, Apple, or any other platform provider. All trademarks belong to their respective owners.";
 const tabs = [
   { name: "Workouts", icon: CalendarDays },
   { name: "Sources", icon: CalendarDays },
@@ -278,6 +280,7 @@ export function App() {
             {error ? "Connection unavailable" : "Connecting…"}
           </p>
         )}
+        <p className="independence-disclaimer">{independenceDisclaimer}</p>
       </main>
     );
   return (
@@ -734,6 +737,7 @@ export function App() {
             <span className="dot" />
             Private instance
           </span>
+          <p className="independence-disclaimer">{independenceDisclaimer}</p>
         </footer>
       </div>
       {sourceForm && (
