@@ -1,5 +1,5 @@
 import { afterEach, expect, test, vi } from "vitest";
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { App } from "./App";
 
@@ -93,7 +93,7 @@ test("Garmin sign-in suggests a supplied email but stays editable and explains s
   fireEvent.focus(email);
   expect(select.mock.calls.length).toBe(selections);
   expect(screen.getByLabelText("Garmin password")).toHaveValue("");
-  expect(screen.getByText(/We do not save your Garmin email or password/)).toBeInTheDocument();
+  expect(screen.getByText(/Your password isn.t stored/).closest("form")).not.toBeNull();
 });
 
 test("COROS browser sign-in saves a connection after authorization", async () => {
@@ -388,4 +388,38 @@ test("Garmin web sign-in clears credentials and accepts requested MFA", async ()
     ).toBe(true),
   );
   expect(localStorage.length).toBe(0);
+});
+
+
+test("Garmin and COROS connect actions are peers in one provider group", async () => {
+  vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify(initial)));
+  render(<App />);
+  await userEvent.click(await screen.findByRole("button", {name: "Connections"}));
+  const group = screen.getByRole("group", {name: "Connect a destination"});
+  expect(within(group).getByRole("button", {name: "Connect Garmin"})).toHaveClass("primary");
+  expect(within(group).getByRole("button", {name: "Connect COROS"})).toHaveClass("primary");
+  expect(screen.getAllByRole("button", {name: "Connect COROS"})).toHaveLength(1);
+});
+
+test("embedding can control workspace navigation", async () => {
+  const change = vi.fn();
+  const request = vi.fn().mockResolvedValue(initial);
+  const {rerender} = render(<App request={request} view="Connections" onViewChange={change} />);
+  await screen.findByRole("button", {name: "Connect Garmin"});
+  await userEvent.click(screen.getByRole("button", {name: "Sources"}));
+  expect(change).toHaveBeenCalledWith("Sources");
+  rerender(<App request={request} view="History" onViewChange={change} />);
+  expect(await screen.findByRole("heading", {name: "History"})).toBeInTheDocument();
+});
+
+test("Garmin unexpected responses retain a usable form and visible error", async () => {
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (url, options) => new Response(JSON.stringify(String(url).endsWith("/garmin/login") ? options?.method === "POST" ? {status: "unexpected"} : {status: "idle"} : initial)));
+  render(<App />);
+  await userEvent.click(await screen.findByRole("button", {name: "Connections"}));
+  await userEvent.click(screen.getByRole("button", {name: "Connect Garmin"}));
+  await userEvent.type(screen.getByLabelText("Garmin email"), "member@example.invalid");
+  await userEvent.type(screen.getByLabelText("Garmin password"), "synthetic-password");
+  await userEvent.click(screen.getByRole("button", {name: "Sign in to Garmin"}));
+  expect(await screen.findByRole("alert")).toHaveTextContent("Unexpected Garmin sign-in response");
+  expect(screen.getByLabelText("Garmin email")).toBeInTheDocument();
 });

@@ -869,3 +869,8 @@ footer {
     animation: none;
   }
 }
+
+.provider-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
+@media (max-width: 600px) { .page-heading:has(.provider-actions) { align-items: stretch; flex-direction: column; } .provider-actions > button { flex: 1; white-space: nowrap; } }
+
+.form-help { font-size: 13px; line-height: 1.6; color: var(--muted); }
