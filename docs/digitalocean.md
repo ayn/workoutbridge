@@ -10,6 +10,8 @@ tokens, feeds, publishing receipts, or scheduled syncs are migrated automaticall
 - Dedicated unprivileged `workoutbridge` user, with no sudo access.
 - Rootless Docker 29.9.2, installed using Docker's official rootless installer;
   user systemd service with linger enabled. No rootful daemon is required.
+  A service-user-specific `user@UID.service.d/delegate.conf` delegates CPU,
+  cpuset, I/O, memory, and PID controllers; Ubuntu otherwise omits CPU delegation.
 - Docker Compose v5.6.1, installed after checking the release SHA256 checksum.
 - Container binds only `127.0.0.1:1879`, with no Apache virtual host or public DNS
   route. Existing WordPress, Apache, and MySQL configuration is unchanged.
@@ -123,3 +125,5 @@ Multi-user support is not implemented by this deployment. Before public access:
   publishing receipts and prevents concurrent publishing from Pi and DO.
 
 Do not expose the existing single-owner app publicly as a shortcut to these gates.
+
+Reference: [Docker rootless resource limits](https://docs.docker.com/engine/security/rootless/tips/#limiting-resources).
