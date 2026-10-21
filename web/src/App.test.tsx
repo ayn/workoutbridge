@@ -1,5 +1,5 @@
 import { afterEach, expect, test, vi } from "vitest";
-import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { App } from "./App";
 
@@ -66,6 +66,27 @@ const initial = {
   ],
   history: [],
 };
+
+test("Garmin sign-in suggests the Prescribed email but stays editable and explains storage", async () => {
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (url) => new Response(JSON.stringify(String(url).endsWith("/garmin/login") ? { status: "idle" } : initial)));
+  render(<App suggestedEmail="athlete@example.invalid" />);
+  await userEvent.click(await screen.findByRole("button", { name: "Connections" }));
+  await userEvent.click(screen.getByRole("button", { name: "Connect Garmin" }));
+  const email = screen.getByLabelText("Garmin email");
+  expect(email).toHaveValue("athlete@example.invalid");
+  const select = vi.spyOn(HTMLInputElement.prototype, "select");
+  fireEvent.focus(email);
+  expect(select).toHaveBeenCalledOnce();
+  await userEvent.clear(email);
+  await userEvent.type(email, "different@example.invalid");
+  expect(email).toHaveValue("different@example.invalid");
+  const selections = select.mock.calls.length;
+  fireEvent.blur(email);
+  fireEvent.focus(email);
+  expect(select.mock.calls.length).toBe(selections);
+  expect(screen.getByLabelText("Garmin password")).toHaveValue("");
+  expect(screen.getByText(/We do not save your Garmin email or password/)).toBeInTheDocument();
+});
 
 test("COROS browser sign-in saves a connection after authorization", async () => {
   const fetcher = vi.spyOn(globalThis, "fetch").mockImplementation(async (url) => {

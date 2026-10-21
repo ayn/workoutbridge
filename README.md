@@ -1,4 +1,10 @@
-# WorkoutBridge
+# Prescribed / WorkoutBridge
+
+Prescribed is the hosted, passkey-first multi-user pilot. It turns a coach's
+written prescriptions into structured workouts for Garmin and COROS. See the
+[multi-user guide](docs/multiuser.md) for accounts, scheduling, plan limits,
+referral rewards, gifts, administration, and DIY multi-user deployment.
+The CLI/package and existing private instance retain the WorkoutBridge name.
 
 The private web pilot provides calendar sources, saved Garmin and COROS connections,
 web sign-in, structured-workout previews, and manual or opt-in hourly publishing. See the
@@ -34,6 +40,8 @@ provisional during the private pilot and will stabilize at public launch.
 - **Self-host today:** follow the [single-owner web deployment runbook](docs/private-web.md)
   for setup, persistent storage, authentication, scheduling, and updates. Keep the
   pilot private; it is not yet a public multi-user service.
+- **DIY multi-user:** optionally add the [multi-user Compose override](docs/multiuser.md)
+  while retaining the Caddy/Tailscale sidecar. Hosted-plan limits are disabled.
 - **Hosted service (planned):** a managed option is intended for people who do not
   want to run their own instance. Public availability, service URL, and paid or
   freemium limits are not yet announced. This section will link to the default

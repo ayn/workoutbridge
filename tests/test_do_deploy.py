@@ -120,6 +120,16 @@ class DoDeployTests(unittest.TestCase):
         ):
             self.assertIn(setting, compose)
 
+    def test_local_multiuser_override_is_applied_without_building_on_server(self):
+        path = self.root / "deploy.json"
+        config = json.loads(path.read_text())
+        config["overrides"] = ["/opt/workoutbridge/compose.multiuser.yaml"]
+        path.write_text(json.dumps(config))
+        self.module.deploy(self.root, self.payload, run=self.fake_run)
+        command = next(args for args, _ in self.calls if "up" in args)
+        self.assertEqual(command.count("-f"), 2)
+        self.assertIn(config["overrides"][0], command)
+
     def test_ci_builds_on_hosted_runner_and_deploys_only_tested_main(self):
         workflow = (SCRIPT.parent.parent / ".github/workflows/deploy-do.yml").read_text()
         for guard in (

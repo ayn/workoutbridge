@@ -93,6 +93,11 @@ def deploy(root, payload, *, run=subprocess.run):
                     config["env_file"],
                     "-f",
                     config["compose"],
+                    *[
+                        argument
+                        for path in config.get("overrides", [])
+                        for argument in ("-f", path)
+                    ],
                     "up",
                     "-d",
                     "--no-build",

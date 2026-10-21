@@ -124,3 +124,22 @@ class WebAuthTests(unittest.TestCase):
             second = load_profile("personal")
         self.assertEqual(first["state_db"], second["state_db"])
         self.assertNotEqual(first["session_dir"], second["session_dir"])
+
+    def test_hosted_auth_keeps_session_plaintext_only_in_runtime_and_seals_before_success(self):
+        from cryptography.fernet import Fernet
+
+        from workoutbridge.vault import SessionVault
+
+        vault = SessionVault(self.root / "sealed", self.root / "runtime", Fernet.generate_key())
+        self.login = GarminLogin(threading.RLock(), config_root=self.root / "config", vault=vault)
+        with patch("workoutbridge.auth.make_client", side_effect=self.factory):
+            job = self.login.start("personal", "example@example.invalid", "PRIVATE")
+            self.wait("mfa")
+            self.login.submit(job["id"], "123456")
+            self.wait("complete")
+        profile = load_profile("personal", config_root=self.root / "config")
+        self.assertEqual(Path(profile["session_dir"]).parent, self.root / "runtime")
+        sealed = list((self.root / "sealed").glob("*.sealed"))
+        self.assertEqual(len(sealed), 1)
+        self.assertNotIn(b"synthetic", sealed[0].read_bytes())
+        self.assertFalse((self.root / "config/sessions").exists())

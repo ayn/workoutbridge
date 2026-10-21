@@ -1,0 +1,18 @@
+services:
+  web:
+    environment:
+      WORKOUTBRIDGE_MULTIUSER: "true"
+      WORKOUTBRIDGE_HOSTED_PLANS: ${WORKOUTBRIDGE_HOSTED_PLANS:-false}
+      WORKOUTBRIDGE_DATA_DIR: /data/multiuser
+      CLOUDFLARE_ACCOUNT_ID: ${CLOUDFLARE_ACCOUNT_ID:?Set email account}
+      CLOUDFLARE_EMAIL_TOKEN_FILE: /run/secrets/cloudflare_email
+      WORKOUTBRIDGE_VAULT_KEY_FILE: /run/secrets/provider_key
+      WORKOUTBRIDGE_ADMIN_EMAIL: ${WORKOUTBRIDGE_ADMIN_EMAIL:-}
+    secrets:
+      - cloudflare_email
+      - provider_key
+secrets:
+  cloudflare_email:
+    file: ${CLOUDFLARE_EMAIL_TOKEN_SOURCE:?Set private token path}
+  provider_key:
+    file: ${WORKOUTBRIDGE_VAULT_KEY_SOURCE:?Set private vault key path}

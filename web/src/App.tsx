@@ -186,7 +186,7 @@ function Progress({ label = "Working..." }: { label?: string }) {
   </div>;
 }
 
-export function App() {
+export function App({ brand = "WorkoutBridge", multiuser = false, suggestedEmail = "", onLogout }: { brand?: string; multiuser?: boolean; suggestedEmail?: string; onLogout?: () => void }) {
   const [state, setState] = useState<State | null>(null);
   const [signedIn, setSignedIn] = useState<boolean | null>(null);
   const [view, setView] = useState<View>("Workouts");
@@ -270,7 +270,7 @@ export function App() {
         {busy && <Progress label="Signing in..." />}
         <div className="login-brand">
           <Route size={30} />
-          <h1>WorkoutBridge</h1>
+          <h1>{brand}</h1>
         </div>
         <span className="badge">Private instance</span>
         {alert}
@@ -302,12 +302,12 @@ export function App() {
       <aside className="sidebar">
         <div className="brand">
           <Route size={24} />
-          <strong>WorkoutBridge</strong>
+          <strong>{brand}</strong>
         </div>
         <div className="workspace">
           <span className="avatar">WB</span>
           <div>
-            Personal workspace<small>Private instance</small>
+            Personal workspace<small>{multiuser ? "Your account" : "Private instance"}</small>
           </div>
           <ShieldCheck size={17} />
         </div>
@@ -329,7 +329,7 @@ export function App() {
         <div className="sidebar-bottom">
           <span className="dot" />{" "}
           {state?.syncs.some((s) => s.automatic && !s.paused && !s.auto_blocked)
-            ? "Hourly publishing"
+            ? (multiuser ? "Scheduled publishing" : "Hourly publishing")
             : "Manual publishing"}
           <button
             title="Sign out"
@@ -339,6 +339,7 @@ export function App() {
                 await api("logout", {});
                 setState(null);
                 setSignedIn(false);
+                onLogout?.();
               })
             }
           >
@@ -658,7 +659,7 @@ export function App() {
                       <ArrowRight size={15} /> {s.profile}
                     </h2>
                     <p>
-                      {s.paused ? "Paused" : "Hourly refresh"} ·{" "}
+                      {s.paused ? "Paused" : multiuser ? "Scheduled refresh" : "Hourly refresh"} ·{" "}
                       {s.auto_blocked
                         ? "Publishing stopped: review required"
                         : s.automatic
@@ -688,7 +689,7 @@ export function App() {
                             });
                         }}
                       />
-                      Publish hourly
+                      {multiuser ? "Automatic publishing" : "Publish hourly"}
                     </label>
                   </div>
                   <button
@@ -868,6 +869,7 @@ export function App() {
       )}
       {garminForm !== null && (
         <GarminForm
+          suggestedEmail={suggestedEmail}
           profile={garminForm}
           close={() => setGarminForm(null)}
           complete={async () => {
@@ -898,7 +900,7 @@ export function App() {
             }
           </p>
           <p>
-            Publish eligible workouts now, then hourly. Paused syncs stay paused. Unresolved workouts stay in
+            Publish eligible workouts now, then {multiuser ? "on your account’s schedule" : "hourly"}. Paused syncs stay paused. Unresolved workouts stay in
             review. A failed or uncertain write stops automatic publishing.
           </p>
           {autoConfirm.auto_blocked && (
@@ -1030,10 +1032,12 @@ function CorosForm({ profile, close, complete }: { profile: string; close: () =>
 }
 
 function GarminForm({
+  suggestedEmail,
   profile,
   close,
   complete,
 }: {
+  suggestedEmail: string;
   profile: string;
   close: () => void;
   complete: () => Promise<void>;
@@ -1042,6 +1046,7 @@ function GarminForm({
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const completed = useRef(false);
+  const emailEdited = useRef(false);
   useEffect(() => {
     let active = true;
     api("garmin/login")
@@ -1111,6 +1116,7 @@ function GarminForm({
         void dismiss();
       }}
     >
+      <p>We do not save your Garmin email or password. We keep your Garmin account ID and session tokens for future syncs. Your Prescribed account email is stored separately.</p>
       {busy && <Progress />}
       {error && (
         <p role="alert" className="error-text">
@@ -1151,6 +1157,11 @@ function GarminForm({
             <input
               name="email"
               type="email"
+              defaultValue={suggestedEmail}
+              onChange={() => { emailEdited.current = true; }}
+              onFocus={(e) => {
+                if (!emailEdited.current && suggestedEmail && e.currentTarget.value === suggestedEmail) e.currentTarget.select();
+              }}
               autoComplete="username"
               maxLength={254}
               required

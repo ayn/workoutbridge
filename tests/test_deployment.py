@@ -1,10 +1,46 @@
+import os
+import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
 class DeploymentTests(unittest.TestCase):
+    def test_multiuser_factory_requires_a_vault_key_instead_of_silently_saving_plaintext(self):
+        from workoutbridge.web import application
+
+        with (
+            tempfile.TemporaryDirectory() as directory,
+            patch.dict(
+                os.environ,
+                {
+                    "WORKOUTBRIDGE_MULTIUSER": "true",
+                    "WORKOUTBRIDGE_DATA_DIR": directory,
+                    "WORKOUTBRIDGE_ORIGIN": "https://bridge.example",
+                    "CLOUDFLARE_ACCOUNT_ID": "a" * 32,
+                    "CLOUDFLARE_EMAIL_TOKEN_FILE": "/private/unused",
+                },
+                clear=True,
+            ),
+        ):
+            with self.assertRaises(KeyError):
+                app = application()
+                self.addCleanup(app.state.scheduler.close)
+
+    def test_multiuser_deployment_keeps_credentials_in_read_only_secrets_and_requires_vault(self):
+        compose = (ROOT / "deploy/compose.multiuser.yaml").read_text()
+        self.assertIn("WORKOUTBRIDGE_MULTIUSER", compose)
+        self.assertIn("WORKOUTBRIDGE_HOSTED_PLANS", compose)
+        self.assertIn("/run/secrets/provider_key", compose)
+        self.assertIn("/run/secrets/cloudflare_email", compose)
+        apache = (ROOT / "deploy/apache-prescribed.conf").read_text()
+        self.assertIn("ServerName prescribed.fit", apache)
+        self.assertIn("ProxyPreserveHost On", apache)
+        self.assertIn("http://127.0.0.1:1879/", apache)
+        self.assertNotIn("LogFormat combined", apache)
+
     def test_coros_dependencies_available_in_ci_and_container(self):
         for path in ("Dockerfile", ".github/workflows/tests.yml"):
             self.assertIn("--extra coros", (ROOT / path).read_text())

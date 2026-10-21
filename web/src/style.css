@@ -610,7 +610,7 @@ footer {
 .progress-status svg {
   flex-shrink: 0;
 }
-.overlay {
+.overlay, .backdrop {
   position: fixed;
   inset: 0;
   background: #182b2580;
@@ -620,6 +620,27 @@ footer {
   padding: 20px;
   z-index: 10;
 }
+
+.hosted-header { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; padding: 8px 20px; background: #fff; border-bottom: 1px solid #dce3df; }
+.hosted-header nav { display: flex; gap: 4px; flex: 1; }
+.hosted-header button[aria-pressed="true"] { background: #e3eee8; }
+.hosted-content { max-width: 1100px; padding: 28px 24px; margin: 0 auto; }
+.hosted-content h1 { font-size: 26px; }
+.hosted-content section { padding: 22px 0; border-bottom: 1px solid #dce3df; }
+.hosted-content dl { display: grid; grid-template-columns: minmax(120px, 180px) minmax(0, 1fr); gap: 10px; }
+.hosted-content dd { margin: 0; overflow-wrap: anywhere; }
+.hosted-content label { display: grid; gap: 8px; max-width: 560px; margin: 16px 0; }
+.hosted-content footer { display: flex; flex-wrap: wrap; gap: 18px; padding: 24px 0; }
+.admin-totals { display: flex; gap: 28px; flex-wrap: wrap; padding: 20px 0; }
+.admin-totals div { display: grid; gap: 4px; }
+.admin-totals strong { font-size: 24px; }
+.table-scroll { overflow-x: auto; max-width: 100%; margin-bottom: 24px; }
+.hosted-content table { width: 100%; border-collapse: collapse; text-align: left; font-size: 14px; }
+.hosted-content th, .hosted-content td { padding: 12px; border-bottom: 1px solid #dce3df; overflow-wrap: anywhere; }
+.hosted-login section { display: grid; gap: 14px; }
+.hosted-login > a { display: inline-flex; align-items: center; gap: 8px; margin-right: 16px; }
+.hosted-shell .modal .close { float: right; }
+@media (max-width: 600px) { .hosted-header { gap: 6px; padding: 8px 12px; } .hosted-content { padding: 18px 14px; } .hosted-content dl { grid-template-columns: 120px minmax(0, 1fr); } }
 .modal {
   background: #fff;
   border-radius: 8px;

@@ -11,6 +11,7 @@ import threading
 import time
 from contextlib import asynccontextmanager, contextmanager
 from datetime import datetime, timedelta
+from functools import partial
 from pathlib import Path
 from urllib.parse import urlsplit
 from uuid import uuid4
@@ -33,7 +34,17 @@ SESSION_SECONDS = 30 * 86400
 API_PREFIX = "/api/v1"
 
 
-def create_app(root: Path, origin: str, password: str, *, poll=True) -> FastAPI:
+def create_app(
+    root: Path,
+    origin: str,
+    password: str,
+    *,
+    poll=True,
+    config_root=None,
+    tenant_id=None,
+    accounts=None,
+    vault=None,
+) -> FastAPI:
     if len(password) < 32 or urlsplit(origin).scheme not in ("https", "http"):
         raise ValueError("Set an origin and a random password of at least 32 characters")
     root.mkdir(parents=True, exist_ok=True, mode=0o700)
@@ -44,7 +55,34 @@ def create_app(root: Path, origin: str, password: str, *, poll=True) -> FastAPI:
     os.close(fd)
     attempts = []
     operation = threading.RLock()
-    garmin_login = GarminLogin(operation)
+    claim_account = partial(accounts.claim_destination, tenant_id) if accounts is not None else None
+    garmin_login = GarminLogin(
+        operation, config_root=config_root, claim_account=claim_account, vault=vault
+    )
+
+    # Explicit roots, rather than changing os.environ, isolate concurrent tenants and login threads.
+    def load(name):
+        profile = (
+            load_profile(name, config_root=config_root)
+            if config_root is not None
+            else load_profile(name)
+        )
+        if vault is not None:
+            vault.restore(Path(profile["session_dir"]))
+        return profile
+
+    def path_for(name):
+        return (
+            profile_path(name, config_root=config_root)
+            if config_root is not None
+            else profile_path(name)
+        )
+
+    def permitted(profile):
+        if accounts is not None and not accounts.provider_allowed(
+            tenant_id, profile.get("destination", "garmin")
+        ):
+            raise HTTPException(403, "Choose your free destination service or upgrade to Supporter")
 
     @contextmanager
     def db():
@@ -122,7 +160,8 @@ def create_app(root: Path, origin: str, password: str, *, poll=True) -> FastAPI:
     def build_preview(rule_id):
         rule = get("sync", rule_id)
         source = get("source", rule["source"])
-        profile = load_profile(rule["profile"])
+        profile = load(rule["profile"])
+        permitted(profile)
         data = read_calendar(source["url"])
         folder = root / "archive" / source["id"]
         folder.mkdir(parents=True, exist_ok=True, mode=0o700)
@@ -209,6 +248,7 @@ def create_app(root: Path, origin: str, password: str, *, poll=True) -> FastAPI:
 
     app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan)
     app.state.poll_once = poll_once
+    app.state.close = garmin_login.close
 
     @app.middleware("http")
     async def protect(request: Request, call_next):
@@ -223,7 +263,12 @@ def create_app(root: Path, origin: str, password: str, *, poll=True) -> FastAPI:
                 )
             if request.method != "GET" and request.headers.get("origin") != origin:
                 return JSONResponse({"detail": "Invalid origin"}, status_code=403)
-            if request.url.path != API_PREFIX + "/login":
+            if tenant_id is not None:
+                if request.scope.get("state", {}).get("hosted_user") != tenant_id:
+                    return JSONResponse({"detail": "Sign in required"}, status_code=401)
+                if request.url.path in (API_PREFIX + "/login", API_PREFIX + "/logout"):
+                    return JSONResponse({"detail": "Use hosted authentication"}, status_code=404)
+            elif request.url.path != API_PREFIX + "/login":
                 token = request.cookies.get("wb_session", "")
                 authenticated_session = session_hash(token)
                 with db() as conn:
@@ -325,9 +370,9 @@ def create_app(root: Path, origin: str, password: str, *, poll=True) -> FastAPI:
     @app.get(API_PREFIX + "/state")
     def state():
         connections = []
-        for path in sorted(profile_path("placeholder").parent.glob("*.json")):
+        for path in sorted(path_for("placeholder").parent.glob("*.json")):
             try:
-                profile = load_profile(path.stem)
+                profile = load(path.stem)
                 connections.append(
                     {
                         "id": path.stem,
@@ -357,18 +402,23 @@ def create_app(root: Path, origin: str, password: str, *, poll=True) -> FastAPI:
 
         if not origin.startswith("https://"):
             raise HTTPException(403, "COROS sign-in requires HTTPS")
+        permitted({"destination": "coros"})
         if not operation.acquire(blocking=False):
             raise HTTPException(409, "Another operation is running")
         try:
             name = body.get("profile", "")
-            path = profile_path(name)
-            if path.exists() and load_profile(name)["destination"] != "coros":
+            path = path_for(name)
+            if path.exists() and load(name)["destination"] != "coros":
                 raise ValueError("Profile belongs to another provider")
             recent = [job for job in values("coros_login") if job["created"] > time.time() - 900]
             if len(recent) >= 3:
                 raise ValueError("Sign-in rate limit")
             key = uuid4().hex
-            session = path.parent.parent / "sessions" / ("coros-" + key)
+            session = (
+                vault.new_path("coros")
+                if vault is not None
+                else path.parent.parent / "sessions" / ("coros-" + key)
+            )
             put(
                 "coros_login",
                 key,
@@ -381,6 +431,8 @@ def create_app(root: Path, origin: str, password: str, *, poll=True) -> FastAPI:
                 },
             )
             result = begin_login(session, body.get("region", "us"))
+            if vault is not None:
+                vault.save(session)
             put(
                 "coros_login",
                 key,
@@ -412,6 +464,8 @@ def create_app(root: Path, origin: str, password: str, *, poll=True) -> FastAPI:
             raise HTTPException(409, "Another operation is running")
         try:
             job = get("coros_login", body.get("id", ""))
+            if vault is not None:
+                vault.restore(Path(job["session"]))
             if job["status"] == "complete":
                 return {"status": "complete", "profile": job["profile"]}
             if job["status"] != "pending" or job["created"] < time.time() - 600:
@@ -432,7 +486,14 @@ def create_app(root: Path, origin: str, password: str, *, poll=True) -> FastAPI:
                     Path(job["session"]),
                     destination="coros",
                     authenticator=authenticate,
+                    **(
+                        {"config_root": config_root, "claim_account": claim_account}
+                        if config_root is not None
+                        else {}
+                    ),
                 )
+                if vault is not None:
+                    vault.save(Path(job["session"]))
             except Pending:
                 return {"status": "pending"}
             job["status"] = "complete"
@@ -454,6 +515,7 @@ def create_app(root: Path, origin: str, password: str, *, poll=True) -> FastAPI:
     def garmin_login_start(body: dict):
         if not origin.startswith("https://"):
             raise HTTPException(403, "Garmin sign-in requires HTTPS")
+        permitted({"destination": "garmin"})
         try:
             return garmin_login.start(
                 body.get("profile", ""), body.get("email"), body.get("password")
@@ -530,7 +592,7 @@ def create_app(root: Path, origin: str, password: str, *, poll=True) -> FastAPI:
     @app.post(API_PREFIX + "/syncs")
     def sync(body: dict):
         get("source", body.get("source"))
-        load_profile(body.get("profile", ""))
+        permitted(load(body.get("profile", "")))
         if any(
             r["source"] == body["source"] and r["profile"] == body["profile"]
             for r in values("sync")
@@ -587,7 +649,8 @@ def create_app(root: Path, origin: str, password: str, *, poll=True) -> FastAPI:
         try:
             rule = get("sync", key)
             if body["enabled"]:
-                profile = load_profile(rule["profile"])
+                profile = load(rule["profile"])
+                permitted(profile)
                 if body.get("account") != profile["account_id"]:
                     raise HTTPException(409, "Confirm the destination account")
                 if rule.get("auto_blocked") and body.get("acknowledge_review") is not True:
@@ -612,7 +675,8 @@ def create_app(root: Path, origin: str, password: str, *, poll=True) -> FastAPI:
             plan = get("plan", key)
             if rule.get("paused"):
                 raise HTTPException(409, "Resume this sync before publishing")
-            profile = load_profile(rule["profile"])
+            profile = load(rule["profile"])
+            permitted(profile)
             selected = body.get("selected", [])
             if (
                 body.get("hash") != plan["hash"]
@@ -680,6 +744,8 @@ def create_app(root: Path, origin: str, password: str, *, poll=True) -> FastAPI:
             finally:
                 if coros_client is not None:
                     coros_client.close()
+                if vault is not None:
+                    vault.save(Path(profile["session_dir"]))
                 logging.disable(previous)
             record = {
                 "id": uuid4().hex,
@@ -689,6 +755,8 @@ def create_app(root: Path, origin: str, password: str, *, poll=True) -> FastAPI:
                 "results": results,
             }
             put("history", record["id"], record)
+            if accounts is not None and results:
+                accounts.activate(tenant_id, source=True, destination=True, publication=True)
             if rule.get("automatic"):
                 rule.update(auto_blocked=False, last_publish=stamp())
                 put("sync", key, rule)
@@ -706,6 +774,24 @@ def application():
     os.umask(0o077)
     # Avoid third-party logs containing session or private feed details.
     logging.disable(logging.CRITICAL)
+    if os.environ.get("WORKOUTBRIDGE_MULTIUSER") == "true":
+        from .hosted import create_hosted_app
+        from .mail import CloudflareMail, read_private_secret
+
+        origin = os.environ["WORKOUTBRIDGE_ORIGIN"]
+        vault_key = read_private_secret(os.environ["WORKOUTBRIDGE_VAULT_KEY_FILE"])
+        return create_hosted_app(
+            Path(os.environ["WORKOUTBRIDGE_DATA_DIR"]),
+            origin,
+            send_email=CloudflareMail(
+                os.environ["CLOUDFLARE_ACCOUNT_ID"],
+                os.environ["CLOUDFLARE_EMAIL_TOKEN_FILE"],
+                origin,
+            ),
+            commercial=os.environ.get("WORKOUTBRIDGE_HOSTED_PLANS") == "true",
+            vault_key=vault_key,
+            admin_email=os.environ.get("WORKOUTBRIDGE_ADMIN_EMAIL"),
+        )
     return create_app(
         Path(os.environ["WORKOUTBRIDGE_DATA_DIR"]),
         os.environ["WORKOUTBRIDGE_ORIGIN"],
