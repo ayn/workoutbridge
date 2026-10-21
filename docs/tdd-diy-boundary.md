@@ -11,6 +11,8 @@ Observed failures before changes:
 - `uv run --extra web python -m unittest discover -s tests -p test_web_extensions.py`
   failed because explicit profile roots and embedding authentication callbacks
   were not supported.
+- The suggested-email frontend regression failed because the supplied address
+  was not populated. Generic embedding props preserve the DIY default UI.
 
 Both focused suites pass after implementation. The public core has generic
 opt-in hooks for an embedding application and explicit profile roots, not a
