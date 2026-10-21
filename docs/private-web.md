@@ -88,7 +88,15 @@ Do not delete receipts to resolve a duplicate or uncertain outcome.
 
 Hourly refresh preserves feed snapshots and updates previews. **Automatic
 publishing is off by default.** In Syncs, enable Publish hourly and confirm the
-specific destination profile/account to opt in. Each hourly pass uses a fresh
+specific destination profile/account to opt in. New sync setup offers this
+confirmation with a manual-publishing alternative; connecting an account alone
+does not enable publishing. Enabling automatic publishing immediately refreshes
+and publishes eligible workouts for that sync only, including already imported
+workouts, using the existing duplicate-prevention receipts. The confirmation
+stays busy until this initial pass finishes. Check History and sync errors for
+the outcome; enabling does not guarantee every workout was published. Paused
+syncs remain paused. Existing automatic settings are not changed on upgrade.
+Each hourly pass uses a fresh
 feed and publishes only fully parsed items within the next 15 calendar days;
 unresolved and cancelled items stay in review. Existing receipts prevent duplicate
 uploads/schedules, and changed prescriptions go through the same update checks as

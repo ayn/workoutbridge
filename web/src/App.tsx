@@ -807,6 +807,14 @@ export function App() {
                 changeSync(result.id);
                 setSyncForm(false);
                 setView("Workouts");
+                setAcknowledged(false);
+                setAutoConfirm({
+                  id: result.id,
+                  source: String(f.get("source")),
+                  profile: String(f.get("profile")),
+                  last_preview: null,
+                  error: null,
+                });
               });
             }}
           >
@@ -850,7 +858,7 @@ export function App() {
         />
       )}
       {autoConfirm && (
-        <Modal title="Automatic publishing" close={() => setAutoConfirm(null)}>
+        <Modal title="Automatic publishing" close={() => !busy && setAutoConfirm(null)}>
           <p>
             {state?.sources.find((s) => s.id === autoConfirm.source)?.name} →{" "}
             <strong>{autoConfirm.profile}</strong>
@@ -863,7 +871,7 @@ export function App() {
             }
           </p>
           <p>
-            Publish eligible workouts hourly. Unresolved workouts stay in
+            Publish eligible workouts now, then hourly. Paused syncs stay paused. Unresolved workouts stay in
             review. A failed or uncertain write stops automatic publishing.
           </p>
           {autoConfirm.auto_blocked && (
@@ -894,7 +902,10 @@ export function App() {
               })
             }
           >
-            Enable hourly publishing
+            {busy ? "Publishing..." : "Enable and publish now"}
+          </button>
+          <button className="full" disabled={busy} onClick={() => setAutoConfirm(null)}>
+            Keep manual publishing
           </button>
         </Modal>
       )}
