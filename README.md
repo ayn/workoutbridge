@@ -22,6 +22,9 @@ Not affiliated with Garmin, Final Surge, Google, Apple, or any coach.
 
 ## Deployment Options
 
+The web app uses the [versioned `/api/v1` API](docs/web-api.md). Its contract is
+provisional during the private pilot and will stabilize at public launch.
+
 - **Self-host today:** follow the [single-owner web deployment runbook](docs/private-web.md)
   for setup, persistent storage, authentication, scheduling, and updates. Keep the
   pilot private; it is not yet a public multi-user service.

@@ -87,8 +87,8 @@ try {
         },
       ],
     };
-    await page.route("**/api/state", (route) => route.fulfill({ json: state }));
-    await page.route("**/api/garmin/login", (route) =>
+    await page.route("**/api/v1/state", (route) => route.fulfill({ json: state }));
+    await page.route("**/api/v1/garmin/login", (route) =>
       route.fulfill({ json: { status: "idle" } }),
     );
     await page.goto(process.env.CHECK_URL || "http://localhost:8080");
@@ -156,7 +156,7 @@ try {
     await page.getByRole("button", { name: "Syncs", exact: true }).click();
     await page.getByLabel("Automatic publishing for sample").click();
     await page
-      .getByRole("button", { name: "Enable hourly publishing" })
+      .getByRole("button", { name: "Enable and publish now" })
       .waitFor();
     modal = await page.getByRole("dialog").boundingBox();
     assert(modal && modal.x >= 0 && modal.x + modal.width <= width);
