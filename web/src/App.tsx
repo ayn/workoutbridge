@@ -730,6 +730,15 @@ export function App() {
         <footer>
           <Route size={14} />
           <span>WorkoutBridge</span>
+          <span className="footer-credit">
+            Garmin integration powered by{" "}
+            <a href="https://github.com/cyberjunky/python-garminconnect" target="_blank" rel="noopener noreferrer">
+              python-garminconnect
+            </a>
+          </span>
+          <a href="https://github.com/ayn/workoutbridge#acknowledgments" target="_blank" rel="noopener noreferrer">
+            Credits
+          </a>
           <span className="footer-status">
             <span className="dot" />
             Private instance

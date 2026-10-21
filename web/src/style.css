@@ -556,12 +556,20 @@ pre {
 }
 footer {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
   padding: 22px 38px;
   color: #829087;
   font-size: 11px;
   border-top: 1px solid var(--border);
+}
+footer a {
+  color: var(--green);
+  text-underline-offset: 3px;
+}
+.footer-credit {
+  line-height: 1.6;
 }
 .footer-status {
   margin-left: auto;
