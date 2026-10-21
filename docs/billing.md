@@ -29,6 +29,13 @@ every year, each with interval count one. The application validates these
 against Stripe at startup and refuses mismatched amount/currency/mode/interval.
 The UI never supplies an arbitrary price, customer, user ID or return URL.
 
+`deploy/stripe_setup.py --secret-file /private/stripe-test-key` provisions only
+this sandbox catalog. It rejects live keys, reuses the deterministic product and
+price lookup keys, and fails on mismatched existing prices rather than replacing
+them. It never creates customers or payments. Run it on the server holding the
+private key; do not copy keys into the workspace. It prints sandbox object IDs,
+not credentials. Portal/webhook configuration remains a separate setup step.
+
 Store API and webhook signing secrets in private mode-600 files, not Git or
 environment values. Use the optional `deploy/compose.stripe.yaml` override after
 the multi-user override. Add private environment configuration:

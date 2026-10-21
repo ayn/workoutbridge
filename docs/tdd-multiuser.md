@@ -51,6 +51,10 @@ Observed failures before fixes:
   progress and admin adjustment queue. Same-tab signup also returned to signup
   rather than passkey sign-in after logout.
 - `test_deployment.py`: missing optional Stripe secret-file override.
+- `test_stripe_setup.py`: absent sandbox setup helper before implementation;
+  then four focused tests passed for reruns, mismatch rejection, private test
+  credentials and live-response rejection. Sandbox provisioning was run twice
+  against the server-held test key and returned the same product/price IDs.
 
 Additional coverage exercises real signature verification, tampering, expired
 signatures, environment mismatch, retry after provider failure, replay,
