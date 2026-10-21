@@ -1,5 +1,5 @@
 import { afterEach, expect, test, vi } from "vitest";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { App } from "./App";
 
@@ -66,6 +66,38 @@ const initial = {
   ],
   history: [],
 };
+
+test.each([true, false])("publishing shows progress until request settles (success=%s)", async (success) => {
+  let finish!: (response: Response) => void;
+  const pending = new Promise<Response>((resolve) => { finish = resolve; });
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (url) =>
+    String(url).endsWith("/publish") ? pending : new Response(JSON.stringify(initial)),
+  );
+  render(<App />);
+  await screen.findByText("Upcoming workouts");
+  await userEvent.click(screen.getByLabelText("Select Run: 4 strides"));
+  await userEvent.click(screen.getByRole("button", { name: "Review publication" }));
+  await userEvent.click(screen.getByRole("button", { name: "Publish to Garmin" }));
+  expect(screen.getByRole("button", { name: "Publishing..." })).toBeDisabled();
+  expect(screen.getByRole("status", { name: "Working..." })).toBeInTheDocument();
+  await act(async () => finish(new Response(JSON.stringify(success ? {} : { detail: "Publication failed" }), { status: success ? 200 : 409 })));
+  await waitFor(() => expect(screen.queryByRole("status", { name: "Working..." })).not.toBeInTheDocument());
+  if (!success) expect(screen.getByRole("button", { name: "Publish to Garmin" })).toBeEnabled();
+});
+
+test("feed refresh displays shared progress until complete", async () => {
+  let finish!: (response: Response) => void;
+  const pending = new Promise<Response>((resolve) => { finish = resolve; });
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (url) =>
+    String(url).endsWith("/preview") ? pending : new Response(JSON.stringify(initial)),
+  );
+  render(<App />);
+  await screen.findByText("Upcoming workouts");
+  await userEvent.click(screen.getByRole("button", { name: "Refresh feed" }));
+  expect(screen.getByRole("status", { name: "Working..." })).toBeInTheDocument();
+  await act(async () => finish(new Response("{}")));
+  await waitFor(() => expect(screen.queryByRole("status", { name: "Working..." })).not.toBeInTheDocument());
+});
 
 test.each([true, false])("independence disclaimer is visible with signedIn=%s", async (signedIn) => {
   vi.spyOn(globalThis, "fetch").mockImplementation(async () =>

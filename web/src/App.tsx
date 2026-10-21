@@ -11,6 +11,7 @@ import {
   Github,
   History,
   Link2,
+  LoaderCircle,
   LogOut,
   Pause,
   Play,
@@ -176,6 +177,13 @@ function Steps({ steps }: { steps: Step[] }) {
   );
 }
 
+function Progress({ label = "Working..." }: { label?: string }) {
+  return <div className="progress-status" role="status" aria-label={label}>
+    <LoaderCircle size={18} className="spin" aria-hidden="true" />
+    <span>{label}</span>
+  </div>;
+}
+
 export function App() {
   const [state, setState] = useState<State | null>(null);
   const [signedIn, setSignedIn] = useState<boolean | null>(null);
@@ -254,6 +262,7 @@ export function App() {
   if (signedIn !== true)
     return (
       <main className="login">
+        {busy && <Progress label="Signing in..." />}
         <div className="login-brand">
           <Route size={30} />
           <h1>WorkoutBridge</h1>
@@ -273,19 +282,18 @@ export function App() {
               />
             </label>
             <button className="primary" disabled={busy}>
-              Sign in <ArrowRight size={16} />
+              Sign in {busy ? <LoaderCircle size={16} className="spin" /> : <ArrowRight size={16} />}
             </button>
           </form>
         ) : (
-          <p role="status">
-            {error ? "Connection unavailable" : "Connecting…"}
-          </p>
+          error ? <p role="status">Connection unavailable</p> : <Progress label="Connecting..." />
         )}
         <p className="independence-disclaimer">{independenceDisclaimer}</p>
       </main>
     );
   return (
     <div className="shell">
+      {busy && <Progress />}
       <aside className="sidebar">
         <div className="brand">
           <Route size={24} />
@@ -907,6 +915,7 @@ export function App() {
             }
           >
             {busy ? "Publishing..." : "Enable and publish now"}
+            {busy && <LoaderCircle size={16} className="spin" aria-hidden="true" />}
           </button>
           <button className="full" disabled={busy} onClick={() => setAutoConfirm(null)}>
             Keep manual publishing
@@ -951,8 +960,8 @@ export function App() {
               })
             }
           >
-            Publish to Garmin
-            <ArrowRight size={16} />
+            {busy ? "Publishing..." : "Publish to Garmin"}
+            {busy ? <LoaderCircle size={16} className="spin" aria-hidden="true" /> : <ArrowRight size={16} />}
           </button>
         </Modal>
       )}
@@ -1048,6 +1057,7 @@ function GarminForm({
         void dismiss();
       }}
     >
+      {busy && <Progress />}
       {error && (
         <p role="alert" className="error-text">
           {error}
@@ -1108,7 +1118,7 @@ function GarminForm({
         </form>
       )}
       {job.status === "signing_in" && (
-        <p role="status">Signing in to Garmin…</p>
+        <Progress label="Signing in to Garmin..." />
       )}
       {job.status === "mfa" && (
         <form
