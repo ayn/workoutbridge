@@ -159,7 +159,13 @@ class CorosPublisher:
             except ValueError:
                 raise ReviewRequired("Invalid COROS inline course JSON") from None
             details = {"course": actual}
-        if not isinstance(details, dict) or not matches(course, details.get("course")):
+        actual = details.get("course") if isinstance(details, dict) else None
+        expected = course
+        if isinstance(actual, dict) and isinstance(actual.get("courseName"), str):
+            # COROS trims title whitespace when reconstructing the stored course.
+            actual = {**actual, "courseName": actual["courseName"].strip()}
+            expected = {**course, "courseName": course["courseName"].strip()}
+        if not matches(expected, actual):
             raise ReviewRequired("COROS read-back differs; reconcile before continuing")
 
     def reconcile(self, *, source, uid, day, course, remote_id, approved):

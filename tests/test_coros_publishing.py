@@ -33,6 +33,44 @@ class FakeClient:
 
 
 class CorosPublishingTests(unittest.TestCase):
+    def test_coros_trimmed_title_verifies_without_changing_receipt_hash(self):
+        self.course["courseName"] = "  Easy aerobic run  "
+        original = self.client.call_tool
+
+        def normalized(name, arguments):
+            result = original(name, arguments)
+            if name == "queryScheduledWorkoutDetails":
+                course = result["structuredContent"]["course"]
+                result = {
+                    "structuredContent": {
+                        "course": {**course, "courseName": course["courseName"].strip()}
+                    }
+                }
+            return result
+
+        self.client.call_tool = normalized
+        self.publish()
+        self.publish()
+        self.assertEqual(self.client.writes, 1)
+        self.assertEqual(self.course["courseName"], "  Easy aerobic run  ")
+
+    def test_title_normalization_does_not_accept_other_changes(self):
+        original = self.client.call_tool
+
+        def altered(name, arguments):
+            result = original(name, arguments)
+            if name == "queryScheduledWorkoutDetails":
+                course = result["structuredContent"]["course"]
+                result = {
+                    "structuredContent": {"course": {**course, "courseName": "Different workout"}}
+                }
+            return result
+
+        self.client.call_tool = altered
+        with self.assertRaises(ReviewRequired):
+            self.publish()
+        self.assertEqual(self.client.writes, 1)
+
     def setUp(self):
         self.directory = tempfile.TemporaryDirectory()
         self.addCleanup(self.directory.cleanup)
