@@ -102,6 +102,16 @@ sidecar's Tailscale address and open the configured HTTPS origin from a tailnet
 device. Do not publish the app through Funnel or port forwarding. Sign in using
 the generated `access-password` file from your private data directory.
 
+**Optional: split-horizon DNS with AdGuard Home.** A private DNS rewrite makes
+your custom hostname resolve to the sidecar's Tailscale address for your devices,
+while Cloudflare's authoritative zone is used for the DNS-01 certificate challenge.
+No public application endpoint is required. The example deployment uses the
+[AdGuard Home + Unbound + Tailscale stack](https://github.com/ayn/adguard-unbound-tailscale),
+but any suitable private DNS resolver works. Configure clients to use that
+resolver, make A/AAAA answers consistent with the sidecar addresses you use, and
+ensure those clients can reach the sidecar over Tailscale. DNS alone does not
+provide network access. Keep your real records, addresses and tokens out of Git.
+
 The included stack uses rootless Docker and `/dev/net/tun`; confirm your server
 supports that setup before deploying. First build/certificate issuance and
 sidecar authorization can take several minutes. Check status with:

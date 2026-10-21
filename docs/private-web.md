@@ -15,6 +15,14 @@ No Caddy ports are published on the host. Do not enable Funnel or public port
 forwarding. Point your private DNS hostname to the sidecar's Tailscale IP.
 Set `WORKOUTBRIDGE_DOMAIN` to that hostname and `WORKOUTBRIDGE_ORIGIN` to its
 exact HTTPS origin. The DNS challenge token needs access to that domain's zone.
+For a custom hostname, split-horizon DNS can provide the private application
+address while Cloudflare handles authoritative DNS-01 challenge records. An
+optional example is the [AdGuard Home + Unbound + Tailscale stack](https://github.com/ayn/adguard-unbound-tailscale):
+add private DNS rewrites for your chosen hostname to its sidecar Tailscale
+addresses, make A/AAAA answers consistent, and configure your clients or tailnet
+to use that resolver. Other private DNS resolvers work too. Clients still need
+network access to the sidecar; DNS rewriting is not a tunnel or public exposure.
+Do not commit actual rewrites, private addresses or DNS credentials.
 On first startup, authorize the new sidecar interactively using
 `docker compose --env-file "$HOME/.config/workoutbridge-deploy.env" exec tailscale tailscale up --accept-dns=false`.
 Keep the resulting login URL private. The sidecar allows 30 minutes for initial
