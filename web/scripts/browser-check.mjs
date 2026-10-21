@@ -88,6 +88,9 @@ try {
       ],
     };
     await page.route("**/api/state", (route) => route.fulfill({ json: state }));
+    await page.route("**/api/garmin/login", (route) =>
+      route.fulfill({ json: { status: "idle" } }),
+    );
     await page.goto(process.env.CHECK_URL || "http://localhost:8080");
     await page.getByText("Upcoming workouts").waitFor();
     assert.equal(
@@ -136,6 +139,32 @@ try {
         `${name} overflow at ${width}`,
       );
     }
+    await page
+      .getByRole("button", { name: "Connections", exact: true })
+      .click();
+    await page
+      .getByRole("button", { name: "Connect Garmin", exact: true })
+      .click();
+    await page.getByLabel("Garmin email").waitFor();
+    let modal = await page.getByRole("dialog").boundingBox();
+    assert(modal && modal.x >= 0 && modal.x + modal.width <= width);
+    await page.screenshot({
+      path: `${directory}/garmin-${width}.png`,
+      fullPage: true,
+    });
+    await page.getByRole("button", { name: "Close dialog" }).click();
+    await page.getByRole("button", { name: "Syncs", exact: true }).click();
+    await page.getByLabel("Automatic publishing for sample").click();
+    await page
+      .getByRole("button", { name: "Enable hourly publishing" })
+      .waitFor();
+    modal = await page.getByRole("dialog").boundingBox();
+    assert(modal && modal.x >= 0 && modal.x + modal.width <= width);
+    await page.screenshot({
+      path: `${directory}/automatic-${width}.png`,
+      fullPage: true,
+    });
+    await page.getByRole("button", { name: "Close dialog" }).click();
     assert.deepEqual(errors, []);
     await page.close();
   }

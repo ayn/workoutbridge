@@ -52,7 +52,7 @@ def load_profile(name: str) -> dict:
 
 
 def authenticate_profile(
-    name: str, session: Path | None = None, state_db: Path | None = None
+    name: str, session: Path | None = None, state_db: Path | None = None, *, authenticator=None
 ) -> dict:
     from .auth import authenticate
 
@@ -75,7 +75,7 @@ def authenticate_profile(
             if session is not None
             else root / "sessions" / f"{name}-{uuid4().hex}"
         )
-        account = authenticate(session)
+        account = (authenticator or authenticate)(session)
         if old and account != old["account_id"]:
             raise ValueError("Reauthentication returned another account; profile unchanged")
         profile = validate(

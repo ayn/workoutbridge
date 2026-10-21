@@ -1,9 +1,10 @@
 # WorkoutBridge
 
 The private web pilot provides calendar sources, saved Garmin connections,
-structured-workout previews, and confirmed publishing. See the
+web sign-in/MFA, structured-workout previews, and manual or opt-in hourly publishing. See the
 [private deployment runbook](docs/private-web.md). It is not a public multi-user
-service; scheduled refresh archives feeds but never publishes unattended.
+service. Scheduled refresh archives feeds; automatic publishing must be enabled
+and confirmed separately for each destination account.
 
 Turn plain-text running and coaching prescriptions into reviewable structured
 workouts for Garmin Connect. Designed for training calendars from Final Surge,
@@ -15,7 +16,7 @@ review plans, Garmin payloads, and a persistent opt-in publisher. The full pipel
 is tested with fake Garmin accounts. A limited live test has also verified
 uploading, calendar scheduling, and repeat-publish reuse in a dedicated account;
 watch delivery has not been verified.
-No web UI or automatic feed polling. Final Surge write-back is blocked pending
+The single-owner web pilot includes hourly feed polling. Final Surge write-back is blocked pending
 an officially available API and permission to use it.
 Not affiliated with Garmin, Final Surge, Google, Apple, or any coach.
 

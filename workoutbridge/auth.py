@@ -14,7 +14,7 @@ def make_client(email, password, *, prompt_mfa):
     return Garmin(email, password, prompt_mfa=prompt_mfa)
 
 
-def authenticate(session: Path) -> str:
+def authenticate(session: Path, *, credentials=None, prompt_mfa=None) -> str:
     if sys.version_info < (3, 12):
         raise ValueError("Garmin authentication requires Python 3.12+")
     session = session.expanduser()
@@ -26,13 +26,18 @@ def authenticate(session: Path) -> str:
         session.mkdir(mode=0o700, parents=True, exist_ok=False)
         with warnings.catch_warnings():
             warnings.simplefilter("error", GetPassWarning)
-            email = input("Garmin email: ").strip()
-            password = getpass("Garmin password: ")
+            email, password = (
+                credentials
+                if credentials is not None
+                else (input("Garmin email: ").strip(), getpass("Garmin password: "))
+            )
             if not email or not password:
                 raise ValueError("Credentials required")
             logging.disable(logging.CRITICAL)
             client = make_client(
-                email, password, prompt_mfa=lambda: getpass("Garmin MFA code: ").strip()
+                email,
+                password,
+                prompt_mfa=prompt_mfa or (lambda: getpass("Garmin MFA code: ").strip()),
             )
             client.login(tokenstore=str(session))
         token = session / "garmin_tokens.json"

@@ -53,6 +53,9 @@ type Sync = {
   last_preview: string | null;
   error: string | null;
   paused?: boolean;
+  automatic?: boolean;
+  auto_blocked?: boolean;
+  last_publish?: string;
 };
 type Connection = { id: string; provider: string; account: string };
 type State = {
@@ -181,6 +184,9 @@ export function App() {
   const [confirm, setConfirm] = useState(false);
   const [sourceForm, setSourceForm] = useState(false);
   const [syncForm, setSyncForm] = useState(false);
+  const [garminForm, setGarminForm] = useState<string | null>(null);
+  const [autoConfirm, setAutoConfirm] = useState<Sync | null>(null);
+  const [acknowledged, setAcknowledged] = useState(false);
   async function load() {
     const value = await api("state");
     setState(value);
@@ -302,7 +308,10 @@ export function App() {
           ))}
         </nav>
         <div className="sidebar-bottom">
-          <span className="dot" /> Manual publishing
+          <span className="dot" />{" "}
+          {state?.syncs.some((s) => s.automatic && !s.paused && !s.auto_blocked)
+            ? "Hourly publishing"
+            : "Manual publishing"}
           <button
             title="Sign out"
             aria-label="Sign out"
@@ -363,6 +372,14 @@ export function App() {
                 Add source
               </button>
             )}
+            {view === "Connections" && (
+              <button
+                className="primary"
+                onClick={() => setGarminForm("personal")}
+              >
+                <Plus size={16} /> Connect Garmin
+              </button>
+            )}
             {view === "Syncs" && (
               <button
                 className="primary"
@@ -399,6 +416,12 @@ export function App() {
               </div>
               {rule?.error && <p className="warning">{rule.error}</p>}
               {rule?.paused && <p className="warning">Sync paused</p>}
+              {rule?.auto_blocked && (
+                <p className="warning">
+                  Automatic publishing stopped. Reconcile History before
+                  resuming in Syncs.
+                </p>
+              )}
               <div className="metrics">
                 <div>
                   <strong>{plan?.items.length || 0}</strong>
@@ -575,7 +598,12 @@ export function App() {
                       {c.provider} · Account {c.account}
                     </p>
                   </div>
-                  <span className="badge">Session saved</span>
+                  <button
+                    className="secondary"
+                    onClick={() => setGarminForm(c.id)}
+                  >
+                    <RefreshCw size={16} /> Sign in again
+                  </button>
                 </article>
               ))}
               <article className="record disabled">
@@ -608,10 +636,38 @@ export function App() {
                       <ArrowRight size={15} /> {s.profile}
                     </h2>
                     <p>
-                      {s.paused ? "Paused" : "Hourly preview"} · Manual
-                      publishing
+                      {s.paused ? "Paused" : "Hourly refresh"} ·{" "}
+                      {s.auto_blocked
+                        ? "Publishing stopped: review required"
+                        : s.automatic
+                          ? "Automatic publishing"
+                          : "Manual publishing"}
                     </p>
+                    {s.last_publish && (
+                      <p>Last published {timestamp(s.last_publish)}</p>
+                    )}
                     {s.error && <p className="error-text">{s.error}</p>}
+                    <label className="inline-check">
+                      <input
+                        type="checkbox"
+                        aria-label={`Automatic publishing for ${s.profile}`}
+                        checked={!!s.automatic && !s.auto_blocked}
+                        disabled={busy}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setAcknowledged(false);
+                            setAutoConfirm(s);
+                          } else
+                            perform(async () => {
+                              await api(`syncs/${s.id}/automatic`, {
+                                enabled: false,
+                              });
+                              await load();
+                            });
+                        }}
+                      />
+                      Publish hourly
+                    </label>
                   </div>
                   <button
                     className="icon"
@@ -767,6 +823,66 @@ export function App() {
           </form>
         </Modal>
       )}
+      {garminForm !== null && (
+        <GarminForm
+          profile={garminForm}
+          close={() => setGarminForm(null)}
+          complete={async () => {
+            await load();
+            setGarminForm(null);
+            setMessage("Garmin connection saved. Choose its sync separately.");
+          }}
+        />
+      )}
+      {autoConfirm && (
+        <Modal title="Automatic publishing" close={() => setAutoConfirm(null)}>
+          <p>
+            {state?.sources.find((s) => s.id === autoConfirm.source)?.name} →{" "}
+            <strong>{autoConfirm.profile}</strong>
+          </p>
+          <p>
+            Garmin account{" "}
+            {
+              state?.connections.find((c) => c.id === autoConfirm.profile)
+                ?.account
+            }
+          </p>
+          <p>
+            Publish eligible workouts hourly. Unresolved workouts stay in
+            review. A failed or uncertain write stops automatic publishing.
+          </p>
+          {autoConfirm.auto_blocked && (
+            <label className="inline-check">
+              <input
+                type="checkbox"
+                checked={acknowledged}
+                onChange={(e) => setAcknowledged(e.target.checked)}
+              />
+              I have reconciled the previous publication in Garmin and History.
+            </label>
+          )}
+          {alert}
+          <button
+            className="primary full"
+            disabled={busy || (!!autoConfirm.auto_blocked && !acknowledged)}
+            onClick={() =>
+              perform(async () => {
+                await api(`syncs/${autoConfirm.id}/automatic`, {
+                  enabled: true,
+                  account: state?.connections.find(
+                    (c) => c.id === autoConfirm.profile,
+                  )?.account,
+                  acknowledge_review: acknowledged,
+                });
+                setAutoConfirm(null);
+                await load();
+              })
+            }
+          >
+            Enable hourly publishing
+          </button>
+        </Modal>
+      )}
       {confirm && plan && (
         <Modal
           title="Confirm publication"
@@ -813,6 +929,187 @@ export function App() {
     </div>
   );
 }
+type LoginJob = {
+  id?: string;
+  status: string;
+  profile?: string;
+  error?: string;
+};
+
+function GarminForm({
+  profile,
+  close,
+  complete,
+}: {
+  profile: string;
+  close: () => void;
+  complete: () => Promise<void>;
+}) {
+  const [job, setJob] = useState<LoginJob>({ status: "idle" });
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const completed = useRef(false);
+  useEffect(() => {
+    let active = true;
+    api("garmin/login")
+      .then((value) => {
+        if (active && ["signing_in", "mfa"].includes(value.status))
+          setJob(value);
+      })
+      .catch(() => {
+        if (active) setError("Unable to check Garmin login status");
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+  useEffect(() => {
+    if (job.status === "complete" && !completed.current) {
+      completed.current = true;
+      complete().catch(() =>
+        setError("Connection saved; refresh Connections."),
+      );
+    }
+    if (!["signing_in", "mfa"].includes(job.status)) return;
+    let active = true;
+    const timer = setTimeout(() => {
+      api("garmin/login")
+        .then((value) => {
+          if (active) setJob(value);
+        })
+        .catch(() => {
+          if (active) setError("Unable to check Garmin login status");
+        });
+    }, 1000);
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
+  }, [job]);
+  async function request(path: string, body: object) {
+    setBusy(true);
+    setError("");
+    try {
+      setJob(await api(path, body));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Sign-in failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function dismiss() {
+    if (busy) return;
+    if (job.id && ["signing_in", "mfa"].includes(job.status)) {
+      try {
+        await api("garmin/login/cancel", { id: job.id });
+      } catch {
+        setError(
+          "Unable to cancel. The sign-in attempt expires after five minutes.",
+        );
+        return;
+      }
+    }
+    close();
+  }
+  return (
+    <Modal
+      title="Connect Garmin"
+      close={() => {
+        void dismiss();
+      }}
+    >
+      {error && (
+        <p role="alert" className="error-text">
+          {error}
+        </p>
+      )}
+      {job.error && (
+        <p role="alert" className="error-text">
+          {job.error}
+        </p>
+      )}
+      {["idle", "failed", "cancelled"].includes(job.status) && (
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            const form = e.currentTarget;
+            const data = new FormData(form);
+            const body = {
+              profile: data.get("profile"),
+              email: data.get("email"),
+              password: data.get("password"),
+            };
+            form.reset();
+            void request("garmin/login", body);
+          }}
+        >
+          <label>
+            Profile name
+            <input
+              name="profile"
+              defaultValue={profile}
+              pattern="[A-Za-z0-9][A-Za-z0-9_-]{0,63}"
+              required
+            />
+          </label>
+          <label>
+            Garmin email
+            <input
+              name="email"
+              type="email"
+              autoComplete="username"
+              maxLength={254}
+              required
+            />
+          </label>
+          <label>
+            Garmin password
+            <input
+              name="password"
+              type="password"
+              autoComplete="current-password"
+              maxLength={1024}
+              required
+            />
+          </label>
+          <button className="primary full" disabled={busy}>
+            Sign in to Garmin
+          </button>
+        </form>
+      )}
+      {job.status === "signing_in" && (
+        <p role="status">Signing in to Garmin…</p>
+      )}
+      {job.status === "mfa" && (
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            const data = new FormData(e.currentTarget);
+            const code = data.get("code");
+            e.currentTarget.reset();
+            void request("garmin/login/mfa", { id: job.id, code });
+          }}
+        >
+          <label>
+            Verification code
+            <input
+              name="code"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              pattern="[0-9]{6}"
+              maxLength={6}
+              required
+            />
+          </label>
+          <button className="primary full" disabled={busy}>
+            Verify code
+          </button>
+        </form>
+      )}
+    </Modal>
+  );
+}
+
 function Modal({
   title,
   close,
