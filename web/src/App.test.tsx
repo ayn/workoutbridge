@@ -67,6 +67,18 @@ const initial = {
   history: [],
 };
 
+test.each([true, false])("independence disclaimer is visible with signedIn=%s", async (signedIn) => {
+  vi.spyOn(globalThis, "fetch").mockImplementation(async () =>
+    signedIn ? new Response(JSON.stringify(initial)) : new Response("{}", { status: 401 }),
+  );
+  render(<App />);
+  if (signedIn) await screen.findByText("Upcoming workouts");
+  else await screen.findByLabelText("Access password");
+  expect(await screen.findByText(
+    "WorkoutBridge is an independent project, not affiliated with, endorsed by, or sponsored by Garmin, Final Surge, COROS, Suunto, Google, Apple, or any other platform provider. All trademarks belong to their respective owners.",
+  )).toBeInTheDocument();
+});
+
 test("history distinguishes an empty feed check from failed checks and publications", async () => {
   const history = [
     { id: "1", at: "2030-01-01T00:00:00Z", status: "Checked successfully", upcoming_count: 0, results: [] },
