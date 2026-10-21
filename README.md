@@ -38,7 +38,7 @@ provisional during the private pilot and will stabilize at public launch.
   want to run their own instance. Public availability, service URL, and paid or
   freemium limits are not yet announced. This section will link to the default
   hosted service and its pricing when available.
-- **Local CLI:** use the Quick Start below without running the web interface.
+- **Local CLI:** use the [CLI guide](#cli) without running the web interface.
 
 This public repository contains the single-owner DIY app and CLI. Managed
 Prescribed accounts, billing, referrals, administration, and production hosting
@@ -46,6 +46,89 @@ are developed separately; they are not required to run this project. Existing
 DIY deployments retain the Tailscale sidecar and their own configuration.
 
 ## Quick Start
+
+Deploy the single-owner web app with Docker Compose, then connect your calendar
+and destination in the browser. No Stripe, transactional email provider, or
+hosted-service account is required. Prefer a terminal-only workflow? See [CLI](#cli).
+
+### 1. Prepare Your Server
+
+You need Docker Engine with Compose, a Tailscale account, a private HTTPS hostname,
+and a Cloudflare-managed DNS zone for the included Caddy DNS-01 setup. This Compose
+deployment is intended for Linux and should remain accessible only on your LAN/tailnet.
+
+```bash
+git clone https://github.com/ayn/workoutbridge.git
+cd workoutbridge
+umask 077
+mkdir -p "$HOME/.config" "$HOME/.local/share/workoutbridge"
+chmod 700 "$HOME/.local/share/workoutbridge"
+openssl rand -hex 32 > "$HOME/.local/share/workoutbridge/access-password"
+chmod 600 "$HOME/.local/share/workoutbridge/access-password"
+```
+
+For a **new installation**, put these values in
+`$HOME/.config/workoutbridge-deploy.env` and chmod the file to 600. Replace all
+placeholders; use an absolute path for the data directory, not a literal `$HOME`.
+Never commit this file or your real calendar feed URL.
+
+```dotenv
+WORKOUTBRIDGE_PRIVATE_DIR=/absolute/path/outside/checkout/workoutbridge
+WORKOUTBRIDGE_DOMAIN=workoutbridge.example.com
+WORKOUTBRIDGE_ORIGIN=https://workoutbridge.example.com
+CF_API_TOKEN=REPLACE_WITH_ZONE_SCOPED_DNS_TOKEN
+```
+
+Set `WORKOUTBRIDGE_PRIVATE_DIR` to the directory created above, containing
+`access-password`. See the [deployment runbook](docs/private-web.md) for DNS-token
+permissions, persistent state, backups, limits and recovery. **Existing installs:**
+keep your original profiles, sessions, password and publishing databases; do not
+regenerate credentials or run a second publisher against the same account.
+
+### 2. Start the App and Authorize Tailscale
+
+```bash
+docker compose --env-file "$HOME/.config/workoutbridge-deploy.env" up -d --build
+docker compose --env-file "$HOME/.config/workoutbridge-deploy.env" exec tailscale \
+  tailscale up --accept-dns=false
+```
+
+Follow the private authorization link. Point your private DNS hostname to the
+sidecar's Tailscale address and open the configured HTTPS origin from a tailnet
+device. Do not publish the app through Funnel or port forwarding. Sign in using
+the generated `access-password` file from your private data directory.
+
+The included stack uses rootless Docker and `/dev/net/tun`; confirm your server
+supports that setup before deploying. First build/certificate issuance and
+sidecar authorization can take several minutes. Check status with:
+
+```bash
+docker compose --env-file "$HOME/.config/workoutbridge-deploy.env" ps
+docker compose --env-file "$HOME/.config/workoutbridge-deploy.env" logs --tail 50 web
+```
+
+### 3. Connect and Review in the Browser
+
+1. In **Connections**, connect Garmin (including MFA if requested) or authorize
+   COROS. Session data stays in your private mounted storage.
+2. In **Sources**, add your authorized Final Surge or Google Calendar feed and
+   timezone. The web pilot currently supports those feed hosts; local CLI import
+   supports other ICS inputs separately.
+3. In **Syncs**, connect that source to the destination profile and refresh the
+   preview. Review the original assignment, converted steps and destination.
+4. Publish selected workouts manually, or explicitly enable and confirm hourly
+   publishing. Enabling it publishes eligible workouts immediately; connecting
+   an account alone does not enable writes. Check History for verified results.
+
+Keep the same data directory and publishing receipts across updates. A failed
+or uncertain write stops automatic publishing until you reconcile history;
+never delete the database to force a retry. See the [full runbook](docs/private-web.md)
+for authentication renewal, updates and recovery.
+
+## CLI
+
+The CLI is optional for a self-hosted web deployment. Use it for local imports,
+review files, dry runs and terminal-driven publishing without running a web server.
 
 Requires [uv](https://docs.astral.sh/uv/getting-started/installation/), Python
 3.12+, and Linux/macOS. Run these commands from the repository checkout.
@@ -112,7 +195,7 @@ See [publishing modes](#publishing-modes) for `--yolo`,
 [Calendar to Garmin](#calendar-to-garmin) for feed options, and
 [Garmin Login](#garmin-login) for session renewal.
 
-## Try the Parser
+### Try the Parser
 
 Parsing alone requires Python 3.11+ and no Garmin login:
 
@@ -139,7 +222,7 @@ rep-time notes, and recovery between repetitions (not after the last rep).
 Easy recovery remains a Run step. No recovery or cooldown is inferred.
 Other natural-language formats remain unresolved; no LLM API is required.
 
-## Calendar to Garmin
+### Calendar to Garmin
 
 Keep input files, review output, sessions, and receipts outside the checkout.
 Pass a local ICS file or an authorized HTTPS calendar feed URL directly to `plan`.
@@ -174,7 +257,7 @@ workoutbridge plan /private/path/training.ics \
   > /private/path/review.json
 ```
 
-### Final Surge Calendar Feed
+#### Final Surge Calendar Feed
 
 Use your authorized Final Surge calendar subscription URL as the same `plan`
 argument. No Final Surge API credentials or login are required for a feed URL
@@ -241,7 +324,7 @@ to select individual events. Unsupported/cancelled events stay visible for revie
 and block batch publishing. Descriptions take precedence over titles as the
 prescription; both are retained, and the review includes original text and steps.
 
-### Explicit Conversion Preferences
+#### Explicit Conversion Preferences
 
 For simple easy-run prescriptions, opt in during planning:
 
@@ -279,7 +362,7 @@ profile ID. Create the session with the interactive login command below.
 Do not use a different athlete's session. An expired session requires renewal
 through the native authentication command below, into a new directory.
 
-### Garmin Login
+#### Garmin Login
 
 The recommended login command saves a named connection:
 
@@ -395,9 +478,9 @@ This is not a universal exactly-once guarantee: Garmin is an unofficial
 integration, unrelated tools can create duplicates, and this lock does not
 coordinate separate hosts/databases. A hosted service needs distributed claims.
 
-## Intended Workflow
+### CLI Workflow
 
-### Publishing Modes
+#### Publishing Modes
 
 The `publish` command accepts mutually exclusive mode flags:
 
@@ -414,7 +497,7 @@ Keep using the same private state database across runs. Use `--profile NAME`
 to load connection settings, or supply `--account-id`, `--session-dir`, and
 `--state-db` explicitly.
 
-### Check Garmin Before Publishing
+#### Check Garmin Before Publishing
 
 Using an existing private session and the independently verified numeric profile
 ID, run this read-only check (Python 3.12+ with the `garmin` extra):
