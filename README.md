@@ -28,6 +28,19 @@ events, and untracked workouts on the same day require manual reconciliation.
 
 ## Deployment Options
 
+## Supported Destinations
+
+| Destination | Status | Notes |
+| --- | --- | --- |
+| Garmin Connect | Supported (pilot) | Structured running workouts and calendar scheduling; device delivery not yet verified. |
+| COROS | Supported (pilot) | OAuth, structured running workouts and calendar scheduling; [limitations](docs/coros.md) apply. |
+| Suunto | Planned | Not implemented; no connection or publishing support yet. |
+
+Want another destination? See [adding a destination adapter](docs/adding-destinations.md)
+for the architecture, safety requirements, tests, and PR checklist.
+
+## Deployment Options
+
 The web app uses the [versioned `/api/v1` API](docs/web-api.md). Its contract is
 provisional during the private pilot and will stabilize at public launch.
 
