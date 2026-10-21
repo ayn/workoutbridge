@@ -40,6 +40,9 @@ provisional during the private pilot and will stabilize at public launch.
   hosted service and its pricing when available.
 - **Local CLI:** use the Quick Start below without running the web interface.
 
+The [DigitalOcean staging runbook](docs/digitalocean.md) describes the private,
+localhost-only deployment foundation for the future multi-user service.
+
 ## Quick Start
 
 Requires [uv](https://docs.astral.sh/uv/getting-started/installation/), Python
