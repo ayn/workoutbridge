@@ -42,10 +42,9 @@ for the architecture, safety requirements, tests, and PR checklist.
 The web app uses the [versioned `/api/v1` API](docs/web-api.md). Its contract is
 provisional during the private pilot and will stabilize at public launch.
 
-- **Hosted service (planned):** a managed option is intended for people who do not
-  want to run their own instance. Public availability, service URL, and paid or
-  freemium limits are not yet announced. This section will link to the default
-  hosted service and its pricing when available.
+- **Hosted service (planned):** [Prescribed.FIT](https://prescribed.fit) is the
+  managed option for people who do not want to run their own instance. Public
+  signup is not open yet; availability and pricing will be announced there.
 - **Self-host today:** follow the [single-owner web deployment runbook](docs/private-web.md)
   for setup, persistent storage, authentication, scheduling, and updates. Keep the
   pilot private; it is not yet a public multi-user service.
