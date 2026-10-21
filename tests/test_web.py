@@ -22,10 +22,24 @@ class WebTests(unittest.TestCase):
         self.addCleanup(fetch.stop)
 
     def login(self):
-        r = self.client.post("/api/login", json={"password": "a" * 40}, headers=self.headers)
+        r = self.client.post("/api/v1/login", json={"password": "a" * 40}, headers=self.headers)
         self.assertEqual(r.status_code, 200)
         self.assertIn("HttpOnly", r.headers["set-cookie"])
         self.assertIn("Secure", r.headers["set-cookie"])
+
+    def test_api_routes_are_versioned_and_health_is_not(self):
+        paths = {route.path for route in self.app.routes}
+        self.assertIn("/api/v1/login", paths)
+        self.assertIn("/api/v1/syncs/{key}/publish", paths)
+        self.assertTrue(all(p.startswith("/api/v1/") for p in paths if p.startswith("/api/")))
+        self.assertEqual(self.client.get("/health").json(), {"status": "ok"})
+        for path in ("/api/login", "/api/state", "/api/v2/state"):
+            with self.subTest(path=path):
+                response = self.client.get(path)
+                self.assertEqual(response.status_code, 404)
+                self.assertEqual(response.headers["content-type"], "application/json")
+        response = self.client.post("/api/syncs/example/publish", json={}, headers=self.headers)
+        self.assertEqual(response.status_code, 404)
 
     def automatic_rule(self):
         self.login()
@@ -38,7 +52,7 @@ class WebTests(unittest.TestCase):
         patcher.start()
         self.addCleanup(patcher.stop)
         source = self.client.post(
-            "/api/sources",
+            "/api/v1/sources",
             json={
                 "name": "Training",
                 "url": "https://log.finalsurge.com/delivery/ical/EXAMPLE",
@@ -48,7 +62,7 @@ class WebTests(unittest.TestCase):
             headers=self.headers,
         ).json()["id"]
         rule = self.client.post(
-            "/api/syncs", json={"source": source, "profile": "test"}, headers=self.headers
+            "/api/v1/syncs", json={"source": source, "profile": "test"}, headers=self.headers
         ).json()["id"]
         return rule, source, profile
 
@@ -59,7 +73,7 @@ class WebTests(unittest.TestCase):
             create_app(self.root, "https://bridge.example", "a" * 40, poll=False),
             base_url="https://bridge.example",
         )
-        response = restarted.get("/api/state", headers={"Cookie": f"wb_session={token}"})
+        response = restarted.get("/api/v1/state", headers={"Cookie": f"wb_session={token}"})
         self.assertEqual(response.status_code, 200)
         self.assertNotIn(token.encode(), (self.root / "web.sqlite").read_bytes())
         self.assertEqual((self.root / "web.sqlite").stat().st_mode & 0o777, 0o600)
@@ -71,16 +85,16 @@ class WebTests(unittest.TestCase):
         token = self.client.cookies.get("wb_session")
         headers = {"Cookie": f"wb_session={token}"}
         with patch("workoutbridge.web.time.time", return_value=now + 29 * 86400):
-            response = self.client.get("/api/state", headers=headers)
+            response = self.client.get("/api/v1/state", headers=headers)
             self.assertEqual(response.status_code, 200)
             self.assertIn("Max-Age=2592000", response.headers["set-cookie"])
             self.assertIn("HttpOnly", response.headers["set-cookie"])
             self.assertIn("Secure", response.headers["set-cookie"])
             self.assertIn("SameSite=strict", response.headers["set-cookie"])
         with patch("workoutbridge.web.time.time", return_value=now + 31 * 86400):
-            self.assertEqual(self.client.get("/api/state", headers=headers).status_code, 200)
+            self.assertEqual(self.client.get("/api/v1/state", headers=headers).status_code, 200)
         with patch("workoutbridge.web.time.time", return_value=now + 62 * 86400):
-            self.assertEqual(self.client.get("/api/state", headers=headers).status_code, 401)
+            self.assertEqual(self.client.get("/api/v1/state", headers=headers).status_code, 401)
 
     def test_owner_logout_revokes_persistent_session_and_password_change_invalidates(self):
         self.login()
@@ -90,13 +104,13 @@ class WebTests(unittest.TestCase):
             create_app(self.root, "https://bridge.example", "b" * 40, poll=False),
             base_url="https://bridge.example",
         )
-        self.assertEqual(changed.get("/api/state", headers=headers).status_code, 401)
-        self.client.post("/api/logout", headers=self.headers)
+        self.assertEqual(changed.get("/api/v1/state", headers=headers).status_code, 401)
+        self.client.post("/api/v1/logout", headers=self.headers)
         restarted = TestClient(
             create_app(self.root, "https://bridge.example", "a" * 40, poll=False),
             base_url="https://bridge.example",
         )
-        self.assertEqual(restarted.get("/api/state", headers=headers).status_code, 401)
+        self.assertEqual(restarted.get("/api/v1/state", headers=headers).status_code, 401)
 
     def test_rejected_requests_do_not_extend_owner_session(self):
         now = time.time()
@@ -105,11 +119,11 @@ class WebTests(unittest.TestCase):
         token = self.client.cookies.get("wb_session")
         headers = {"Cookie": f"wb_session={token}", "Origin": "https://evil.example"}
         with patch("workoutbridge.web.time.time", return_value=now + 29 * 86400):
-            response = self.client.post("/api/logout", headers=headers)
+            response = self.client.post("/api/v1/logout", headers=headers)
             self.assertEqual(response.status_code, 403)
             self.assertNotIn("set-cookie", response.headers)
         with patch("workoutbridge.web.time.time", return_value=now + 31 * 86400):
-            self.assertEqual(self.client.get("/api/state", headers=headers).status_code, 401)
+            self.assertEqual(self.client.get("/api/v1/state", headers=headers).status_code, 401)
 
     def test_hourly_publish_is_opt_in_account_bound_and_idempotent(self):
         from test_publishing import FakeGarmin
@@ -118,7 +132,7 @@ class WebTests(unittest.TestCase):
 
         rule, source, profile = self.automatic_rule()
         other = self.client.post(
-            "/api/syncs", json={"source": source, "profile": "other"}, headers=self.headers
+            "/api/v1/syncs", json={"source": source, "profile": "other"}, headers=self.headers
         ).json()["id"]
         provider = FakeGarmin()
         provider.account_id = "123"
@@ -133,7 +147,7 @@ class WebTests(unittest.TestCase):
         ):
             self.app.state.poll_once()
             connect.assert_not_called()
-            endpoint = f"/api/syncs/{rule}/automatic"
+            endpoint = f"/api/v1/syncs/{rule}/automatic"
             self.assertEqual(
                 self.client.post(
                     endpoint, json={"enabled": True, "account": "999"}, headers=self.headers
@@ -147,7 +161,7 @@ class WebTests(unittest.TestCase):
                 200,
             )
             self.assertEqual((provider.uploads, provider.schedules), (1, 1))
-            checks = self.client.get("/api/state").json()["history"]
+            checks = self.client.get("/api/v1/state").json()["history"]
             self.assertEqual(sum(h["sync"] == other for h in checks), 1)
             self.app.state.poll_once()
             self.app.state.poll_once()
@@ -156,14 +170,14 @@ class WebTests(unittest.TestCase):
             connect.reset_mock()
             self.app.state.poll_once()
             connect.assert_not_called()
-            rules = self.client.get("/api/state").json()["syncs"]
+            rules = self.client.get("/api/v1/state").json()["syncs"]
             self.assertTrue(next(s for s in rules if s["id"] == rule)["auto_blocked"])
 
     def test_automatic_failure_latches_across_restart_and_requires_acknowledgment(self):
         from workoutbridge.calendar import Event
 
         rule, source, _ = self.automatic_rule()
-        endpoint = f"/api/syncs/{rule}/automatic"
+        endpoint = f"/api/v1/syncs/{rule}/automatic"
         self.assertEqual(
             self.client.post(
                 endpoint, json={"enabled": True, "account": "123"}, headers=self.headers
@@ -184,7 +198,7 @@ class WebTests(unittest.TestCase):
             restarted = create_app(self.root, "https://bridge.example", "a" * 40, poll=False)
             restarted.state.poll_once()
             connect.assert_called_once()
-        state = self.client.get("/api/state")
+        state = self.client.get("/api/v1/state")
         self.assertNotIn("PRIVATE", state.text)
         self.assertTrue(state.json()["syncs"][0]["auto_blocked"])
         self.assertEqual(
@@ -206,7 +220,7 @@ class WebTests(unittest.TestCase):
         rule, _, _ = self.automatic_rule()
         self.assertEqual(
             self.client.post(
-                f"/api/syncs/{rule}/automatic",
+                f"/api/v1/syncs/{rule}/automatic",
                 json={"enabled": True, "account": "123"},
                 headers=self.headers,
             ).status_code,
@@ -215,7 +229,7 @@ class WebTests(unittest.TestCase):
         with patch("workoutbridge.web.GarminProvider.connect") as connect:
             with patch("workoutbridge.web.read_calendar", side_effect=ValueError("PRIVATE")):
                 self.app.state.poll_once()
-            history = self.client.get("/api/state").json()["history"]
+            history = self.client.get("/api/v1/state").json()["history"]
             self.assertEqual(history[-1]["status"], "Feed check failed")
             self.assertNotIn("PRIVATE", str(history))
             with (
@@ -223,8 +237,8 @@ class WebTests(unittest.TestCase):
                 patch("workoutbridge.web.import_calendar", return_value=[]),
             ):
                 self.app.state.poll_once()
-                self.client.post(f"/api/syncs/{rule}/preview", json={}, headers=self.headers)
-            history = self.client.get("/api/state").json()["history"]
+                self.client.post(f"/api/v1/syncs/{rule}/preview", json={}, headers=self.headers)
+            history = self.client.get("/api/v1/state").json()["history"]
             self.assertEqual(len(history), 4)
             for entry in history[2:]:
                 self.assertEqual(entry["status"], "Checked successfully")
@@ -233,17 +247,17 @@ class WebTests(unittest.TestCase):
                 self.assertEqual(entry["sync"], rule)
                 self.assertTrue(entry["at"])
             self.client.post(
-                f"/api/syncs/{rule}/pause", json={"paused": True}, headers=self.headers
+                f"/api/v1/syncs/{rule}/pause", json={"paused": True}, headers=self.headers
             )
             with patch("workoutbridge.web.read_calendar") as fetch:
                 self.client.post(
-                    f"/api/syncs/{rule}/automatic",
+                    f"/api/v1/syncs/{rule}/automatic",
                     json={"enabled": True, "account": "123"},
                     headers=self.headers,
                 )
                 self.app.state.poll_once()
                 fetch.assert_not_called()
-            self.assertEqual(self.client.get("/api/state").json()["history"], history)
+            self.assertEqual(self.client.get("/api/v1/state").json()["history"], history)
             connect.assert_not_called()
 
     def test_manual_failure_also_stops_enabled_automatic_publishing(self):
@@ -251,7 +265,7 @@ class WebTests(unittest.TestCase):
 
         rule, source, _ = self.automatic_rule()
         self.client.post(
-            f"/api/syncs/{rule}/automatic",
+            f"/api/v1/syncs/{rule}/automatic",
             json={"enabled": True, "account": "123"},
             headers=self.headers,
         )
@@ -262,34 +276,36 @@ class WebTests(unittest.TestCase):
                 return_value=[Event(source, "run", "", "2030-01-01", "Run: 20 min", "")],
             ),
         ):
-            plan = self.client.post(f"/api/syncs/{rule}/preview", headers=self.headers).json()
+            plan = self.client.post(f"/api/v1/syncs/{rule}/preview", headers=self.headers).json()
         with patch("workoutbridge.web.GarminProvider.connect", side_effect=RuntimeError("PRIVATE")):
             self.assertEqual(
                 self.client.post(
-                    f"/api/syncs/{rule}/publish",
+                    f"/api/v1/syncs/{rule}/publish",
                     json={"hash": plan["hash"], "selected": [0]},
                     headers=self.headers,
                 ).status_code,
                 409,
             )
-        self.assertTrue(self.client.get("/api/state").json()["syncs"][0]["auto_blocked"])
+        self.assertTrue(self.client.get("/api/v1/state").json()["syncs"][0]["auto_blocked"])
 
     def test_auth_and_csrf(self):
-        self.assertEqual(self.client.get("/api/state").status_code, 401)
+        self.assertEqual(self.client.get("/api/v1/state").status_code, 401)
         self.assertEqual(
-            self.client.post("/api/login", json={"password": "a" * 40}).status_code, 403
+            self.client.post("/api/v1/login", json={"password": "a" * 40}).status_code, 403
         )
         self.login()
-        self.assertEqual(self.client.get("/api/state").status_code, 200)
+        self.assertEqual(self.client.get("/api/v1/state").status_code, 200)
         self.assertEqual(
-            self.client.post("/api/logout", headers={"Origin": "https://evil.example"}).status_code,
+            self.client.post(
+                "/api/v1/logout", headers={"Origin": "https://evil.example"}
+            ).status_code,
             403,
         )
-        self.client.post("/api/logout", headers=self.headers)
-        self.assertEqual(self.client.get("/api/state").status_code, 401)
+        self.client.post("/api/v1/logout", headers=self.headers)
+        self.assertEqual(self.client.get("/api/v1/state").status_code, 401)
 
     def test_garmin_login_api_requires_owner_origin_and_https(self):
-        path = "/api/garmin/login"
+        path = "/api/v1/garmin/login"
         self.assertEqual(self.client.post(path, json={}, headers=self.headers).status_code, 401)
         self.login()
         with patch(
@@ -318,7 +334,9 @@ class WebTests(unittest.TestCase):
             base_url="http://bridge.example",
         )
         http.post(
-            "/api/login", json={"password": "a" * 40}, headers={"Origin": "http://bridge.example"}
+            "/api/v1/login",
+            json={"password": "a" * 40},
+            headers={"Origin": "http://bridge.example"},
         )
         self.assertEqual(
             http.post(path, json=body, headers={"Origin": "http://bridge.example"}).status_code, 403
@@ -334,19 +352,19 @@ class WebTests(unittest.TestCase):
             "https://log.finalsurge.com:444/x",
         ):
             r = self.client.post(
-                "/api/sources",
+                "/api/v1/sources",
                 json={"name": "Training", "url": url, "format": "finalsurge", "timezone": "UTC"},
                 headers=self.headers,
             )
             self.assertEqual(r.status_code, 422)
         url = "https://log.finalsurge.com/delivery/ical/SYNTHETICPRIVATE"
         r = self.client.post(
-            "/api/sources",
+            "/api/v1/sources",
             json={"name": "Training", "url": url, "format": "finalsurge", "timezone": "UTC"},
             headers=self.headers,
         )
         self.assertEqual(r.status_code, 200)
-        state = self.client.get("/api/state")
+        state = self.client.get("/api/v1/state")
         self.assertNotIn("SYNTHETICPRIVATE", state.text)
         self.assertEqual(len(state.json()["sources"]), 1)
         self.assertEqual((self.root / "web.sqlite").stat().st_mode & 0o777, 0o600)
@@ -354,7 +372,7 @@ class WebTests(unittest.TestCase):
     def test_preview_and_publish_require_exact_server_plan(self):
         self.login()
         source = self.client.post(
-            "/api/sources",
+            "/api/v1/sources",
             json={
                 "name": "Training",
                 "url": "https://log.finalsurge.com/delivery/ical/EXAMPLE",
@@ -370,7 +388,9 @@ class WebTests(unittest.TestCase):
         }
         with patch("workoutbridge.web.load_profile", return_value=profile):
             rule = self.client.post(
-                "/api/syncs", json={"source": source, "profile": "personal"}, headers=self.headers
+                "/api/v1/syncs",
+                json={"source": source, "profile": "personal"},
+                headers=self.headers,
             ).json()["id"]
             from workoutbridge.calendar import Event
 
@@ -380,7 +400,7 @@ class WebTests(unittest.TestCase):
                 patch("workoutbridge.web.import_calendar", return_value=[event]),
                 patch("workoutbridge.web.GarminProvider.connect") as connect,
             ):
-                r = self.client.post(f"/api/syncs/{rule}/preview", headers=self.headers)
+                r = self.client.post(f"/api/v1/syncs/{rule}/preview", headers=self.headers)
                 self.assertEqual(r.status_code, 200)
                 connect.assert_not_called()
             plan = r.json()
@@ -390,7 +410,7 @@ class WebTests(unittest.TestCase):
                 patch("workoutbridge.web.Publisher") as publisher,
             ):
                 bad = self.client.post(
-                    f"/api/syncs/{rule}/publish",
+                    f"/api/v1/syncs/{rule}/publish",
                     json={"hash": "wrong", "selected": [0]},
                     headers=self.headers,
                 )
@@ -398,7 +418,7 @@ class WebTests(unittest.TestCase):
                 connect.assert_not_called()
                 publisher.return_value.publish.return_value = "55"
                 good = self.client.post(
-                    f"/api/syncs/{rule}/publish",
+                    f"/api/v1/syncs/{rule}/publish",
                     json={"hash": plan["hash"], "selected": [0]},
                     headers=self.headers,
                 )
@@ -409,7 +429,7 @@ class WebTests(unittest.TestCase):
     def test_fetch_failure_is_redacted(self):
         self.login()
         source = self.client.post(
-            "/api/sources",
+            "/api/v1/sources",
             json={
                 "name": "Training",
                 "url": "https://log.finalsurge.com/delivery/ical/PRIVATE",
@@ -420,7 +440,7 @@ class WebTests(unittest.TestCase):
         ).json()["id"]
         with patch("workoutbridge.web.load_profile", return_value={"account_id": "123"}):
             rule = self.client.post(
-                "/api/syncs", json={"source": source, "profile": "test"}, headers=self.headers
+                "/api/v1/syncs", json={"source": source, "profile": "test"}, headers=self.headers
             ).json()["id"]
             with (
                 patch("workoutbridge.web.read_calendar", side_effect=ValueError("PRIVATE")),
@@ -428,12 +448,12 @@ class WebTests(unittest.TestCase):
             ):
                 self.app.state.poll_once()
                 connect.assert_not_called()
-            state = self.client.get("/api/state")
+            state = self.client.get("/api/v1/state")
             self.assertNotIn("PRIVATE", state.text)
             self.assertIn("failed", state.json()["syncs"][0]["error"])
             self.assertEqual(
                 self.client.post(
-                    f"/api/syncs/{rule}/pause", json={"paused": True}, headers=self.headers
+                    f"/api/v1/syncs/{rule}/pause", json={"paused": True}, headers=self.headers
                 ).status_code,
                 200,
             )
@@ -446,10 +466,10 @@ class WebTests(unittest.TestCase):
             self.client.get("/health", headers={"host": "evil.example"}).status_code, 400
         )
         for _ in range(10):
-            self.client.post("/api/login", json={"password": "incorrect"}, headers=self.headers)
+            self.client.post("/api/v1/login", json={"password": "incorrect"}, headers=self.headers)
         self.assertEqual(
             self.client.post(
-                "/api/login", json={"password": "a" * 40}, headers=self.headers
+                "/api/v1/login", json={"password": "a" * 40}, headers=self.headers
             ).status_code,
             429,
         )
@@ -457,7 +477,7 @@ class WebTests(unittest.TestCase):
     def test_login_body_is_bounded(self):
         self.assertEqual(
             self.client.post(
-                "/api/login", json={"password": "a" * 17000}, headers=self.headers
+                "/api/v1/login", json={"password": "a" * 17000}, headers=self.headers
             ).status_code,
             413,
         )

@@ -86,11 +86,13 @@ const tabs = [
   { name: "History", icon: History },
 ] as const;
 
+const API_BASE = "/api/v1/";
+
 async function api(path: string, data?: unknown) {
   let response: Response;
   try {
     response = await fetch(
-      "/api/" + path,
+      API_BASE + path,
       data === undefined
         ? { credentials: "same-origin" }
         : {

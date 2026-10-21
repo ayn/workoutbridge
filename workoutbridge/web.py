@@ -30,6 +30,7 @@ from .publishing import Publisher, digest
 from .web_auth import GarminLogin
 
 SESSION_SECONDS = 30 * 86400
+API_PREFIX = "/api/v1"
 
 
 def create_app(root: Path, origin: str, password: str, *, poll=True) -> FastAPI:
@@ -215,9 +216,14 @@ def create_app(root: Path, origin: str, password: str, *, poll=True) -> FastAPI:
         if request.headers.get("host") != urlsplit(origin).netloc:
             return JSONResponse({"detail": "Invalid host"}, status_code=400)
         if request.url.path.startswith("/api/"):
+            if not request.url.path.startswith(API_PREFIX + "/"):
+                return JSONResponse(
+                    {"detail": "Unsupported API version. Refresh the app to use /api/v1."},
+                    status_code=404,
+                )
             if request.method != "GET" and request.headers.get("origin") != origin:
                 return JSONResponse({"detail": "Invalid origin"}, status_code=403)
-            if request.url.path != "/api/login":
+            if request.url.path != API_PREFIX + "/login":
                 token = request.cookies.get("wb_session", "")
                 authenticated_session = session_hash(token)
                 with db() as conn:
@@ -240,7 +246,7 @@ def create_app(root: Path, origin: str, password: str, *, poll=True) -> FastAPI:
         response = await call_next(request)
         if (
             authenticated_session
-            and request.url.path != "/api/logout"
+            and request.url.path != API_PREFIX + "/logout"
             and response.status_code < 400
         ):
             now = time.time()
@@ -277,7 +283,7 @@ def create_app(root: Path, origin: str, password: str, *, poll=True) -> FastAPI:
             conn.execute("SELECT 1").fetchone()
         return {"status": "ok"}
 
-    @app.post("/api/login")
+    @app.post(API_PREFIX + "/login")
     def login(body: dict):
         now = time.time()
         attempts[:] = [t for t in attempts if t > now - 300]
@@ -305,7 +311,7 @@ def create_app(root: Path, origin: str, password: str, *, poll=True) -> FastAPI:
         session_cookie(response, token)
         return response
 
-    @app.post("/api/logout")
+    @app.post(API_PREFIX + "/logout")
     def logout(request: Request):
         with db() as conn:
             conn.execute(
@@ -316,7 +322,7 @@ def create_app(root: Path, origin: str, password: str, *, poll=True) -> FastAPI:
         response.delete_cookie("wb_session")
         return response
 
-    @app.get("/api/state")
+    @app.get(API_PREFIX + "/state")
     def state():
         connections = []
         for path in sorted(profile_path("placeholder").parent.glob("*.json")):
@@ -343,11 +349,11 @@ def create_app(root: Path, origin: str, password: str, *, poll=True) -> FastAPI:
             "history": sorted(values("history"), key=lambda entry: entry["at"])[-50:],
         }
 
-    @app.get("/api/garmin/login")
+    @app.get(API_PREFIX + "/garmin/login")
     def garmin_login_status():
         return garmin_login.status()
 
-    @app.post("/api/garmin/login")
+    @app.post(API_PREFIX + "/garmin/login")
     def garmin_login_start(body: dict):
         if not origin.startswith("https://"):
             raise HTTPException(403, "Garmin sign-in requires HTTPS")
@@ -361,7 +367,7 @@ def create_app(root: Path, origin: str, password: str, *, poll=True) -> FastAPI:
                 "Check profile and credentials; only one login and three attempts per 15 minutes are allowed",
             ) from None
 
-    @app.post("/api/garmin/login/mfa")
+    @app.post(API_PREFIX + "/garmin/login/mfa")
     def garmin_login_code(body: dict):
         if not origin.startswith("https://"):
             raise HTTPException(403, "Garmin sign-in requires HTTPS")
@@ -372,7 +378,7 @@ def create_app(root: Path, origin: str, password: str, *, poll=True) -> FastAPI:
                 409, "Use the current login and a six-digit verification code"
             ) from None
 
-    @app.post("/api/garmin/login/cancel")
+    @app.post(API_PREFIX + "/garmin/login/cancel")
     def garmin_login_cancel(body: dict):
         try:
             garmin_login.cancel(body.get("id"))
@@ -380,7 +386,7 @@ def create_app(root: Path, origin: str, password: str, *, poll=True) -> FastAPI:
         except ValueError:
             raise HTTPException(409, "No matching login") from None
 
-    @app.post("/api/sources")
+    @app.post(API_PREFIX + "/sources")
     def source(body: dict):
         url = body.get("url", "")
         if not isinstance(url, str) or len(url) > 2048:
@@ -424,7 +430,7 @@ def create_app(root: Path, origin: str, password: str, *, poll=True) -> FastAPI:
         )
         return {"id": key}
 
-    @app.post("/api/syncs")
+    @app.post(API_PREFIX + "/syncs")
     def sync(body: dict):
         get("source", body.get("source"))
         load_profile(body.get("profile", ""))
@@ -447,7 +453,7 @@ def create_app(root: Path, origin: str, password: str, *, poll=True) -> FastAPI:
         )
         return {"id": key}
 
-    @app.post("/api/syncs/{key}/preview")
+    @app.post(API_PREFIX + "/syncs/{key}/preview")
     def refresh(key: str):
         if not operation.acquire(blocking=False):
             raise HTTPException(409, "Another operation is running")
@@ -461,7 +467,7 @@ def create_app(root: Path, origin: str, password: str, *, poll=True) -> FastAPI:
         finally:
             operation.release()
 
-    @app.post("/api/syncs/{key}/pause")
+    @app.post(API_PREFIX + "/syncs/{key}/pause")
     def pause(key: str, body: dict):
         if type(body.get("paused")) is not bool:
             raise HTTPException(422, "Choose a paused state")
@@ -475,7 +481,7 @@ def create_app(root: Path, origin: str, password: str, *, poll=True) -> FastAPI:
         finally:
             operation.release()
 
-    @app.post("/api/syncs/{key}/automatic")
+    @app.post(API_PREFIX + "/syncs/{key}/automatic")
     def automatic(key: str, body: dict):
         if type(body.get("enabled")) is not bool:
             raise HTTPException(422, "Choose an automatic publishing state")
@@ -500,7 +506,7 @@ def create_app(root: Path, origin: str, password: str, *, poll=True) -> FastAPI:
         finally:
             operation.release()
 
-    @app.post("/api/syncs/{key}/publish")
+    @app.post(API_PREFIX + "/syncs/{key}/publish")
     def publish(key: str, body: dict):
         if not operation.acquire(blocking=False):
             raise HTTPException(409, "Another operation is running")

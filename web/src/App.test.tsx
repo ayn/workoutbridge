@@ -138,7 +138,7 @@ test("sign in does not store credentials in browser storage", async () => {
   );
   await userEvent.click(screen.getByRole("button", { name: "Sign in" }));
   await screen.findByText("Upcoming workouts");
-  expect(fetcher.mock.calls[1][0]).toBe("/api/login");
+  expect(fetcher.mock.calls[1][0]).toBe("/api/v1/login");
   expect(localStorage.length).toBe(0);
 });
 
@@ -175,11 +175,11 @@ test("review shows native repeats and requires confirmation before publishing", 
   );
   await waitFor(() =>
     expect(
-      fetcher.mock.calls.some(([url]) => url === "/api/syncs/r/publish"),
+      fetcher.mock.calls.some(([url]) => url === "/api/v1/syncs/r/publish"),
     ).toBe(true),
   );
   const request = fetcher.mock.calls.find(
-    ([url]) => url === "/api/syncs/r/publish",
+    ([url]) => url === "/api/v1/syncs/r/publish",
   )![1];
   expect(JSON.parse(request!.body as string)).toEqual({
     hash: "review-hash",
@@ -218,7 +218,7 @@ test("calendar source dialog receives focus and submits a private URL", async ()
     screen.getAllByRole("button", { name: "Add source" }).at(-1)!,
   );
   await waitFor(() =>
-    expect(fetcher.mock.calls.some(([url]) => url === "/api/sources")).toBe(
+    expect(fetcher.mock.calls.some(([url]) => url === "/api/v1/sources")).toBe(
       true,
     ),
   );
@@ -233,18 +233,18 @@ test("hourly publishing requires destination confirmation", async () => {
   await userEvent.click(screen.getByRole("button", { name: "Syncs" }));
   await userEvent.click(screen.getByLabelText("Automatic publishing for test"));
   expect(
-    fetcher.mock.calls.some(([url]) => url === "/api/syncs/r/automatic"),
+    fetcher.mock.calls.some(([url]) => url === "/api/v1/syncs/r/automatic"),
   ).toBe(false);
   await userEvent.click(
     screen.getByRole("button", { name: "Enable and publish now" }),
   );
   await waitFor(() =>
     expect(
-      fetcher.mock.calls.some(([url]) => url === "/api/syncs/r/automatic"),
+      fetcher.mock.calls.some(([url]) => url === "/api/v1/syncs/r/automatic"),
     ).toBe(true),
   );
   const request = fetcher.mock.calls.find(
-    ([url]) => url === "/api/syncs/r/automatic",
+    ([url]) => url === "/api/v1/syncs/r/automatic",
   )![1];
   expect(JSON.parse(request!.body as string)).toEqual({
     enabled: true,
@@ -268,7 +268,7 @@ test("dialog dismisses on backdrop taps but not inside taps", async () => {
 
 test("new sync offers automatic publishing with an explicit manual choice", async () => {
   const fetcher = vi.spyOn(globalThis, "fetch").mockImplementation(async (url) =>
-    new Response(JSON.stringify(url === "/api/syncs" ? { id: "new" } : initial)),
+    new Response(JSON.stringify(url === "/api/v1/syncs" ? { id: "new" } : initial)),
   );
   render(<App />);
   await screen.findByText("Upcoming workouts");
@@ -284,11 +284,11 @@ test("Garmin web sign-in clears credentials and accepts requested MFA", async ()
   const fetcher = vi
     .spyOn(globalThis, "fetch")
     .mockImplementation(async (url, options) => {
-      if (url === "/api/garmin/login" && options?.method === "POST")
+      if (url === "/api/v1/garmin/login" && options?.method === "POST")
         return new Response(
           JSON.stringify({ id: "job", status: "mfa", profile: "personal" }),
         );
-      if (url === "/api/garmin/login/mfa")
+      if (url === "/api/v1/garmin/login/mfa")
         return new Response(
           JSON.stringify({
             id: "job",
@@ -297,7 +297,7 @@ test("Garmin web sign-in clears credentials and accepts requested MFA", async ()
             account: "456",
           }),
         );
-      if (url === "/api/garmin/login")
+      if (url === "/api/v1/garmin/login")
         return new Response(JSON.stringify({ status: "idle" }));
       return new Response(JSON.stringify(initial));
     });
@@ -326,7 +326,7 @@ test("Garmin web sign-in clears credentials and accepts requested MFA", async ()
   await userEvent.click(screen.getByRole("button", { name: "Verify code" }));
   await waitFor(() =>
     expect(
-      fetcher.mock.calls.some(([url]) => url === "/api/garmin/login/mfa"),
+      fetcher.mock.calls.some(([url]) => url === "/api/v1/garmin/login/mfa"),
     ).toBe(true),
   );
   expect(localStorage.length).toBe(0);
