@@ -35,8 +35,16 @@ Store the following **outside the checkout** in a private directory mounted as
 Put `WORKOUTBRIDGE_PRIVATE_DIR`, `WORKOUTBRIDGE_ORIGIN`,
 `WORKOUTBRIDGE_DOMAIN`, and `CF_API_TOKEN` in
 `~/.config/workoutbridge-deploy.env`, chmod 600. The app uses an HttpOnly,
-SameSite=Strict cookie with a 12-hour session; HTTPS enables Secure cookies.
-Sessions expire on container restart. Login attempts are rate-limited. Write
+SameSite=Strict cookie with a rolling 30-day session; HTTPS enables Secure cookies.
+Successful authenticated API requests renew both cookie and server expiry. Sessions
+survive service restarts/deployments in the private SQLite database, storing only
+password-bound token hashes, never the browser bearer token. Logout revokes that
+session; changing the configured access password invalidates existing sessions.
+After 30 days without successful API activity, sign in again. Existing in-memory
+sessions require one final sign-in after upgrading to persistent sessions.
+At most 100 sessions are retained; new logins evict the least-recently renewed
+session when necessary. Do not use persistent sign-in on a shared browser.
+Login attempts are rate-limited. Write
 requests require the exact Origin; Host is checked to resist DNS rebinding.
 No passwords or private feeds belong in Git, build contexts, or Actions logs.
 
@@ -176,8 +184,8 @@ npm run build
 Set the three server environment variables plus `WORKOUTBRIDGE_CONFIG_DIR`, then
 run `uvicorn workoutbridge.web:application --factory --host 0.0.0.0 --port 8080
 --workers 1 --no-access-log` from the repo. Use only synthetic profiles for local
-HTTP previews. Production must use HTTPS and exactly one worker because session
-state and polling coordination are process-local.
+HTTP previews. Production must use HTTPS and exactly one worker because login
+rate limits and polling coordination are process-local.
 
 ## Before public hosting
 
