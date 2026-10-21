@@ -9,12 +9,16 @@ from pathlib import Path
 from uuid import uuid4
 
 
-def profile_path(name: str) -> Path:
+def profile_path(name: str, *, config_root=None) -> Path:
     if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,63}", name):
         raise ValueError("Use a short profile name containing letters, numbers, - or _")
-    root = Path(
-        os.environ.get("WORKOUTBRIDGE_CONFIG_DIR", str(Path.home() / ".config/workoutbridge"))
-    ).expanduser()
+    root = (
+        Path(config_root)
+        if config_root is not None
+        else Path(
+            os.environ.get("WORKOUTBRIDGE_CONFIG_DIR", str(Path.home() / ".config/workoutbridge"))
+        ).expanduser()
+    )
     if not root.is_absolute() or root.is_symlink() or (root / "profiles").is_symlink():
         raise ValueError("Profile root must be an absolute, non-symlink directory")
     return root / "profiles" / f"{name}.json"
@@ -41,8 +45,8 @@ def validate(profile: dict) -> dict:
     return profile
 
 
-def load_profile(name: str) -> dict:
-    path = profile_path(name)
+def load_profile(name: str, *, config_root=None) -> dict:
+    path = profile_path(name, config_root=config_root)
     try:
         fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
         with os.fdopen(fd, "rb") as handle:
@@ -63,10 +67,12 @@ def authenticate_profile(
     *,
     authenticator=None,
     destination="garmin",
+    config_root=None,
+    claim_account=None,
 ) -> dict:
     from .auth import authenticate
 
-    path = profile_path(name)
+    path = profile_path(name, config_root=config_root)
     root = path.parent.parent
     root.mkdir(mode=0o700, parents=True, exist_ok=True)
     root.chmod(0o700)
@@ -75,7 +81,11 @@ def authenticate_profile(
     fd = os.open(path.with_suffix(".lock"), os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)
     with os.fdopen(fd, "r+") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        old = load_profile(name) if path.exists() or path.is_symlink() else None
+        old = (
+            load_profile(name, config_root=config_root)
+            if path.exists() or path.is_symlink()
+            else None
+        )
         if destination not in {"garmin", "coros"} or (old and old["destination"] != destination):
             raise ValueError("Cannot change a profile's destination provider")
         if state_db is not None:
@@ -90,6 +100,8 @@ def authenticate_profile(
         account = (authenticator or authenticate)(session)
         if old and account != old["account_id"]:
             raise ValueError("Reauthentication returned another account; profile unchanged")
+        if claim_account is not None:
+            claim_account(destination, account)
         profile = validate(
             {
                 "version": 1,

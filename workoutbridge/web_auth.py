@@ -5,6 +5,7 @@ import re
 import shutil
 import threading
 import time
+from pathlib import Path
 from uuid import uuid4
 
 from .auth import authenticate
@@ -12,8 +13,11 @@ from .profiles import authenticate_profile, profile_path
 
 
 class GarminLogin:
-    def __init__(self, operation, *, timeout=300):
+    def __init__(self, operation, *, timeout=300, config_root=None, claim_account=None, vault=None):
         self.operation = operation
+        self.config_root = config_root
+        self.claim_account = claim_account
+        self.vault = vault
         self.timeout = timeout
         self.lock = threading.RLock()
         self.worker = None
@@ -27,7 +31,7 @@ class GarminLogin:
             return dict(self.job)
 
     def start(self, profile, email, password):
-        profile_path(profile)
+        profile_path(profile, config_root=self.config_root)
         if not isinstance(email, str) or not 3 <= len(email) <= 254 or "@" not in email:
             raise ValueError("Enter a Garmin email")
         if not isinstance(password, str) or not 1 <= len(password) <= 1024:
@@ -77,7 +81,16 @@ class GarminLogin:
         try:
             if not acquired:
                 raise ValueError("Another operation is running")
-            result = authenticate_profile(profile, authenticator=login)
+            options = (
+                {}
+                if self.config_root is None
+                else {"config_root": self.config_root, "claim_account": self.claim_account}
+            )
+            if self.vault is not None:
+                options["session"] = self.vault.new_path(profile)
+            result = authenticate_profile(profile, authenticator=login, **options)
+            if self.vault is not None:
+                self.vault.save(Path(result["session_dir"]))
             saved = True
             with self.lock:
                 self.job.update(status="complete", account=result["account_id"])
