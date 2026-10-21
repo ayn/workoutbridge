@@ -116,6 +116,16 @@ test("DIY workspaces do not show the hosted setup checklist", async () => {
   expect(screen.queryByRole("group", {name: "Setup checklist"})).not.toBeInTheDocument();
 });
 
+test("setup checklist can be dismissed without changing setup or navigating", async () => {
+  const request = vi.fn().mockResolvedValue(initial);
+  render(<App multiuser request={request} />);
+  const checklist = await screen.findByRole("group", {name: "Setup checklist"});
+  await userEvent.click(within(checklist).getByRole("button", {name: "Dismiss getting started"}));
+  expect(screen.queryByRole("group", {name: "Setup checklist"})).not.toBeInTheDocument();
+  expect(screen.getByRole("heading", {name: "Upcoming workouts"})).toBeInTheDocument();
+  expect(request.mock.calls.every(([, body]) => body === undefined)).toBe(true);
+});
+
 test("Garmin sign-in suggests a supplied email but stays editable and explains storage", async () => {
   vi.spyOn(globalThis, "fetch").mockImplementation(async (url) => new Response(JSON.stringify(String(url).endsWith("/garmin/login") ? { status: "idle" } : initial)));
   render(<App suggestedEmail="athlete@example.invalid" />);
@@ -508,4 +518,17 @@ test("connected providers offer another account with an unused profile name", as
   expect(screen.getByRole("button", {name: "Connect another Garmin account"})).toBeInTheDocument();
   await userEvent.click(screen.getByRole("button", {name: "Connect another COROS account"}));
   expect(screen.getByLabelText("Profile name")).toHaveValue("coros-2");
+});
+
+
+test("setup dismissal waits for persistence and remains available after failure", async () => {
+  const persist = vi.fn().mockRejectedValueOnce(new Error("Could not save preference" )).mockResolvedValueOnce(undefined);
+  const request = vi.fn().mockResolvedValue(initial);
+  render(<App multiuser request={request} onDismissSetup={persist} />);
+  await userEvent.click(await screen.findByRole("button", {name: "Dismiss getting started"}));
+  expect(await screen.findByRole("alert")).toHaveTextContent("Could not save preference");
+  expect(screen.getByRole("group", {name: "Setup checklist"})).toBeInTheDocument();
+  await userEvent.click(screen.getByRole("button", {name: "Dismiss getting started"}));
+  await waitFor(() => expect(screen.queryByRole("group", {name: "Setup checklist"})).not.toBeInTheDocument());
+  expect(persist).toHaveBeenCalledTimes(2);
 });
