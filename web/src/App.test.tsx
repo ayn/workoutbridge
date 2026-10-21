@@ -67,6 +67,20 @@ const initial = {
   history: [],
 };
 
+test("history distinguishes an empty feed check from failed checks and publications", async () => {
+  const history = [
+    { id: "1", at: "2030-01-01T00:00:00Z", status: "Checked successfully", upcoming_count: 0, results: [] },
+    { id: "2", at: "2030-01-01T01:00:00Z", status: "Feed check failed", results: [] },
+  ];
+  vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response(JSON.stringify({ ...initial, history })));
+  render(<App />);
+  await screen.findByText("Upcoming workouts");
+  await userEvent.click(screen.getByRole("button", { name: "History" }));
+  expect(screen.getByText(/0 upcoming workouts/)).toBeInTheDocument();
+  expect(screen.getByText("Feed check failed")).toBeInTheDocument();
+  expect(screen.queryByText(/verified workouts/)).not.toBeInTheDocument();
+});
+
 test("sign in does not store credentials in browser storage", async () => {
   const fetcher = vi
     .spyOn(globalThis, "fetch")

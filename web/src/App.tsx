@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import {
+  AlertTriangle,
   ArrowRight,
   CalendarDays,
   Check,
@@ -68,6 +69,7 @@ type State = {
     sync: string;
     at: string;
     status: string;
+    upcoming_count?: number;
     results: { title: string; date: string; workout_id: string }[];
   }[];
 };
@@ -692,18 +694,27 @@ export function App() {
               {!state?.history.length && (
                 <div className="empty">
                   <History size={32} />
-                  <h2>No publications yet</h2>
+                  <h2>No activity yet</h2>
                 </div>
               )}
               {[...(state?.history || [])].reverse().map((h) => (
                 <article className="record" key={h.id}>
                   <div className="record-icon">
-                    <CheckCircle2 size={22} />
+                    {h.status === "Feed check failed" || h.status === "Review required" ? (
+                      <AlertTriangle size={22} />
+                    ) : (
+                      <CheckCircle2 size={22} />
+                    )}
                   </div>
                   <div>
                     <h2>{h.status}</h2>
                     <p>
-                      {timestamp(h.at)} · {h.results.length} verified workouts
+                      {timestamp(h.at)}
+                      {h.upcoming_count !== undefined
+                        ? ` · ${h.upcoming_count} upcoming workouts`
+                        : h.status !== "Feed check failed"
+                          ? ` · ${h.results.length} verified workouts`
+                          : ""}
                     </p>
                     {h.results.map((r, i) => (
                       <p key={i}>

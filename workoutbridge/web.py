@@ -83,6 +83,23 @@ def create_app(root: Path, origin: str, password: str, *, poll=True) -> FastAPI:
         return datetime.now(ZoneInfo("UTC")).isoformat()
 
     def preview(rule_id):
+        record = {
+            "id": uuid4().hex,
+            "sync": rule_id,
+            "at": stamp(),
+            "status": "Feed check failed",
+            "results": [],
+        }
+        try:
+            plan = build_preview(rule_id)
+        except Exception:
+            put("history", record["id"], record)
+            raise
+        record.update(status="Checked successfully", upcoming_count=len(plan["items"]))
+        put("history", record["id"], record)
+        return plan
+
+    def build_preview(rule_id):
         rule = get("sync", rule_id)
         source = get("source", rule["source"])
         profile = load_profile(rule["profile"])
@@ -280,7 +297,7 @@ def create_app(root: Path, origin: str, password: str, *, poll=True) -> FastAPI:
             "connections": connections,
             "syncs": values("sync"),
             "plans": values("plan"),
-            "history": values("history")[-50:],
+            "history": sorted(values("history"), key=lambda entry: entry["at"])[-50:],
         }
 
     @app.get("/api/garmin/login")

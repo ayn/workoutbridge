@@ -145,17 +145,30 @@ class WebTests(unittest.TestCase):
         with patch("workoutbridge.web.GarminProvider.connect") as connect:
             with patch("workoutbridge.web.read_calendar", side_effect=ValueError("PRIVATE")):
                 self.app.state.poll_once()
+            history = self.client.get("/api/state").json()["history"]
+            self.assertEqual(history[-1]["status"], "Feed check failed")
+            self.assertNotIn("PRIVATE", str(history))
             with (
                 patch("workoutbridge.web.read_calendar", return_value=b"synthetic"),
                 patch("workoutbridge.web.import_calendar", return_value=[]),
             ):
                 self.app.state.poll_once()
+                self.client.post(f"/api/syncs/{rule}/preview", json={}, headers=self.headers)
+            history = self.client.get("/api/state").json()["history"]
+            self.assertEqual(len(history), 3)
+            for entry in history[1:]:
+                self.assertEqual(entry["status"], "Checked successfully")
+                self.assertEqual(entry["upcoming_count"], 0)
+                self.assertEqual(entry["results"], [])
+                self.assertEqual(entry["sync"], rule)
+                self.assertTrue(entry["at"])
             self.client.post(
                 f"/api/syncs/{rule}/pause", json={"paused": True}, headers=self.headers
             )
             with patch("workoutbridge.web.read_calendar") as fetch:
                 self.app.state.poll_once()
                 fetch.assert_not_called()
+            self.assertEqual(self.client.get("/api/state").json()["history"], history)
             connect.assert_not_called()
 
     def test_manual_failure_also_stops_enabled_automatic_publishing(self):
