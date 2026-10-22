@@ -304,17 +304,17 @@ export function App({ brand = "WorkoutBridge", multiuser = false, suggestedEmail
         <span className="badge">Private instance</span>
         {alert}
         {signedIn === false ? (
-          <form onSubmit={login}>
+          <form id="instance-login-form" method="post" onSubmit={login}>
             <h2>Welcome back</h2>
-            <label>
-              Access password
-              <input
+            <div className="form-field">
+              <label htmlFor="instance-login-password">Access password</label>
+              <input id="instance-login-password"
                 name="password"
                 type="password"
                 autoComplete="current-password"
                 required
               />
-            </label>
+            </div>
             <button className="primary" disabled={busy}>
               Sign in {busy ? <LoaderCircle size={16} className="spin" /> : <ArrowRight size={16} />}
             </button>
@@ -780,7 +780,7 @@ export function App({ brand = "WorkoutBridge", multiuser = false, suggestedEmail
       </div>
       {sourceForm && (
         <Modal title="Add calendar source" close={() => setSourceForm(false)}>
-          <form
+          <form id="calendar-source-form" method="post"
             onSubmit={(e) => {
               e.preventDefault();
               const f = new FormData(e.currentTarget);
@@ -791,25 +791,25 @@ export function App({ brand = "WorkoutBridge", multiuser = false, suggestedEmail
               });
             }}
           >
-            <label>
-              Name
-              <input
+            <div className="form-field">
+              <label htmlFor="calendar-source-name">Name</label>
+              <input autoComplete="off" data-1p-ignore id="calendar-source-name"
                 name="name"
                 maxLength={80}
                 required
                 placeholder="Training calendar"
               />
-            </label>
-            <label>
-              Calendar
-              <select name="format">
+            </div>
+            <div className="form-field">
+              <label htmlFor="calendar-source-format">Calendar</label>
+              <select id="calendar-source-format" name="format">
                 <option value="finalsurge">Final Surge iCal</option>
                 <option value="generic">iCal / ICS feed</option>
               </select>
-            </label>
-            <label>
-              Calendar link or iCal URL
-              <input
+            </div>
+            <div className="form-field">
+              <label htmlFor="calendar-source-url">Calendar link or iCal URL</label>
+              <input data-1p-ignore id="calendar-source-url"
                 name="url"
                 aria-describedby="calendar-link-help"
                 type="url"
@@ -817,16 +817,16 @@ export function App({ brand = "WorkoutBridge", multiuser = false, suggestedEmail
                 autoComplete="off"
                 placeholder="https://log.finalsurge.com/delivery/ical/…"
               />
-            </label>
+            </div>
             <p id="calendar-link-help" className="field-help">Supported sources: Final Surge, Google Calendar and iCloud. Use a public iCloud subscription link or Google sharing link. For private Google calendars, use the Secret address in iCal format. Anyone with a public subscription link can read that calendar.</p>
-            <label>
-              Timezone
-              <input
+            <div className="form-field">
+              <label htmlFor="calendar-source-timezone">Timezone</label>
+              <input autoComplete="off" data-1p-ignore id="calendar-source-timezone"
                 name="timezone"
                 defaultValue={Intl.DateTimeFormat().resolvedOptions().timeZone}
                 required
               />
-            </label>
+            </div>
             {alert}
             <button className="primary" disabled={busy}>
               Add source
@@ -837,7 +837,7 @@ export function App({ brand = "WorkoutBridge", multiuser = false, suggestedEmail
       )}
       {syncForm && (
         <Modal title="Connect a sync" close={() => setSyncForm(false)}>
-          <form
+          <form id="sync-form" method="post"
             onSubmit={(e) => {
               e.preventDefault();
               const f = new FormData(e.currentTarget);
@@ -858,26 +858,26 @@ export function App({ brand = "WorkoutBridge", multiuser = false, suggestedEmail
               });
             }}
           >
-            <label>
-              Source
-              <select name="source">
+            <div className="form-field">
+              <label htmlFor="sync-source">Source</label>
+              <select id="sync-source" name="source">
                 {state?.sources.map((s) => (
                   <option key={s.id} value={s.id}>
                     {s.name}
                   </option>
                 ))}
               </select>
-            </label>
-            <label>
-              Destination
-              <select name="profile">
+            </div>
+            <div className="form-field">
+              <label htmlFor="sync-profile">Destination</label>
+              <select id="sync-profile" name="profile">
                 {state?.connections.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.provider === "COROS" ? "COROS" : "Garmin"} - {c.id.charAt(0).toUpperCase() + c.id.slice(1)}
                   </option>
                 ))}
               </select>
-            </label>
+            </div>
             {alert}
             <button className="primary" disabled={busy}>
               Connect
@@ -1038,12 +1038,16 @@ function CorosForm({ profile, close, complete }: { profile: string; close: () =>
       <button className="primary full" disabled={busy} onClick={() => void request("coros/login/finish", { id: job.id })}>
         {busy ? "Connecting..." : "Finish connection"} {busy && <LoaderCircle size={16} className="spin" />}
       </button>
-    </div> : <form onSubmit={(e) => {
+    </div> : <form id="coros-login-form" method="post" onSubmit={(e) => {
       e.preventDefault();
       void request("coros/login", Object.fromEntries(new FormData(e.currentTarget)));
     }}>
-      <label>Profile name<input name="profile" defaultValue={profile} required pattern={"[A-Za-z0-9][A-Za-z0-9_\\-]{0,63}"} /></label>
-      <label>Account region<select name="region" defaultValue="us"><option value="us">United States / Global</option><option value="eu">Europe</option><option value="cn">China</option></select></label>
+      <div className="form-field">
+        <label htmlFor="coros-login-profile">Profile name</label>
+        <input autoComplete="off" data-1p-ignore id="coros-login-profile" name="profile" defaultValue={profile} required pattern={"[A-Za-z0-9][A-Za-z0-9_\\-]{0,63}"} /></div>
+      <div className="form-field">
+        <label htmlFor="coros-login-region">Account region</label>
+        <select id="coros-login-region" name="region" defaultValue="us"><option value="us">United States / Global</option><option value="eu">Europe</option><option value="cn">China</option></select></div>
       {error && <p role="alert">{error}</p>}
       <button className="primary" disabled={busy}>{busy ? "Connecting..." : "Continue to COROS"} {busy ? <LoaderCircle size={16} className="spin" /> : <ArrowRight size={16} />}</button>
     </form>}
@@ -1165,7 +1169,7 @@ function GarminForm({
         </p>
       )}
       {!busy && ["idle", "failed", "cancelled"].includes(job.status) && (
-        <form
+        <form id="garmin-login-form" method="post"
           onSubmit={(e) => {
             e.preventDefault();
             const form = e.currentTarget;
@@ -1180,18 +1184,18 @@ function GarminForm({
           }}
         >
           <p className="form-help">Your password isn’t stored. We save your account ID and session tokens for syncing.</p>
-          <label>
-            Profile name
-            <input
+          <div className="form-field">
+            <label htmlFor="garmin-login-profile">Profile name</label>
+            <input autoComplete="off" data-1p-ignore id="garmin-login-profile"
               name="profile"
               defaultValue={profile}
               pattern={"[A-Za-z0-9][A-Za-z0-9_\\-]{0,63}"}
               required
             />
-          </label>
-          <label>
-            Garmin email
-            <input
+          </div>
+          <div className="form-field">
+            <label htmlFor="garmin-login-email">Garmin email</label>
+            <input autoCapitalize="none" spellCheck={false} id="garmin-login-email"
               name="email"
               type="email"
               defaultValue={suggestedEmail}
@@ -1203,24 +1207,24 @@ function GarminForm({
               maxLength={254}
               required
             />
-          </label>
-          <label>
-            Garmin password
-            <input
+          </div>
+          <div className="form-field">
+            <label htmlFor="garmin-login-password">Garmin password</label>
+            <input id="garmin-login-password"
               name="password"
               type="password"
               autoComplete="current-password"
               maxLength={1024}
               required
             />
-          </label>
+          </div>
           <button className="primary full" disabled={busy}>
             Sign in to Garmin
           </button>
         </form>
       )}
       {!busy && job.status === "mfa" && (
-        <form
+        <form id="garmin-mfa-form" method="post"
           onSubmit={(e) => {
             e.preventDefault();
             const data = new FormData(e.currentTarget);
@@ -1229,9 +1233,9 @@ function GarminForm({
             void request("garmin/login/mfa", { id: job.id, code });
           }}
         >
-          <label>
-            Verification code
-            <input
+          <div className="form-field">
+            <label htmlFor="garmin-mfa-code">Verification code</label>
+            <input id="garmin-mfa-code"
               name="code"
               inputMode="numeric"
               autoComplete="one-time-code"
@@ -1239,7 +1243,7 @@ function GarminForm({
               maxLength={6}
               required
             />
-          </label>
+          </div>
           <button className="primary full" disabled={busy}>
             Verify code
           </button>
