@@ -618,3 +618,11 @@ Garmin or the python-garminconnect maintainers.
 ## License
 
 MIT. See [LICENSE](LICENSE).
+
+
+Google Calendar sources accept public sharing links (`cid`), single-calendar embed
+links (`src`), and public or secret iCal URLs. Sharing links are normalized to the
+calendar's public ICS endpoint without scraping a sign-in page or following
+redirects. Private calendars still require the Secret address in iCal format;
+a browser link alone does not authorize calendar access. Existing saved sharing
+links are normalized when fetched. Calendar URLs remain private in API responses.

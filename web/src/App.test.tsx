@@ -320,7 +320,7 @@ test("calendar source dialog receives focus and submits a private URL", async ()
   expect(screen.getByRole("button", { name: "Close dialog" })).toHaveFocus();
   await userEvent.type(screen.getByLabelText("Name"), "Example feed");
   await userEvent.type(
-    screen.getByLabelText("Private feed URL"),
+    screen.getByLabelText("Calendar link or iCal URL"),
     "https://log.finalsurge.com/delivery/ical/EXAMPLE",
   );
   await userEvent.click(
@@ -531,4 +531,17 @@ test("setup dismissal waits for persistence and remains available after failure"
   await userEvent.click(screen.getByRole("button", {name: "Dismiss getting started"}));
   await waitFor(() => expect(screen.queryByRole("group", {name: "Setup checklist"})).not.toBeInTheDocument());
   expect(persist).toHaveBeenCalledTimes(2);
+});
+
+
+test.each(["Garmin", "COROS"])("%s profile name pattern works with modern Unicode validation", async provider => {
+  vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify(initial)));
+  render(<App />);
+  await userEvent.click(await screen.findByRole("button", {name: "Connections"}));
+  await userEvent.click(screen.getByRole("button", {name: provider === "Garmin" ? "Connect another Garmin account" : "Connect COROS"}));
+  const input = screen.getByLabelText("Profile name") as HTMLInputElement;
+  const pattern = new RegExp(`^(?:${input.pattern})$`, "v");
+  expect(pattern.test("synthetic-profile_2")).toBe(true);
+  expect(pattern.test("a".repeat(64))).toBe(true);
+  for (const invalid of ["", "-leading", "two words", "slash/name", "a".repeat(65)]) expect(pattern.test(invalid)).toBe(false);
 });
