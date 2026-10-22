@@ -32,11 +32,18 @@ def event_key(account: str, event: Event) -> str:
 def event_payload(event: Event) -> dict:
     if event.cancelled:
         raise ReviewRequired("Cancelled event requires manual reconciliation")
-    return workout_payload(event.title, event.description, parse(event.prescription))
+    return workout_payload(
+        event.title, event.description, parse(event.prescription, sport=event.sport)
+    )
 
 
 def approval_token(account: str, event: Event) -> str:
-    return digest([account, asdict(event), event_payload(event)])
+    identity = asdict(event)
+    # Preserve pre-sport running approvals during rollout; cycling is bound
+    # explicitly and always carries a different destination sport payload.
+    if event.sport == "running":
+        identity.pop("sport")
+    return digest([account, identity, event_payload(event)])
 
 
 def matches(expected, actual) -> bool:

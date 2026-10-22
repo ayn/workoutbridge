@@ -70,6 +70,9 @@ class GarminProvider:
 
 
 def workout_payload(title: str, description: str, draft: Draft) -> dict:
+    if draft.sport not in {"running", "cycling"}:
+        raise ValueError("Unsupported Garmin workout sport")
+    sport = SPORT if draft.sport == "running" else {"sportTypeId": 2, "sportTypeKey": "cycling"}
     if draft.unresolved or not draft.steps:
         raise ValueError("Resolve the full prescription before exporting")
     order = 0
@@ -90,10 +93,13 @@ def workout_payload(title: str, description: str, draft: Draft) -> dict:
                 "skipLastRestStep": step.skip_last_recovery,
                 "workoutSteps": [convert(child) for child in step.steps],
             }
+        if step.kind == ("run" if draft.sport == "cycling" else "ride"):
+            raise ValueError("Workout step does not match its sport")
         kind, kind_id = {
             "warm_up": ("warmup", 1),
             "cool_down": ("cooldown", 2),
             "run": ("interval", 3),
+            "ride": ("interval", 3),
             "rest": ("recovery", 4),
         }[step.kind]
         condition, condition_id = {
@@ -122,11 +128,11 @@ def workout_payload(title: str, description: str, draft: Draft) -> dict:
     return {
         "workoutName": title,
         "description": description,
-        "sportType": SPORT,
+        "sportType": sport,
         "workoutSegments": [
             {
                 "segmentOrder": 1,
-                "sportType": SPORT,
+                "sportType": sport,
                 "workoutSteps": [convert(step) for step in draft.steps],
             }
         ],

@@ -16,7 +16,9 @@ def event_values(event):
         source=event.source,
         uid=digest([event.uid, event.recurrence_id]),
         day=event.date,
-        course=workout_payload(event.title, event.description, parse(event.prescription)),
+        course=workout_payload(
+            event.title, event.description, parse(event.prescription, sport=event.sport)
+        ),
     )
 
 

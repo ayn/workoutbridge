@@ -614,3 +614,12 @@ test.each([
     }
   }
 });
+
+
+test("cycling sport is visible in workout list and detail before publishing", async () => {
+  const state = {...initial, plans: [{...initial.plans[0], items: [{...initial.plans[0].items[0], event: {title: "Recovery session", date: "2030-01-02", description: "Ride 30 min easy", sport: "cycling"}}]}]};
+  const request = vi.fn().mockResolvedValue(state);
+  render(<App request={request} />);
+  await screen.findByRole("heading", {name: "Recovery session"});
+  expect(screen.getAllByText(/Cycling/).length).toBeGreaterThanOrEqual(2);
+});

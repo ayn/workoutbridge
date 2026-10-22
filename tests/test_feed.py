@@ -114,3 +114,24 @@ class ICloudCalendarLinkTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     read_calendar(url)
                 build.assert_not_called()
+
+
+class TeamupFeedTests(unittest.TestCase):
+    def test_subscription_alias_normalizes_without_fetch(self):
+        url = "https://ics.teamup.com/feed/SYNTHETIC_123/456.ics"
+        self.assertEqual(calendar_feed_url(url.replace("https:", "webcal:")), url)
+
+    def test_invalid_teamup_links_are_rejected_before_fetch(self):
+        for url in (
+            "http://ics.teamup.com/feed/SYNTHETIC/456.ics",
+            "https://ics.teamup.com/feed/SYNTHETIC/456.ics?other=1",
+            "https://ics.teamup.com/feed/SYNTHETIC/456.ics#fragment",
+            "https://ics.teamup.com:444/feed/SYNTHETIC/456.ics",
+            "https://user:secret@ics.teamup.com/feed/SYNTHETIC/456.ics",
+            "https://ics.teamup.com/private/path",
+            "https://ics.teamup.com/feed/../private/456.ics",
+        ):
+            with self.subTest(url=url), patch("workoutbridge.feed.build_opener") as build:
+                with self.assertRaises(ValueError):
+                    read_calendar(url)
+                build.assert_not_called()

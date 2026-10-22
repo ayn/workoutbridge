@@ -594,6 +594,39 @@ uv run --locked --extra garmin --extra web python -m unittest discover -s tests 
 
 See [contributing](CONTRIBUTING.md) for the required red/green TDD workflow.
 
+### Cycling workouts
+
+Calendar imports recognize cycling from explicit Bike/Cycling/Ride titles,
+Final Surge `Workout: Bike` metadata, or `X-WORKOUTBRIDGE-SPORT:cycling`.
+Conflicting sport cues, swimming, strength and cross-training stay in review;
+they are never exported as running. The preview labels cycling before publishing.
+Both Garmin and COROS receive native cycling workouts, preserving the source
+identity and duplicate-prevention receipts.
+
+Supported examples include `Bike: 40 min easy`, `Ride 18 km easy`, and:
+
+```text
+Warm up 8 min; 3 x 4 min hard with 90 sec easy recovery; Cool down 6 min
+```
+
+For intervals, recovery is between repetitions, without recovery after the last
+rep. Effort words stay as guidance; no numeric power, cadence or heart-rate
+target is invented. Those targets, mixed run/bike choices, running pace/strides
+in cycling, and other unsupported instructions remain review-required. Existing
+running approval tokens and payloads retain their previous meaning.
+
+Garmin sport IDs follow the [python-garminconnect workout models](https://github.com/cyberjunky/python-garminconnect/blob/master/garminconnect/workout.py).
+COROS sport IDs and cycling creation support follow its [official tool guide](https://github.com/coroslab/COROS-MCP/blob/main/docs/en/tools.md#createscheduledworkout).
+Swimming is tracked separately because the current COROS scheduling tool supports
+running, cycling and trail running.
+
+Teamup subscription feeds such as `https://ics.teamup.com/feed/SYNTHETIC/123.ics`
+are supported with the same bounded reads and redirect refusal. Use Final Surge
+iCal for Final Surge-formatted workouts, including when delivered through Teamup;
+the generic option also recognizes their explicit workout metadata. Calendar
+links and tokens stay private. Only existing events can be imported; old entries
+that a provider removes do not trigger deletion of published workouts.
+
 ### Structured workouts with coaching notes
 
 For generated calendars or detailed coaching notes, put the exact executable

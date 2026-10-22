@@ -1,4 +1,4 @@
-"""Translate reviewed running prescriptions into COROS scheduled courses."""
+"""Translate reviewed running and cycling prescriptions into COROS scheduled courses."""
 
 import math
 
@@ -6,6 +6,9 @@ from .parser import Draft, Repeat, Step
 
 
 def workout_payload(title: str, description: str, draft: Draft) -> dict:
+    if draft.sport not in {"running", "cycling"}:
+        raise ValueError("Unsupported COROS workout sport")
+    work_kind = "ride" if draft.sport == "cycling" else "run"
     if not title.strip() or len(title) > 100:
         raise ValueError("COROS requires a title of 1-100 characters")
     if draft.unresolved or not draft.steps:
@@ -26,9 +29,14 @@ def workout_payload(title: str, description: str, draft: Draft) -> dict:
         return result
 
     def plain(step):
-        if not isinstance(step, Step) or step.kind not in {"warm_up", "run", "rest", "cool_down"}:
+        if not isinstance(step, Step) or step.kind not in {
+            "warm_up",
+            work_kind,
+            "rest",
+            "cool_down",
+        }:
             raise ValueError("Unsupported COROS step")
-        result = {"sectionType": {"warm_up": 1, "run": 2, "rest": 3, "cool_down": 4}[step.kind]}
+        result = {"sectionType": {"warm_up": 1, work_kind: 2, "rest": 3, "cool_down": 4}[step.kind]}
         if step.unit == "lap_button":
             if step.duration is not None:
                 raise ValueError("Lap steps cannot have a duration")
@@ -40,6 +48,8 @@ def workout_payload(title: str, description: str, draft: Draft) -> dict:
         else:
             raise ValueError("Unsupported COROS duration")
         if step.speed_min is not None or step.speed_max is not None:
+            if draft.sport == "cycling":
+                raise ValueError("Running pace targets cannot be used for cycling")
             for speed in (step.speed_min, step.speed_max):
                 integer(speed)
             if step.speed_min > step.speed_max:
@@ -57,7 +67,7 @@ def workout_payload(title: str, description: str, draft: Draft) -> dict:
             if type(step.count) is not int or not 1 <= step.count <= 20 or not step.steps:
                 raise ValueError("COROS repeats require 1-20 repetitions and steps")
             if any(
-                not isinstance(child, Step) or child.kind not in {"run", "rest"}
+                not isinstance(child, Step) or child.kind not in {work_kind, "rest"}
                 for child in step.steps
             ):
                 raise ValueError("COROS repeat members must be run or recovery steps")
@@ -78,6 +88,6 @@ def workout_payload(title: str, description: str, draft: Draft) -> dict:
             dict.fromkeys(note for note in notes if note and note.strip())
         )
         or title,
-        "sportType": 1,
+        "sportType": 2 if draft.sport == "cycling" else 1,
         "sections": sections,
     }

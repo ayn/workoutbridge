@@ -375,6 +375,27 @@ class WebTests(unittest.TestCase):
         self.assertNotIn("SYNTHETIC_PRIVATE_TOKEN", state.text)
         self.assertEqual(len(state.json()["sources"]), 1)
 
+    def test_teamup_subscription_is_supported_without_exposing_its_token(self):
+        self.login()
+        body = {
+            "name": "Calendar",
+            "url": "https://ics.teamup.com/feed/SYNTHETIC_123/456.ics",
+            "format": "generic",
+            "timezone": "UTC",
+        }
+        response = self.client.post("/api/v1/sources", json=body, headers=self.headers)
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn("SYNTHETIC_123", self.client.get("/api/v1/state").text)
+        for url in (
+            "https://ics.teamup.com.evil.invalid/feed/SYNTHETIC/456.ics",
+            "https://teamup.com/feed/SYNTHETIC/456.ics",
+        ):
+            body["url"] = url
+            self.assertEqual(
+                self.client.post("/api/v1/sources", json=body, headers=self.headers).status_code,
+                422,
+            )
+
     def test_sources_private_and_restricted(self):
         self.login()
         for url in (

@@ -7,6 +7,8 @@ from zoneinfo import ZoneInfo
 import recurring_ical_events
 from icalendar import Calendar
 
+from .sports import event_sport
+
 
 @dataclass(frozen=True)
 class Event:
@@ -18,6 +20,7 @@ class Event:
     description: str
     cancelled: bool = False
     structured_text: str = ""
+    sport: str = "running"
 
     @property
     def prescription(self) -> str:
@@ -107,6 +110,11 @@ def import_calendar(
                     str(component.get("SUMMARY", "")),
                     str(component.get("DESCRIPTION", "")),
                     str(component.get("STATUS", "")).upper() == "CANCELLED",
+                    sport=event_sport(
+                        str(component.get("SUMMARY", "")),
+                        str(component.get("DESCRIPTION", "")),
+                        str(component.get("X-WORKOUTBRIDGE-SPORT", "")),
+                    ),
                 )
             )
         return sorted(result, key=lambda e: (e.date, e.uid, e.recurrence_id))

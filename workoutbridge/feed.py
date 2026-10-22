@@ -18,6 +18,18 @@ class NoRedirect(HTTPRedirectHandler):
 def calendar_feed_url(location: str) -> str:
     """Normalize a supported calendar subscription without fetching a web page."""
     parsed = urlsplit(location)
+    if parsed.hostname == "ics.teamup.com":
+        if (
+            parsed.scheme not in ("https", "webcal")
+            or parsed.username
+            or parsed.password
+            or parsed.port not in (None, 443)
+            or parsed.query
+            or parsed.fragment
+            or not re.fullmatch(r"/feed/[A-Za-z0-9_-]+/[0-9]+\.ics", parsed.path)
+        ):
+            raise ValueError("Use the Teamup iCalendar subscription feed link")
+        return parsed._replace(scheme="https").geturl()
     if re.fullmatch(r"p[0-9]+-caldav\.icloud\.com", parsed.hostname or ""):
         if (
             parsed.scheme not in ("https", "webcal")
