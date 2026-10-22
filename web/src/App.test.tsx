@@ -545,3 +545,20 @@ test.each(["Garmin", "COROS"])("%s profile name pattern works with modern Unicod
   expect(pattern.test("a".repeat(64))).toBe(true);
   for (const invalid of ["", "-leading", "two words", "slash/name", "a".repeat(65)]) expect(pattern.test(invalid)).toBe(false);
 });
+
+
+test("pending Garmin sign-in leaves room between status requests", async () => {
+  vi.useFakeTimers();
+  try {
+    const fetcher = vi.spyOn(globalThis, "fetch").mockImplementation(async url => new Response(JSON.stringify(String(url).endsWith("/garmin/login") ? {status: "signing_in"} : initial)));
+    await act(async () => { render(<App />); });
+    await act(async () => { screen.getByRole("button", {name: "Connections"}).click(); });
+    await act(async () => { screen.getByRole("button", {name: "Connect another Garmin account"}).click(); });
+    const reads = () => fetcher.mock.calls.filter(([url]) => String(url).endsWith("/garmin/login")).length;
+    expect(reads()).toBe(1);
+    await act(async () => { await vi.advanceTimersByTimeAsync(5000); });
+    expect(reads()).toBe(1);
+    await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
+    expect(reads()).toBe(2);
+  } finally { cleanup(); vi.useRealTimers(); }
+});
