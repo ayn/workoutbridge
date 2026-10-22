@@ -910,3 +910,5 @@ footer {
 .setup-checklist .setup-dismiss:hover { background: #eef4f0; color: var(--green); }
 
 .modal .field-help { margin: -4px 0 4px; font-size: 13px; line-height: 1.5; color: var(--muted); }
+
+.form-field { display: flex; flex-direction: column; gap: 8px; }

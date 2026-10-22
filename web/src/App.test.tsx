@@ -425,8 +425,12 @@ test("Garmin web sign-in clears credentials and accepts requested MFA", async ()
   await userEvent.click(
     screen.getByRole("button", { name: "Sign in to Garmin" }),
   );
+  const codeField = await screen.findByLabelText("Verification code");
+  expect(codeField).toHaveAttribute("id", "garmin-mfa-code");
+  expect(codeField.closest("label")).toBeNull();
+  expect(codeField.closest("form")).toHaveAttribute("method", "post");
   await userEvent.type(
-    await screen.findByLabelText("Verification code"),
+    codeField,
     "123456",
   );
   expect(
@@ -578,4 +582,35 @@ test("source form explains iCloud subscriptions without exposing other calendar 
   await userEvent.click(screen.getByRole("button", {name: "Add source"}));
   expect(screen.getByRole("option", {name: "iCal / ICS feed"})).toHaveValue("generic");
   expect(screen.getByLabelText("Calendar link or iCal URL")).toHaveAccessibleDescription(/iCloud.*subscription link/);
+});
+
+
+test.each([
+  ["Connections", "Connect another Garmin account", "garmin-login-form", ["Profile name", "Garmin email", "Garmin password"]],
+  ["Connections", "Connect COROS", "coros-login-form", ["Profile name", "Account region"]],
+  ["Sources", "Add source", "calendar-source-form", ["Name", "Calendar", "Calendar link or iCal URL", "Timezone"]],
+  ["Syncs", "Add sync", "sync-form", ["Source", "Destination"]],
+])("%s / %s uses explicit labels and stable autofill identities", async (view, action, formId, labels) => {
+  const request = vi.fn().mockImplementation(async path => path === "garmin/login" ? {status: "idle"} : initial);
+  render(<App request={request} />);
+  await userEvent.click(await screen.findByRole("button", {name: view as string}));
+  await userEvent.click(screen.getByRole("button", {name: action as string}));
+  const dialog = screen.getByRole("dialog");
+  const form = dialog.querySelector("form")!;
+  expect(form).toHaveAttribute("id", formId);
+  expect(form).toHaveAttribute("method", "post");
+  for (const label of labels as string[]) {
+    const input = within(dialog).getByLabelText(label) as HTMLInputElement;
+    expect(input.id).not.toBe("");
+    expect(input.closest("label")).toBeNull();
+    expect(dialog.querySelector(`label[for="${input.id}"]`)).not.toBeNull();
+    if (input.tagName === "INPUT") {
+      if (label === "Garmin email" || label === "Garmin password") {
+        expect(input).not.toHaveAttribute("data-1p-ignore");
+        expect(input).toHaveAttribute("autocomplete", label === "Garmin email" ? "username" : "current-password");
+      } else expect(input).toHaveAttribute("data-1p-ignore");
+      await userEvent.click(input);
+      expect(input).toHaveFocus();
+    }
+  }
 });
