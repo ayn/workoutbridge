@@ -36,7 +36,22 @@ def normalize_finalsurge(event: Event, *, recovery_choice: str = "lap") -> Event
 
 
 def normalize_workout(event: Event, *, recovery_choice: str = "lap") -> Event:
-    if event.structured_text or not parse(event.prescription).unresolved:
+    if event.structured_text:
+        return event
+    # An explicit author-supplied section distinguishes executable steps from
+    # coaching notes. Never guess boundaries or choose among multiple sections.
+    text = event.description
+    if "[workoutbridge]" in text.lower() or "[/workoutbridge]" in text.lower():
+        blocks = re.findall(r"(?im)^\[WorkoutBridge\]\s*\n([\s\S]*?)^\[/WorkoutBridge\]\s*$", text)
+        if (
+            len(blocks) == 1
+            and text.lower().count("[workoutbridge]") == 1
+            and text.lower().count("[/workoutbridge]") == 1
+            and blocks[0].strip()
+        ):
+            return replace(event, structured_text=blocks[0].strip())
+        return replace(event, structured_text="Invalid structured workout section; review required")
+    if not parse(event.prescription).unresolved:
         return event
     text = re.sub(r"^\s*Run:\s*", "", event.prescription, flags=re.I)
     return _normalize(event, text, recovery_choice)

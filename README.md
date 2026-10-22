@@ -594,6 +594,28 @@ uv run --locked --extra garmin --extra web python -m unittest discover -s tests 
 
 See [contributing](CONTRIBUTING.md) for the required red/green TDD workflow.
 
+### Structured workouts with coaching notes
+
+For generated calendars or detailed coaching notes, put the exact executable
+prescription inside one explicit section in the event description:
+
+```text
+Optional session: only if comfortable and recovered.
+[WorkoutBridge]
+Warm up until lap; 4 x 300 m in 90-96 sec with 2 min walk/jog recovery; Cool down 5 min
+[/WorkoutBridge]
+Keep the warm-up flexible and stop if uncomfortable.
+```
+
+Choose **iCal / ICS feed** for these calendars. WorkoutBridge parses the section
+and preserves the entire original description in destination notes. Missing,
+empty, repeated or unclosed sections, and unsupported instructions inside the
+section, still require review. The section is an explicit prescription supplied
+by the calendar author; WorkoutBridge does not infer steps from the surrounding
+notes. Specify Lap endings explicitly rather than silently converting duration
+ranges. Timed strides such as `4 x 12 sec strides with lap recovery` preserve
+both the work duration and Lap recovery, skipping recovery after the last rep.
+
 ## Hosting and Funding
 
 The managed service, [Prescribed.FIT](https://prescribed.fit), is in a closed pilot.

@@ -53,3 +53,16 @@ class ParserTests(unittest.TestCase):
             )
             self.assertEqual(result.returncode, code)
             self.assertTrue(json.loads(result.stdout)["requires_review"])
+
+
+class TimedStridesTests(unittest.TestCase):
+    def test_timed_strides_keep_duration_count_and_lap_recovery(self):
+        draft = parse("Run 8 min easy; 4 x 12 sec strides with lap recovery")
+        self.assertFalse(draft.unresolved)
+        repeat = draft.steps[1]
+        self.assertEqual(repeat.count, 4)
+        self.assertTrue(repeat.skip_last_recovery)
+        self.assertEqual(repeat.steps[0].duration, 12)
+        self.assertEqual(repeat.steps[0].unit, "seconds")
+        self.assertEqual(repeat.steps[0].note, "Strides")
+        self.assertEqual(repeat.steps[1].unit, "lap_button")

@@ -38,6 +38,47 @@ class CalendarTests(unittest.TestCase):
         self.assertEqual(event.prescription, "Run 15 min easy")
         self.assertEqual(event.source, "synthetic")
 
+    def test_explicit_structured_block_separates_steps_from_preserved_notes(self):
+        from workoutbridge.cli import review_item
+        from workoutbridge.prescriptions import normalize_workout
+
+        description = "Coach guidance: walking is fine.\n[WorkoutBridge]\nRun 12 min easy\n[/WorkoutBridge]\nStop if uncomfortable."
+        event = self.load(
+            calendar(
+                "UID:synthetic-structured\r\nDTSTART;VALUE=DATE:20270105\r\n"
+                "SUMMARY:Training\r\nDESCRIPTION:" + description.replace("\n", "\\n")
+            )
+        )[0]
+        normalized = normalize_workout(event)
+        self.assertEqual(normalized.structured_text, "Run 12 min easy")
+        self.assertEqual(normalized.description, description)
+        result = review_item("synthetic", normalized)
+        self.assertNotIn("error", result)
+        self.assertEqual(result["payload"]["description"], description)
+        self.assertEqual(
+            result["payload"]["workoutSegments"][0]["workoutSteps"][0]["endConditionValue"], 720
+        )
+
+    def test_malformed_or_ambiguous_structured_blocks_require_review(self):
+        from workoutbridge.cli import review_item
+        from workoutbridge.prescriptions import normalize_workout
+
+        for block in (
+            "[WorkoutBridge]\nRun 12 min easy",
+            "[WorkoutBridge]\nRun 10-15 min easy\n[/WorkoutBridge]",
+            "[WorkoutBridge]\nRun 12 min easy\n[/WorkoutBridge]\n[WorkoutBridge]\nRun 3 min\n[/WorkoutBridge]",
+            "[WorkoutBridge]\nRun 12 min easy\n[/WorkoutBridge]\n[WorkoutBridge]",
+            "[WorkoutBridge]\n\n[/WorkoutBridge]",
+        ):
+            with self.subTest(block=block):
+                event = self.load(
+                    calendar(
+                        "UID:synthetic-invalid\r\nDTSTART;VALUE=DATE:20270105\r\nDESCRIPTION:"
+                        + block.replace("\n", "\\n")
+                    )
+                )[0]
+                self.assertIn("error", review_item("synthetic", normalize_workout(event)))
+
     def test_utc_date_converted_to_athlete_timezone(self):
         event = self.load(calendar("UID:a\r\nDTSTART:20270105T180000Z\r\nSUMMARY:Run 15 min"))[0]
         self.assertEqual(event.date, "2027-01-06")
