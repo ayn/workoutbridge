@@ -41,6 +41,7 @@ type Item = {
   event: { title: string; date: string; description: string; sport?: string };
   draft: { steps: Step[]; unresolved: string[] };
   error?: string;
+  suggestion?: {policy: string; draft: {steps: Step[]; unresolved: string[]}};
 };
 type Plan = {
   id: string;
@@ -582,6 +583,19 @@ export function App({ brand = "WorkoutBridge", multiuser = false, suggestedEmail
                           </div>
                         ) : (
                           <Steps steps={item.draft.steps} />
+                        )}
+                        {item.error && item.suggestion && (
+                          <section className="progression-review" aria-label="Proposed progression conversion">
+                            <h3>Progression conversion</h3>
+                            <p>One continuous progression with the prescribed pace range. Added easy running until Lap after the prescribed warm-up; no extra warm-up or cooldown distance.</p>
+                            <Steps steps={item.suggestion.draft.steps} />
+                            <p>This approval applies to this workout and destination only. If automatic publishing is enabled, it can publish on the next refresh.</p>
+                            <button className="primary" disabled={busy || rule?.paused} onClick={() => perform(async () => {
+                              await api(`syncs/${active}/review-progression`, {hash: plan?.hash, index: expanded, choice: item.suggestion?.policy});
+                              await load();
+                              setMessage("Progression conversion approved");
+                            })}>Approve progression conversion <Check size={16} /></button>
+                          </section>
                         )}
                         <details className="original">
                           <summary>

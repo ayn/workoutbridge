@@ -912,3 +912,8 @@ footer {
 .modal .field-help { margin: -4px 0 4px; font-size: 13px; line-height: 1.5; color: var(--muted); }
 
 .form-field { display: flex; flex-direction: column; gap: 8px; }
+
+.progression-review { margin: 20px 0; padding: 18px; border: 1px solid #cbd9d1; border-radius: 8px; background: #f4f8f5; }
+.progression-review h3 { font-size: 16px; margin-bottom: 10px; }
+.progression-review p { font-size: 13px; line-height: 1.6; margin: 12px 0; color: var(--muted); }
+.progression-review > button { min-height: 44px; max-width: 100%; white-space: normal; }
