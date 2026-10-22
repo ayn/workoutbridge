@@ -623,3 +623,29 @@ test("cycling sport is visible in workout list and detail before publishing", as
   await screen.findByRole("heading", {name: "Recovery session"});
   expect(screen.getAllByText(/Cycling/).length).toBeGreaterThanOrEqual(2);
 });
+
+
+test("progression suggestion requires explicit approval of the displayed plan", async () => {
+  const draft = {steps: [
+    {kind: "warm_up", duration: 1609.344, unit: "meters"},
+    {kind: "run", duration: null, unit: "lap_button", label: "easy"},
+    {kind: "run", duration: 6437.376, unit: "meters", note: "Progression: gradually build toward the faster pace.", speed_min: 3.5, speed_max: 3.8},
+    {kind: "cool_down", duration: 1609.344, unit: "meters"},
+  ], unresolved: []};
+  const unresolved = {event: {title: "Run: progression", date: "2030-04-03", description: "Original coach notes"}, draft: {steps: [], unresolved: ["Review progression"]}, error: "Review required", suggestion: {policy: "pace_range_lap", draft}};
+  let approved = false;
+  const request = vi.fn(async (path: string, body?: unknown) => {
+    if (path.endsWith("/review-progression")) {approved = true; return {ok: true};}
+    return {...initial, plans: [{...initial.plans[0], items: [approved ? {...unresolved, draft, error: undefined, suggestion: undefined} : unresolved]}]};
+  });
+  render(<App request={request} />);
+  const approve = await screen.findByRole("button", {name: "Approve progression conversion"});
+  expect(screen.getByText(/Added easy running until Lap/)).toBeInTheDocument();
+  expect(screen.getByText(/gradually build toward the faster pace/)).toBeInTheDocument();
+  expect(request.mock.calls.some(([path]) => path.endsWith("/review-progression"))).toBe(false);
+  await userEvent.click(approve);
+  expect(request).toHaveBeenCalledWith("syncs/r/review-progression", {hash: "review-hash", index: 0, choice: "pace_range_lap"});
+  expect(await screen.findByText("Progression conversion approved")).toBeInTheDocument();
+  expect(screen.queryByRole("button", {name: "Approve progression conversion"})).not.toBeInTheDocument();
+  expect(screen.getByLabelText("Select Run: progression")).not.toBeDisabled();
+});

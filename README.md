@@ -684,3 +684,23 @@ a browser link alone does not authorize calendar access. Existing saved sharing
 links are normalized when fetched. Calendar URLs remain private in API responses.
 
 Public iCloud calendars are supported using their `webcal://p…-caldav.icloud.com/published/…` subscription link (fetched over HTTPS) or its HTTPS equivalent. Choose **iCal / ICS feed** when adding the source. Use a dedicated training calendar: anyone with the public subscription link can read its events. Private authenticated CalDAV calendars are not supported as subscription feeds. Redirects remain disabled. Adding a source does not publish workouts; review existing destination entries before enabling automatic publishing, especially when a separate tool previously uploaded them.
+
+### Reviewed progression runs
+
+A progression with explicit warm-up/cooldown distances and start/end paces can
+show a proposed conversion in workout details. **Approve progression conversion**
+opts into one continuous distance step with a pace band and progression note,
+plus an added easy run-until-Lap transition after the prescribed warm-up.
+For example, a synthetic prescription `Warm up 1 miles; 4 mile progression from
+7:40 -> 7:00; Cool down 1 miles` retains those distances and uses 7:00–7:40/mi
+for the main step. It does not invent individual mile targets or extra bookends.
+Original coaching notes and the added transition are identified in destination
+notes. Garmin retains the progression instruction on the main step; COROS retains
+it in course notes.
+
+Approval is saved for the exact sync, destination account, event identity, date
+and prescription. It is not a global preference: changing the feed prescription
+requires a new review. Approval itself does not contact a destination. Normal
+manual publishing or an already-enabled automatic sync publishes it using the
+existing duplicate-prevention receipts. Unknown instructions, missing bookends,
+unsupported pace formats and reversed progressions remain blocked for review.

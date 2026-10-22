@@ -539,3 +539,106 @@ class WebTests(unittest.TestCase):
             ).status_code,
             413,
         )
+
+    def test_progression_review_is_exact_account_scoped_durable_and_never_publishes(self):
+        from dataclasses import replace
+
+        from workoutbridge.calendar import Event
+
+        rule, source, profile = self.automatic_rule()
+        other = self.client.post(
+            "/api/v1/syncs", json={"source": source, "profile": "other"}, headers=self.headers
+        ).json()["id"]
+        event = Event(
+            source,
+            "synthetic-progression",
+            "",
+            "2030-04-03",
+            "Run: progression",
+            "Workout: Run\n\nWarm up 1 miles\n4 mile progression from ~7:40 -> 7:00\nCool down 1 miles",
+        )
+        with (
+            patch("workoutbridge.web.read_calendar", return_value=b"synthetic"),
+            patch("workoutbridge.web.import_calendar", return_value=[event]) as imported,
+            patch("workoutbridge.web.GarminProvider.connect") as connect,
+        ):
+            plan = self.client.post(
+                f"/api/v1/syncs/{rule}/preview", json={}, headers=self.headers
+            ).json()
+            item = plan["items"][0]
+            self.assertIn("error", item)
+            self.assertEqual(len(item["suggestion"]["draft"]["steps"]), 4)
+            endpoint = f"/api/v1/syncs/{rule}/review-progression"
+            body = {"hash": plan["hash"], "index": 0, "choice": "pace_range_lap"}
+            self.assertEqual(
+                self.client.post(
+                    endpoint, json={**body, "hash": "stale"}, headers=self.headers
+                ).status_code,
+                409,
+            )
+            self.assertEqual(
+                self.client.post(
+                    endpoint, json={**body, "index": True}, headers=self.headers
+                ).status_code,
+                422,
+            )
+            self.assertEqual(
+                self.client.post(
+                    endpoint, json={**body, "choice": "guess"}, headers=self.headers
+                ).status_code,
+                422,
+            )
+            response = self.client.post(endpoint, json=body, headers=self.headers)
+            self.assertEqual(response.status_code, 200, response.text)
+            plan = self.client.post(
+                f"/api/v1/syncs/{rule}/preview", json={}, headers=self.headers
+            ).json()
+            self.assertNotIn("error", plan["items"][0])
+            self.assertEqual(len(plan["items"][0]["draft"]["steps"]), 4)
+            restarted = create_app(self.root, "https://bridge.example", "a" * 40, poll=False)
+            self.addCleanup(restarted.state.close)
+            restarted_client = TestClient(restarted, base_url="https://bridge.example")
+            restarted_client.cookies.update(self.client.cookies)
+            saved = restarted_client.post(
+                f"/api/v1/syncs/{rule}/preview", json={}, headers=self.headers
+            ).json()
+            self.assertNotIn("error", saved["items"][0])
+            other_plan = self.client.post(
+                f"/api/v1/syncs/{other}/preview", json={}, headers=self.headers
+            ).json()
+            self.assertIn("error", other_plan["items"][0])
+            # Change account even within the same rule: previous approval cannot follow it.
+            profile["account_id"] = "456"
+            changed = self.client.post(
+                f"/api/v1/syncs/{rule}/preview", json={}, headers=self.headers
+            ).json()
+            self.assertIn("error", changed["items"][0])
+            profile["account_id"] = "123"
+            # Changed notes and a moved date both invalidate the exact-event review.
+            for changed_event in [
+                replace(event, description=event.description.replace("4 mile", "5 mile")),
+                replace(event, date="2030-04-04"),
+            ]:
+                imported.return_value = [changed_event]
+                changed = self.client.post(
+                    f"/api/v1/syncs/{rule}/preview", json={}, headers=self.headers
+                ).json()
+                self.assertIn("error", changed["items"][0])
+            connect.assert_not_called()
+            from test_publishing import FakeGarmin
+
+            provider = FakeGarmin()
+            provider.account_id = "123"
+            connect.return_value = provider
+            imported.return_value = [event]
+            plan = self.client.post(
+                f"/api/v1/syncs/{rule}/preview", json={}, headers=self.headers
+            ).json()
+            for _ in range(2):
+                result = self.client.post(
+                    f"/api/v1/syncs/{rule}/publish",
+                    json={"hash": plan["hash"], "selected": [0]},
+                    headers=self.headers,
+                )
+                self.assertEqual(result.status_code, 200, result.text)
+            self.assertEqual((provider.uploads, provider.schedules), (1, 1))

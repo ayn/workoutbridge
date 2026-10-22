@@ -11,6 +11,7 @@ import sqlite3
 import threading
 import time
 from contextlib import asynccontextmanager, contextmanager
+from dataclasses import asdict
 from datetime import datetime, timedelta
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -28,6 +29,7 @@ from .garmin import GarminProvider
 from .prescriptions import normalize_finalsurge, normalize_workout
 from .profiles import load_profile, profile_path
 from .publishing import Publisher, digest
+from .reviewed import review_progression
 from .web_auth import GarminLogin
 
 SESSION_SECONDS = 30 * 86400
@@ -157,6 +159,36 @@ def create_app(
         put("history", record["id"], record)
         return plan
 
+    def review_key(rule_id, account, event):
+        return digest([rule_id, account, event.source, event.uid, event.recurrence_id, event.date])
+
+    def planned_item(rule_id, account, event):
+        with db() as conn:
+            row = conn.execute(
+                "SELECT body FROM objects WHERE kind='progression_review' AND id=?",
+                (review_key(rule_id, account, event),),
+            ).fetchone()
+        if row:
+            reviewed = json.loads(row[0])
+            if reviewed["original_hash"] == digest(asdict(event)):
+                return review_item(account, Event(**reviewed["event"]))
+        item = review_item(account, event)
+        if "error" in item:
+            try:
+                suggested = review_item(
+                    account,
+                    review_progression(
+                        event,
+                        pace_choice="range",
+                        transition_choice="lap",
+                    ),
+                )
+            except ValueError:
+                suggested = {"error": "Manual review required"}
+            if "error" not in suggested:
+                item["suggestion"] = {"policy": "pace_range_lap", "draft": suggested["draft"]}
+        return item
+
     def build_preview(rule_id):
         rule = get("sync", rule_id)
         source = get("source", rule["source"])
@@ -179,7 +211,7 @@ def create_app(
             end=start + timedelta(days=15),
         )
         normalize = normalize_finalsurge if source["format"] == "finalsurge" else normalize_workout
-        items = [review_item(profile["account_id"], normalize(event)) for event in events]
+        items = [planned_item(rule_id, profile["account_id"], normalize(event)) for event in events]
         plan = {"id": rule_id, "account": profile["account_id"], "items": items, "created": stamp()}
         plan["hash"] = digest(plan)
         put("plan", rule_id, plan)
@@ -682,6 +714,57 @@ def create_app(
             put("sync", key, rule)
             if body["enabled"]:
                 poll_once(key)
+            return {"ok": True}
+        finally:
+            operation.release()
+
+    @app.post(API_PREFIX + "/syncs/{key}/review-progression")
+    def approve_progression(key: str, body: dict):
+        if not operation.acquire(blocking=False):
+            raise HTTPException(409, "Another operation is running")
+        try:
+            rule = get("sync", key)
+            plan = get("plan", key)
+            profile = load(rule["profile"])
+            permitted(profile)
+            if (
+                body.get("hash") != plan["hash"]
+                or profile["account_id"] != plan["account"]
+                or datetime.fromisoformat(plan["created"])
+                < datetime.now(ZoneInfo("UTC")) - timedelta(hours=24)
+            ):
+                raise HTTPException(409, "Preview changed or expired. Refresh and review again")
+            index = body.get("index")
+            if (
+                type(index) is not int
+                or not 0 <= index < len(plan["items"])
+                or body.get("choice") != "pace_range_lap"
+            ):
+                raise HTTPException(422, "Choose this exact progression and conversion")
+            original = Event(**plan["items"][index]["event"])
+            try:
+                event = review_progression(original, pace_choice="range", transition_choice="lap")
+                item = review_item(profile["account_id"], event)
+                if "error" in item:
+                    raise ValueError("Destination cannot represent this progression")
+            except ValueError:
+                raise HTTPException(
+                    422, "Unsupported progression; manual review required"
+                ) from None
+            put(
+                "progression_review",
+                review_key(key, profile["account_id"], original),
+                {
+                    "original_hash": digest(asdict(original)),
+                    "event": asdict(event),
+                    "at": stamp(),
+                    "policy": "pace_range_lap",
+                },
+            )
+            plan["items"][index] = item
+            plan.pop("hash", None)
+            plan["hash"] = digest(plan)
+            put("plan", key, plan)
             return {"ok": True}
         finally:
             operation.release()

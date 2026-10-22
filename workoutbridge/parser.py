@@ -217,6 +217,33 @@ def parse(text: str, *, sport: str = "running") -> Draft:
     steps: list[Step | Repeat] = []
     unresolved: list[str] = []
     for clause in filter(None, (part.strip() for part in text.split(";"))):
+        progression = (
+            re.fullmatch(
+                r"Run (\d+(?:\.\d+)?) (?:miles|mi) progression from (\d{1,2}:[0-5]\d) to (\d{1,2}:[0-5]\d)/mi",
+                clause,
+                re.I,
+            )
+            if sport == "running"
+            else None
+        )
+        if progression:
+            amount, start, finish = progression.groups()
+            distance = float(amount) * FACTORS["mi"]
+            slow, fast = clock_seconds(start), clock_seconds(finish)
+            if not 0 < distance < float("inf") or not 0 < fast <= slow:
+                unresolved.append(clause)
+                continue
+            steps.append(
+                Step(
+                    "run",
+                    distance,
+                    "meters",
+                    note=f"Progression: start around {start}/mi and gradually build toward {finish}/mi.",
+                    speed_min=FACTORS["mi"] / slow,
+                    speed_max=FACTORS["mi"] / fast,
+                )
+            )
+            continue
         repeated = interval(clause, sport)
         if repeated:
             steps.append(repeated)
