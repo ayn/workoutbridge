@@ -329,10 +329,10 @@ export function App({ brand = "WorkoutBridge", multiuser = false, suggestedEmail
     <div className="shell">
       {busy && <Progress />}
       <aside className="sidebar">
-        <div className="brand">
-          <Route size={24} />
+        <a className="brand" href="/">
+          <Route size={24} aria-hidden="true" />
           <strong>{brand}</strong>
-        </div>
+        </a>
         <div className="workspace">
           <span className="avatar">WB</span>
           <div>
