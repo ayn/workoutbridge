@@ -704,3 +704,7 @@ requires a new review. Approval itself does not contact a destination. Normal
 manual publishing or an already-enabled automatic sync publishes it using the
 existing duplicate-prevention receipts. Unknown instructions, missing bookends,
 unsupported pace formats and reversed progressions remain blocked for review.
+
+Workout details retain prescribed distance units: mile-based steps display `mi`,
+kilometer-based steps `km`, and track intervals prescribed in meters display `m`.
+Garmin and COROS continue to receive the same normalized distances.

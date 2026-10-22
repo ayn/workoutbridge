@@ -66,3 +66,48 @@ class TimedStridesTests(unittest.TestCase):
         self.assertEqual(repeat.steps[0].unit, "seconds")
         self.assertEqual(repeat.steps[0].note, "Strides")
         self.assertEqual(repeat.steps[1].unit, "lap_button")
+
+
+class DistanceUnitsTests(unittest.TestCase):
+    def test_prescribed_distance_units_survive_internal_meter_conversion(self):
+        draft = parse(
+            "Warm up 1.25 miles; 3 x 0.8 km in 200-220 with 60 sec easy recovery; Run 400 m; Cool down 1.5 km"
+        )
+        self.assertFalse(draft.unresolved)
+        self.assertEqual(draft.steps[0].display_unit, "mi")
+        self.assertEqual(draft.steps[1].steps[0].display_unit, "km")
+        self.assertIsNone(draft.steps[1].steps[1].display_unit)
+        self.assertEqual(draft.steps[2].display_unit, "m")
+        self.assertEqual(draft.steps[3].display_unit, "km")
+        self.assertEqual(draft.steps[0].duration, 1.25 * 1609.344)
+        self.assertEqual(draft.steps[1].steps[0].duration, 800)
+        self.assertEqual(draft.steps[3].duration, 1500)
+        lap = parse("3 x 0.5 km smooth with lap recovery").steps[0]
+        self.assertEqual(lap.steps[0].display_unit, "km")
+        self.assertIsNone(lap.steps[1].display_unit)
+        cycling = parse("Ride 18 km easy", sport="cycling").steps[0]
+        self.assertEqual(cycling.display_unit, "km")
+        progression = parse("Run 4 miles progression from 7:40 to 7:00/mi").steps[0]
+        self.assertEqual(progression.display_unit, "mi")
+
+    def test_display_metadata_preserves_existing_provider_approvals(self):
+        from workoutbridge.calendar import Event
+        from workoutbridge.cli import review_item
+
+        event = Event(
+            "synthetic",
+            "units",
+            "",
+            "2030-05-01",
+            "Synthetic mixed units",
+            "Warm up 1.25 miles; 3 x 0.8 km in 200-220 with 60 sec easy recovery; Run 400 m; Cool down 1.5 km",
+        )
+        # Captured before adding display metadata; includes each provider's payload.
+        for account, approved in [
+            ("123", "f9f4478961cf8ffde3e5e5d1dd1a00d5c6184cde384b371fcdcbb7be889fc430"),
+            (
+                "coros:us:synthetic",
+                "2e157c359ddd17a1f3a36972f77a8d16fd7ff98f2acbd08c4bc692af58d6b44b",
+            ),
+        ]:
+            self.assertEqual(review_item(account, event)["approval"], approved)
