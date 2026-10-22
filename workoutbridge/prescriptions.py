@@ -5,14 +5,27 @@ from dataclasses import replace
 
 from .calendar import Event
 from .parser import Step, parse
+from .sports import event_sport
 
-METADATA = re.compile(r"(?:Workout:\s*Run|Planned:\s*\d+(?:\.\d+)?\s*(?:mi|km))", re.I)
+METADATA = re.compile(
+    r"(?:Workout:\s*(?:Run|Bike|Cycling)(?:\s*-\s*(?:Easy|Moderate|Hard))?"
+    r"|Planned:\s*(?:\d+(?:\.\d+)?\s*(?:mi|km)(?:\s*~\s*\d+:\d{2}:\d{2})?|\d+:\d{2}:\d{2}))",
+    re.I,
+)
 
 
 def normalize_finalsurge(event: Event, *, recovery_choice: str = "lap") -> Event:
+    event = replace(
+        event,
+        sport=event_sport(
+            event.title, event.description, event.sport if event.sport != "running" else ""
+        ),
+    )
     if event.structured_text:
         return event
-    title = re.fullmatch(r"\s*Run:\s*(.+)", event.title, re.I)
+    title = re.fullmatch(
+        r"\s*(?:Run|Bike|Cycling)(?:\s*-\s*(?:Easy|Moderate|Hard))?:\s*(.+)", event.title, re.I
+    )
     if not title:
         return replace(event, structured_text="Unsupported Final Surge event: " + event.title)
     details = "\n".join(
@@ -20,7 +33,7 @@ def normalize_finalsurge(event: Event, *, recovery_choice: str = "lap") -> Event
         for line in event.description.splitlines()
         if line.strip() and not METADATA.fullmatch(line.strip())
     )
-    detail_draft = parse(details)
+    detail_draft = parse(details, sport=event.sport)
     if (
         details
         and not detail_draft.unresolved
@@ -36,6 +49,12 @@ def normalize_finalsurge(event: Event, *, recovery_choice: str = "lap") -> Event
 
 
 def normalize_workout(event: Event, *, recovery_choice: str = "lap") -> Event:
+    event = replace(
+        event,
+        sport=event_sport(
+            event.title, event.description, event.sport if event.sport != "running" else ""
+        ),
+    )
     if event.structured_text:
         return event
     # An explicit author-supplied section distinguishes executable steps from
@@ -51,14 +70,23 @@ def normalize_workout(event: Event, *, recovery_choice: str = "lap") -> Event:
         ):
             return replace(event, structured_text=blocks[0].strip())
         return replace(event, structured_text="Invalid structured workout section; review required")
-    if not parse(event.prescription).unresolved:
+    if not parse(event.prescription, sport=event.sport).unresolved:
         return event
-    text = re.sub(r"^\s*Run:\s*", "", event.prescription, flags=re.I)
+    if re.search(r"(?im)^Workout:\s*(?:Run|Bike|Cycling)\b", event.description):
+        return normalize_finalsurge(event, recovery_choice=recovery_choice)
+    text = re.sub(r"^\s*(?:Run|Bike|Cycling|Ride):\s*", "", event.prescription, flags=re.I)
     return _normalize(event, text, recovery_choice)
 
 
 def _normalize(event: Event, text: str, recovery_choice: str) -> Event:
-    if not parse(text).unresolved:
+    if event.sport == "cycling":
+        # Only add the cycling verb to an otherwise fully supported duration or
+        # distance, never strip target instructions or borrow running shorthand.
+        candidate = "Ride " + text
+        if not parse(candidate, sport="cycling").unresolved:
+            text = candidate
+        return replace(event, structured_text=text)
+    if not parse(text, sport=event.sport).unresolved:
         return replace(event, structured_text=text)
     clauses = []
     fallback_used = False

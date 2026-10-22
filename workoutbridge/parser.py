@@ -28,12 +28,16 @@ class Draft:
     steps: tuple[Step | Repeat, ...]
     unresolved: tuple[str, ...]
     requires_review: bool = True
+    sport: str = "running"
 
     def to_dict(self) -> dict:
         return asdict(self)
 
 
 UNITS = {
+    "hr": "seconds",
+    "hour": "seconds",
+    "hours": "seconds",
     "min": "seconds",
     "mins": "seconds",
     "minutes": "seconds",
@@ -46,6 +50,9 @@ UNITS = {
     "miles": "meters",
 }
 FACTORS = {
+    "hr": 3600,
+    "hour": 3600,
+    "hours": 3600,
     "min": 60,
     "mins": 60,
     "minutes": 60,
@@ -58,8 +65,8 @@ FACTORS = {
     "miles": 1609.344,
 }
 PATTERN = re.compile(
-    r"(warm up|run|rest|cool down)\s+"
-    r"(?:(\d+(?:\.\d+)?)\s*(minutes|mins|min|seconds|secs|sec|miles|mi|km|m)"
+    r"(warm up|run|ride|bike|cycle|rest|cool down)\s+"
+    r"(?:(\d+(?:\.\d+)?)\s*(hours|hour|hr|minutes|mins|min|seconds|secs|sec|miles|mi|km|m)"
     r"|until lap)"
     r"(?:\s+(easy|moderate|hard|smooth))?",
     re.IGNORECASE,
@@ -81,7 +88,30 @@ def clock_label(seconds: int) -> str:
     return f"{seconds // 60}:{seconds % 60:02}"
 
 
-def interval(clause: str) -> Repeat | None:
+def interval(clause: str, sport: str = "running") -> Repeat | None:
+    if sport == "cycling":
+        match = re.fullmatch(
+            r"(\d+)\s*x\s*(\d+(?:\.\d+)?)\s*(min|sec|minutes|seconds)"
+            r"(?:\s+(easy|moderate|hard|smooth))?\s+with\s+"
+            r"(\d+(?:\.\d+)?)\s*(min|sec|minutes|seconds)\s+(easy|rest)\s+recovery",
+            clause,
+            re.I,
+        )
+        if not match:
+            return None
+        count, work, unit, effort, recovery, recovery_unit, recovery_effort = match.groups()
+        work = float(work) * FACTORS[unit.lower()]
+        recovery = float(recovery) * FACTORS[recovery_unit.lower()]
+        if not 1 <= int(count) <= 100 or not 0 < work <= 86400 or not 0 < recovery <= 86400:
+            return None
+        return Repeat(
+            int(count),
+            (
+                Step("ride", work, "seconds", effort.lower() if effort else None),
+                Step("rest", recovery, "seconds", recovery_effort.lower()),
+            ),
+        )
+
     strides = re.fullmatch(r"(\d+) strides with lap recovery", clause, re.IGNORECASE)
     if strides and 1 <= int(strides[1]) <= 100:
         return Repeat(
@@ -181,11 +211,13 @@ def interval(clause: str) -> Repeat | None:
     )
 
 
-def parse(text: str) -> Draft:
+def parse(text: str, *, sport: str = "running") -> Draft:
+    if sport not in {"running", "cycling"}:
+        return Draft(text, (), ("Unsupported or ambiguous sport; review required",), sport=sport)
     steps: list[Step | Repeat] = []
     unresolved: list[str] = []
     for clause in filter(None, (part.strip() for part in text.split(";"))):
-        repeated = interval(clause)
+        repeated = interval(clause, sport)
         if repeated:
             steps.append(repeated)
             continue
@@ -195,6 +227,11 @@ def parse(text: str) -> Draft:
             continue
         kind, amount, unit, label = match.groups()
         kind = kind.lower().replace(" ", "_")
+        if kind in {"run", "ride", "bike", "cycle"}:
+            if (sport == "running" and kind != "run") or (sport == "cycling" and kind == "run"):
+                unresolved.append(clause)
+                continue
+            kind = "run" if sport == "running" else "ride"
         label = label.lower() if label else None
         if amount is None:
             steps.append(Step(kind, None, "lap_button", label))
@@ -207,4 +244,4 @@ def parse(text: str) -> Draft:
             steps.append(Step(kind, value, UNITS[unit], label))
     if not steps and not unresolved:
         unresolved.append("Empty prescription")
-    return Draft(text, tuple(steps), tuple(unresolved))
+    return Draft(text, tuple(steps), tuple(unresolved), sport=sport)

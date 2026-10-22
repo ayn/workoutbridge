@@ -564,7 +564,7 @@ def create_app(
         if (
             parsed.scheme != "https"
             or not (
-                parsed.hostname in ("log.finalsurge.com", "calendar.google.com")
+                parsed.hostname in ("log.finalsurge.com", "calendar.google.com", "ics.teamup.com")
                 or re.fullmatch(r"p[0-9]+-caldav\.icloud\.com", parsed.hostname or "")
             )
             or parsed.port not in (None, 443)
@@ -572,7 +572,9 @@ def create_app(
             or parsed.password
             or parsed.fragment
         ):
-            raise HTTPException(422, "Use a Final Surge, Google Calendar or public iCloud feed")
+            raise HTTPException(
+                422, "Use a Final Surge, Google Calendar, public iCloud or Teamup feed"
+            )
         name = body.get("name", "")
         if (
             not isinstance(name, str)

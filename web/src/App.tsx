@@ -38,7 +38,7 @@ type Step = {
   skip_last_recovery?: boolean;
 };
 type Item = {
-  event: { title: string; date: string; description: string };
+  event: { title: string; date: string; description: string; sport?: string };
   draft: { steps: Step[]; unresolved: string[] };
   error?: string;
 };
@@ -538,7 +538,7 @@ export function App({ brand = "WorkoutBridge", multiuser = false, suggestedEmail
                           className="workout-title"
                           onClick={() => setExpanded(i)}
                         >
-                          <small>{dateLabel(entry.event.date)}</small>
+                          <small>{dateLabel(entry.event.date)}{entry.event.sport === "cycling" ? " · Cycling" : ""}</small>
                           <strong>{entry.event.title}</strong>
                         </button>
                         <span
@@ -572,6 +572,7 @@ export function App({ brand = "WorkoutBridge", multiuser = false, suggestedEmail
                               : "Calendar"}
                           </span>
                         </div>
+                        {item.event.sport === "cycling" && <span className="badge">Cycling</span>}
                         <h2>{item.event.title}</h2>
                         <p className="muted">{dateLabel(item.event.date)}</p>
                         {item.error ? (
@@ -818,7 +819,7 @@ export function App({ brand = "WorkoutBridge", multiuser = false, suggestedEmail
                 placeholder="https://log.finalsurge.com/delivery/ical/…"
               />
             </div>
-            <p id="calendar-link-help" className="field-help">Supported sources: Final Surge, Google Calendar and iCloud. Use a public iCloud subscription link or Google sharing link. For private Google calendars, use the Secret address in iCal format. Anyone with a public subscription link can read that calendar.</p>
+            <p id="calendar-link-help" className="field-help">Supported sources: Final Surge, Google Calendar, iCloud and Teamup. Use a public iCloud subscription link or Google sharing link. For private Google calendars, use the Secret address in iCal format. Anyone with a public subscription link can read that calendar.</p>
             <div className="form-field">
               <label htmlFor="calendar-source-timezone">Timezone</label>
               <input autoComplete="off" data-1p-ignore id="calendar-source-timezone"

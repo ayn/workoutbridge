@@ -21,7 +21,10 @@ def emit(value):
 
 
 def review_item(account: str, event: Event) -> dict:
-    result = {"event": asdict(event), "draft": parse(event.prescription).to_dict()}
+    result = {
+        "event": asdict(event),
+        "draft": parse(event.prescription, sport=event.sport).to_dict(),
+    }
     try:
         if account.startswith("coros:"):
             from .coros_publishing import approval_token as coros_approval
@@ -39,7 +42,10 @@ def review_item(account: str, event: Event) -> dict:
 def main(argv=None) -> int:
     argv = sys.argv[1:] if argv is None else argv
     if not argv:
-        draft = parse(sys.stdin.read())
+        from .sports import event_sport
+
+        text = sys.stdin.read()
+        draft = parse(text, sport=event_sport("", text))
         emit(draft.to_dict())
         return 2 if draft.unresolved else 0
     parser = argparse.ArgumentParser(description=__doc__)
