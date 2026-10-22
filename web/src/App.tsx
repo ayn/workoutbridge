@@ -1,3 +1,4 @@
+import { readApiResponse } from "./response";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import {
   AlertTriangle,
@@ -107,15 +108,7 @@ async function defaultApi(path: string, data?: unknown) {
       "Unable to connect. Check the instance connection before retrying.",
     );
   }
-  if (response.status === 401) throw new Error("Sign in required");
-  const result = await response.json();
-  if (!response.ok)
-    throw new Error(
-      typeof result.detail === "string"
-        ? result.detail
-        : "Check the supplied values.",
-    );
-  return result;
+  return readApiResponse(response);
 }
 
 function dateLabel(date: string) {
@@ -815,15 +808,17 @@ export function App({ brand = "WorkoutBridge", multiuser = false, suggestedEmail
               </select>
             </label>
             <label>
-              Private feed URL
+              Calendar link or iCal URL
               <input
                 name="url"
+                aria-describedby="calendar-link-help"
                 type="url"
                 required
                 autoComplete="off"
                 placeholder="https://log.finalsurge.com/delivery/ical/…"
               />
             </label>
+            <p id="calendar-link-help" className="field-help">Google sharing links work for public calendars. For a private calendar, use its Secret address in iCal format.</p>
             <label>
               Timezone
               <input
@@ -1047,7 +1042,7 @@ function CorosForm({ profile, close, complete }: { profile: string; close: () =>
       e.preventDefault();
       void request("coros/login", Object.fromEntries(new FormData(e.currentTarget)));
     }}>
-      <label>Profile name<input name="profile" defaultValue={profile} required pattern="[A-Za-z0-9][A-Za-z0-9_-]{0,63}" /></label>
+      <label>Profile name<input name="profile" defaultValue={profile} required pattern={"[A-Za-z0-9][A-Za-z0-9_\\-]{0,63}"} /></label>
       <label>Account region<select name="region" defaultValue="us"><option value="us">United States / Global</option><option value="eu">Europe</option><option value="cn">China</option></select></label>
       {error && <p role="alert">{error}</p>}
       <button className="primary" disabled={busy}>{busy ? "Connecting..." : "Continue to COROS"} {busy ? <LoaderCircle size={16} className="spin" /> : <ArrowRight size={16} />}</button>
@@ -1190,7 +1185,7 @@ function GarminForm({
             <input
               name="profile"
               defaultValue={profile}
-              pattern="[A-Za-z0-9][A-Za-z0-9_-]{0,63}"
+              pattern={"[A-Za-z0-9][A-Za-z0-9_\\-]{0,63}"}
               required
             />
           </label>

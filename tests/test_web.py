@@ -342,6 +342,22 @@ class WebTests(unittest.TestCase):
             http.post(path, json=body, headers={"Origin": "http://bridge.example"}).status_code, 403
         )
 
+    def test_google_share_link_and_ics_are_one_source(self):
+        self.login()
+        body = {
+            "name": "Synthetic calendar",
+            "url": "https://calendar.google.com/calendar/embed?src=synthetic%40example.invalid",
+            "format": "generic",
+            "timezone": "UTC",
+        }
+        response = self.client.post("/api/v1/sources", json=body, headers=self.headers)
+        self.assertEqual(response.status_code, 200)
+        body["url"] = (
+            "https://calendar.google.com/calendar/ical/synthetic%40example.invalid/public/basic.ics"
+        )
+        response = self.client.post("/api/v1/sources", json=body, headers=self.headers)
+        self.assertEqual(response.status_code, 409)
+
     def test_sources_private_and_restricted(self):
         self.login()
         for url in (

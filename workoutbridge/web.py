@@ -22,7 +22,7 @@ from fastapi.staticfiles import StaticFiles
 
 from .calendar import Event, import_calendar
 from .cli import review_item
-from .feed import read_calendar
+from .feed import calendar_feed_url, read_calendar
 from .garmin import GarminProvider
 from .prescriptions import normalize_finalsurge, normalize_workout
 from .profiles import load_profile, profile_path
@@ -553,7 +553,13 @@ def create_app(
         url = body.get("url", "")
         if not isinstance(url, str) or len(url) > 2048:
             raise HTTPException(422, "Invalid feed URL")
-        parsed = urlsplit(url)
+        try:
+            url = calendar_feed_url(url)
+            parsed = urlsplit(url)
+        except ValueError:
+            raise HTTPException(
+                422, "Use a Google Calendar sharing link or an HTTPS iCal feed"
+            ) from None
         if (
             parsed.scheme != "https"
             or parsed.hostname not in ("log.finalsurge.com", "calendar.google.com")
@@ -576,8 +582,13 @@ def create_app(
             raise HTTPException(422, "Invalid timezone") from None
         if len(values("source")) >= 20:
             raise HTTPException(409, "Source limit reached")
-        if any(s["url"] == url for s in values("source")):
-            raise HTTPException(409, "This feed already exists")
+        for existing in values("source"):
+            try:
+                same = calendar_feed_url(existing["url"]) == url
+            except ValueError:
+                same = False
+            if same:
+                raise HTTPException(409, "This feed already exists")
         key = uuid4().hex
         put(
             "source",

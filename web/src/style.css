@@ -907,3 +907,5 @@ footer {
 .setup-checklist summary { padding-right: 40px; }
 .setup-checklist .setup-dismiss { position: absolute; top: 10px; right: 10px; width: 44px; min-height: 44px; padding: 0; display: grid; place-items: center; color: var(--muted); border-radius: 6px; }
 .setup-checklist .setup-dismiss:hover { background: #eef4f0; color: var(--green); }
+
+.modal .field-help { margin: -4px 0 4px; font-size: 13px; line-height: 1.5; color: var(--muted); }
