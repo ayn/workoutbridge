@@ -29,6 +29,7 @@ type Step = {
   kind?: string;
   unit?: string;
   duration?: number | null;
+  display_unit?: "mi" | "km" | "m";
   note?: string;
   label?: string;
   speed_min?: number;
@@ -134,6 +135,11 @@ function duration(step: Step) {
   if (step.unit === "lap_button") return "Until Lap";
   if (step.unit === "seconds")
     return `${Math.floor((step.duration || 0) / 60)}:${String((step.duration || 0) % 60).padStart(2, "0")}`;
+  if (step.display_unit === "mi" || step.display_unit === "km") {
+    const factor = step.display_unit === "mi" ? 1609.344 : 1000;
+    const distance = new Intl.NumberFormat(undefined, {maximumFractionDigits: 3}).format((step.duration || 0) / factor);
+    return `${distance} ${step.display_unit}`;
+  }
   return `${Math.round((step.duration || 0) * 100) / 100} m`;
 }
 function pace(speed: number) {

@@ -649,3 +649,21 @@ test("progression suggestion requires explicit approval of the displayed plan", 
   expect(screen.queryByRole("button", {name: "Approve progression conversion"})).not.toBeInTheDocument();
   expect(screen.getByLabelText("Select Run: progression")).not.toBeDisabled();
 });
+
+
+test("workout details preserve mile, kilometer and track-meter display units", async () => {
+  const steps = [
+    {kind: "warm_up", duration: 2011.68, unit: "meters", display_unit: "mi"},
+    {kind: "run", duration: null, unit: "lap_button"},
+    {count: 3, steps: [{kind: "run", duration: 800, unit: "meters", display_unit: "km"}, {kind: "rest", duration: 60, unit: "seconds"}]},
+    {kind: "run", duration: 400, unit: "meters", display_unit: "m"},
+    {kind: "cool_down", duration: 1500, unit: "meters", display_unit: "km"},
+    {kind: "run", duration: 600, unit: "meters"},
+  ];
+  render(<App request={vi.fn().mockResolvedValue({...initial, plans: [{...initial.plans[0], items: [{...initial.plans[0].items[0], draft: {steps, unresolved: []}}]}]})} />);
+  await screen.findByText("1.25 mi");
+  for (const text of ["Until Lap", "0.8 km", "1:00", "400 m", "1.5 km", "600 m"]) {
+    expect(screen.getByText(text, {exact: true})).toBeInTheDocument();
+  }
+  expect(screen.queryByText("2011.68 m")).not.toBeInTheDocument();
+});

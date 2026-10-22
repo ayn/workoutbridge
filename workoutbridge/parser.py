@@ -13,6 +13,7 @@ class Step:
     note: str = ""
     speed_min: float | None = None
     speed_max: float | None = None
+    display_unit: str | None = None
 
 
 @dataclass(frozen=True)
@@ -135,7 +136,13 @@ def interval(clause: str, sport: str = "running") -> Repeat | None:
         return Repeat(
             int(count),
             (
-                Step("run", distance, "meters", effort.lower() if effort else None),
+                Step(
+                    "run",
+                    distance,
+                    "meters",
+                    effort.lower() if effort else None,
+                    display_unit=unit.lower(),
+                ),
                 Step("rest", None, "lap_button"),
             ),
         )
@@ -205,6 +212,7 @@ def interval(clause: str, sport: str = "running") -> Repeat | None:
                 note=f"{clock_label(fast)}-{clock_label(slow)}",
                 speed_min=distance / slow,
                 speed_max=distance / fast,
+                display_unit=unit.lower(),
             ),
             Step("run" if effort == "easy" else "rest", recovery, "seconds", effort),
         ),
@@ -241,6 +249,7 @@ def parse(text: str, *, sport: str = "running") -> Draft:
                     note=f"Progression: start around {start}/mi and gradually build toward {finish}/mi.",
                     speed_min=FACTORS["mi"] / slow,
                     speed_max=FACTORS["mi"] / fast,
+                    display_unit="mi",
                 )
             )
             continue
@@ -268,7 +277,15 @@ def parse(text: str, *, sport: str = "running") -> Draft:
             if not 0 < value < float("inf"):
                 unresolved.append(clause)
                 continue
-            steps.append(Step(kind, value, UNITS[unit], label))
+            steps.append(
+                Step(
+                    kind,
+                    value,
+                    UNITS[unit],
+                    label,
+                    display_unit={"mi": "mi", "miles": "mi", "km": "km", "m": "m"}.get(unit),
+                )
+            )
     if not steps and not unresolved:
         unresolved.append("Empty prescription")
     return Draft(text, tuple(steps), tuple(unresolved), sport=sport)
