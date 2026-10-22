@@ -1100,7 +1100,7 @@ function GarminForm({
         .catch(() => {
           if (active) setError("Unable to check Garmin login status");
         });
-    }, 1000);
+    }, 6000);
     return () => {
       active = false;
       clearTimeout(timer);
