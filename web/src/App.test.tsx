@@ -562,3 +562,10 @@ test("pending Garmin sign-in leaves room between status requests", async () => {
     expect(reads()).toBe(2);
   } finally { cleanup(); vi.useRealTimers(); }
 });
+
+
+test("workspace brand links to the app home", async () => {
+  vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({sources: [], connections: [], syncs: [], plans: [], history: []})));
+  render(<App multiuser brand="Prescribed.FIT" />);
+  expect(await screen.findByRole("link", {name: "Prescribed.FIT"})).toHaveAttribute("href", "/");
+});
