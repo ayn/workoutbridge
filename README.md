@@ -42,9 +42,10 @@ for the architecture, safety requirements, tests, and PR checklist.
 The web app uses the [versioned `/api/v1` API](docs/web-api.md). Its contract is
 provisional during the private pilot and will stabilize at public launch.
 
-- **Hosted service (planned):** [Prescribed.FIT](https://prescribed.fit) is the
-  managed option for people who do not want to run their own instance. Public
-  signup is not open yet; availability and pricing will be announced there.
+- **Hosted service (closed pilot):** [Prescribed.FIT](https://prescribed.fit) is the
+  managed option for people who do not want to run their own instance. Access is
+  currently by invitation; [contact the maintainer](https://github.com/ayn)
+  to request pilot access.
 - **Self-host today:** follow the [single-owner web deployment runbook](docs/private-web.md)
   for setup, persistent storage, authentication, scheduling, and updates. Keep the
   pilot private; it is not yet a public multi-user service.
@@ -596,9 +597,10 @@ See [contributing](CONTRIBUTING.md) for the required red/green TDD workflow.
 
 ## Hosting and Funding
 
-The planned managed service is [Prescribed](https://prescribed.fit). It is
-developed separately from this MIT-licensed, single-owner self-hosted project.
-The hosted service is not yet publicly available. DIY deployments do not need
+The managed service, [Prescribed.FIT](https://prescribed.fit), is in a closed pilot.
+[Contact the maintainer](https://github.com/ayn) to request access.
+It is developed separately from this MIT-licensed, single-owner self-hosted project.
+DIY deployments do not need
 billing, email-provider credentials, subscription configuration, or managed
 hosting infrastructure. GitHub sponsorship is optional support for the public
 project, not a way to buy hosted access.
