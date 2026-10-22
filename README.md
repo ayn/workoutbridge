@@ -626,3 +626,5 @@ calendar's public ICS endpoint without scraping a sign-in page or following
 redirects. Private calendars still require the Secret address in iCal format;
 a browser link alone does not authorize calendar access. Existing saved sharing
 links are normalized when fetched. Calendar URLs remain private in API responses.
+
+Public iCloud calendars are supported using their `webcal://p…-caldav.icloud.com/published/…` subscription link (fetched over HTTPS) or its HTTPS equivalent. Choose **iCloud / Google Calendar** when adding the source. Use a dedicated training calendar: anyone with the public subscription link can read its events. Private authenticated CalDAV calendars are not supported as subscription feeds. Redirects remain disabled. Adding a source does not publish workouts; review existing destination entries before enabling automatic publishing, especially when a separate tool previously uploaded them.

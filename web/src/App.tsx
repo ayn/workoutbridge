@@ -615,7 +615,7 @@ export function App({ brand = "WorkoutBridge", multiuser = false, suggestedEmail
                     <p>
                       {s.format === "finalsurge"
                         ? "Final Surge"
-                        : "Google Calendar"}{" "}
+                        : "iCal calendar"}{" "}
                       · {s.timezone}
                     </p>
                   </div>
@@ -804,7 +804,7 @@ export function App({ brand = "WorkoutBridge", multiuser = false, suggestedEmail
               Calendar
               <select name="format">
                 <option value="finalsurge">Final Surge</option>
-                <option value="generic">Google Calendar</option>
+                <option value="generic">iCloud / Google Calendar</option>
               </select>
             </label>
             <label>
@@ -818,7 +818,7 @@ export function App({ brand = "WorkoutBridge", multiuser = false, suggestedEmail
                 placeholder="https://log.finalsurge.com/delivery/ical/…"
               />
             </label>
-            <p id="calendar-link-help" className="field-help">Google sharing links work for public calendars. For a private calendar, use its Secret address in iCal format.</p>
+            <p id="calendar-link-help" className="field-help">Use an iCloud public calendar subscription link or a Google sharing link. For private Google calendars, use the Secret address in iCal format. Anyone with a public subscription link can read that calendar.</p>
             <label>
               Timezone
               <input

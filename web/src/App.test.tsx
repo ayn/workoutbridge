@@ -569,3 +569,13 @@ test("workspace brand links to the app home", async () => {
   render(<App multiuser brand="Prescribed.FIT" />);
   expect(await screen.findByRole("link", {name: "Prescribed.FIT"})).toHaveAttribute("href", "/");
 });
+
+
+test("source form explains iCloud subscriptions without exposing other calendar events", async () => {
+  vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify(initial)));
+  render(<App />);
+  await userEvent.click(await screen.findByRole("button", {name: "Sources"}));
+  await userEvent.click(screen.getByRole("button", {name: "Add source"}));
+  expect(screen.getByRole("option", {name: "iCloud / Google Calendar"})).toHaveValue("generic");
+  expect(screen.getByLabelText("Calendar link or iCal URL")).toHaveAccessibleDescription(/iCloud.*subscription link/);
+});

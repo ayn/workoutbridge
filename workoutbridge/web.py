@@ -5,6 +5,7 @@ import hmac
 import json
 import logging
 import os
+import re
 import secrets
 import sqlite3
 import threading
@@ -558,17 +559,20 @@ def create_app(
             parsed = urlsplit(url)
         except ValueError:
             raise HTTPException(
-                422, "Use a Google Calendar sharing link or an HTTPS iCal feed"
+                422, "Use a supported calendar sharing link or an HTTPS iCal feed"
             ) from None
         if (
             parsed.scheme != "https"
-            or parsed.hostname not in ("log.finalsurge.com", "calendar.google.com")
+            or not (
+                parsed.hostname in ("log.finalsurge.com", "calendar.google.com")
+                or re.fullmatch(r"p[0-9]+-caldav\.icloud\.com", parsed.hostname or "")
+            )
             or parsed.port not in (None, 443)
             or parsed.username
             or parsed.password
             or parsed.fragment
         ):
-            raise HTTPException(422, "Use a Final Surge or Google Calendar HTTPS feed")
+            raise HTTPException(422, "Use a Final Surge, Google Calendar or public iCloud feed")
         name = body.get("name", "")
         if (
             not isinstance(name, str)

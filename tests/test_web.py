@@ -358,6 +358,23 @@ class WebTests(unittest.TestCase):
         response = self.client.post("/api/v1/sources", json=body, headers=self.headers)
         self.assertEqual(response.status_code, 409)
 
+    def test_icloud_published_link_aliases_are_one_private_source(self):
+        self.login()
+        url = "webcal://p123-caldav.icloud.com/published/2/SYNTHETIC_PRIVATE_TOKEN"
+        body = {"name": "Synthetic training", "url": url, "format": "generic", "timezone": "UTC"}
+        with patch("workoutbridge.feed.build_opener") as network:
+            response = self.client.post("/api/v1/sources", json=body, headers=self.headers)
+            self.assertEqual(response.status_code, 200)
+            body["url"] = url.replace("webcal:", "https:")
+            self.assertEqual(
+                self.client.post("/api/v1/sources", json=body, headers=self.headers).status_code,
+                409,
+            )
+            network.assert_not_called()
+        state = self.client.get("/api/v1/state")
+        self.assertNotIn("SYNTHETIC_PRIVATE_TOKEN", state.text)
+        self.assertEqual(len(state.json()["sources"]), 1)
+
     def test_sources_private_and_restricted(self):
         self.login()
         for url in (
@@ -366,6 +383,10 @@ class WebTests(unittest.TestCase):
             "https://127.0.0.1/x",
             "https://log.finalsurge.com.evil.example/x",
             "https://log.finalsurge.com:444/x",
+            "https://p123-caldav.icloud.com.evil.invalid/published/2/SYNTHETIC",
+            "https://evil-p123-caldav.icloud.com/published/2/SYNTHETIC",
+            "https://p123-caldav.icloud.com/private/calendar/",
+            "webcal://127.0.0.1/published/2/SYNTHETIC",
         ):
             r = self.client.post(
                 "/api/v1/sources",

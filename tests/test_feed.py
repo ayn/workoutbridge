@@ -3,7 +3,7 @@ import io
 import unittest
 from unittest.mock import MagicMock, patch
 
-from workoutbridge.feed import read_calendar
+from workoutbridge.feed import calendar_feed_url, read_calendar
 
 
 class FeedTests(unittest.TestCase):
@@ -83,5 +83,34 @@ class GoogleCalendarLinkTests(unittest.TestCase):
         ):
             with self.subTest(url=url), patch("workoutbridge.feed.build_opener") as build:
                 with self.assertRaisesRegex(ValueError, "iCal"):
+                    read_calendar(url)
+                build.assert_not_called()
+
+
+class ICloudCalendarLinkTests(unittest.TestCase):
+    def test_webcal_and_https_published_links_use_https(self):
+        expected = "https://p123-caldav.icloud.com/published/2/SYNTHETIC_abc-123"
+        for url in (expected, expected.replace("https:", "webcal:")):
+            with self.subTest(url=url), patch("workoutbridge.feed.build_opener") as build:
+                response = MagicMock()
+                response.__enter__.return_value = response
+                response.read.return_value = b"BEGIN:VCALENDAR"
+                build.return_value.open.return_value = response
+                self.assertEqual(calendar_feed_url(url), expected)
+                self.assertEqual(read_calendar(url), b"BEGIN:VCALENDAR")
+                self.assertEqual(build.return_value.open.call_args.args[0].full_url, expected)
+
+    def test_non_public_or_unsafe_icloud_links_rejected_before_fetch(self):
+        for url in (
+            "http://p123-caldav.icloud.com/published/2/SYNTHETIC",
+            "https://user:secret@p123-caldav.icloud.com/published/2/SYNTHETIC",
+            "https://p123-caldav.icloud.com:444/published/2/SYNTHETIC",
+            "https://p123-caldav.icloud.com/published/2/SYNTHETIC#fragment",
+            "https://p123-caldav.icloud.com/published/2/SYNTHETIC?query=1",
+            "https://p123-caldav.icloud.com/private/calendar/",
+            "https://p123-caldav.icloud.com/published/2/../private",
+        ):
+            with self.subTest(url=url), patch("workoutbridge.feed.build_opener") as build:
+                with self.assertRaises(ValueError):
                     read_calendar(url)
                 build.assert_not_called()
