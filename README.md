@@ -44,7 +44,7 @@ provisional during the private pilot and will stabilize at public launch.
 
 - **Hosted service (closed pilot):** [Prescribed.FIT](https://prescribed.fit) is the
   managed option for people who do not want to run their own instance. Access is
-  currently by invitation; [contact support@prescribed.fit](mailto:support@prescribed.fit)
+  currently by invitation; [contact the maintainer](https://github.com/ayn)
   to request pilot access.
 - **Self-host today:** follow the [single-owner web deployment runbook](docs/private-web.md)
   for setup, persistent storage, authentication, scheduling, and updates. Keep the
@@ -598,7 +598,7 @@ See [contributing](CONTRIBUTING.md) for the required red/green TDD workflow.
 ## Hosting and Funding
 
 The managed service, [Prescribed.FIT](https://prescribed.fit), is in a closed pilot.
-[Contact support@prescribed.fit](mailto:support@prescribed.fit) to request access.
+[Contact the maintainer](https://github.com/ayn) to request access.
 It is developed separately from this MIT-licensed, single-owner self-hosted project.
 DIY deployments do not need
 billing, email-provider credentials, subscription configuration, or managed
