@@ -47,8 +47,7 @@ provisional during the private pilot and will stabilize at public launch.
   currently by invitation; [contact the maintainer](https://github.com/ayn)
   to request pilot access.
 - **Self-host today:** follow the [single-owner web deployment runbook](docs/private-web.md)
-  for setup, persistent storage, authentication, scheduling, and updates. Keep the
-  pilot private; it is not yet a public multi-user service.
+  for setup, persistent storage, authentication, scheduling, and updates.
 - **Local CLI:** use the [CLI guide](#cli) without running the web interface.
 
 This public repository contains the single-owner DIY app and CLI. Managed
