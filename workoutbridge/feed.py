@@ -16,8 +16,20 @@ class NoRedirect(HTTPRedirectHandler):
 
 
 def calendar_feed_url(location: str) -> str:
-    """Convert a single Google calendar sharing link without fetching a web page."""
+    """Normalize a supported calendar subscription without fetching a web page."""
     parsed = urlsplit(location)
+    if re.fullmatch(r"p[0-9]+-caldav\.icloud\.com", parsed.hostname or ""):
+        if (
+            parsed.scheme not in ("https", "webcal")
+            or parsed.username
+            or parsed.password
+            or parsed.port not in (None, 443)
+            or parsed.query
+            or parsed.fragment
+            or not re.fullmatch(r"/published/[0-9]+/[A-Za-z0-9_-]+", parsed.path)
+        ):
+            raise ValueError("Use the public iCloud calendar subscription link")
+        return parsed._replace(scheme="https").geturl()
     if parsed.hostname != "calendar.google.com":
         return location
     message = "Use a Google Calendar sharing link or its Secret address in iCal format"
