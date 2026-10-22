@@ -576,6 +576,6 @@ test("source form explains iCloud subscriptions without exposing other calendar 
   render(<App />);
   await userEvent.click(await screen.findByRole("button", {name: "Sources"}));
   await userEvent.click(screen.getByRole("button", {name: "Add source"}));
-  expect(screen.getByRole("option", {name: "iCloud / Google Calendar"})).toHaveValue("generic");
+  expect(screen.getByRole("option", {name: "iCal / ICS feed"})).toHaveValue("generic");
   expect(screen.getByLabelText("Calendar link or iCal URL")).toHaveAccessibleDescription(/iCloud.*subscription link/);
 });

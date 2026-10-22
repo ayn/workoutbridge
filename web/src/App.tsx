@@ -803,8 +803,8 @@ export function App({ brand = "WorkoutBridge", multiuser = false, suggestedEmail
             <label>
               Calendar
               <select name="format">
-                <option value="finalsurge">Final Surge</option>
-                <option value="generic">iCloud / Google Calendar</option>
+                <option value="finalsurge">Final Surge iCal</option>
+                <option value="generic">iCal / ICS feed</option>
               </select>
             </label>
             <label>
@@ -818,7 +818,7 @@ export function App({ brand = "WorkoutBridge", multiuser = false, suggestedEmail
                 placeholder="https://log.finalsurge.com/delivery/ical/…"
               />
             </label>
-            <p id="calendar-link-help" className="field-help">Use an iCloud public calendar subscription link or a Google sharing link. For private Google calendars, use the Secret address in iCal format. Anyone with a public subscription link can read that calendar.</p>
+            <p id="calendar-link-help" className="field-help">Supported sources: Final Surge, Google Calendar and iCloud. Use a public iCloud subscription link or Google sharing link. For private Google calendars, use the Secret address in iCal format. Anyone with a public subscription link can read that calendar.</p>
             <label>
               Timezone
               <input
