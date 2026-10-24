@@ -4,7 +4,9 @@ import re
 from dataclasses import replace
 
 from .calendar import Event
-from .parser import Step, parse
+from .parser import Repeat, Step, parse
+from .shorthand import cj_units, normalize_bookend, normalize_clause
+from .shorthand import clauses as split_clauses
 from .sports import event_sport
 
 METADATA = re.compile(
@@ -14,7 +16,29 @@ METADATA = re.compile(
 )
 
 
-def normalize_finalsurge(event: Event, *, recovery_choice: str = "lap") -> Event:
+def incomplete_description(title, details, sport):
+    draft = parse(
+        "; ".join(normalize_bookend(part) for part in split_clauses(details)), sport=sport
+    )
+    return bool(
+        details
+        and not draft.unresolved
+        and all(
+            isinstance(step, Step) and step.kind in ("warm_up", "cool_down") for step in draft.steps
+        )
+        and re.search(
+            r"\d\s*[x×]|\b(fartlek|tempo|strides|sprints|hills|intervals|fast|progression|workout)\b",
+            title,
+            re.I,
+        )
+    )
+
+
+def normalize_finalsurge(
+    event: Event, *, recovery_choice: str = "lap", coaching_policy: str = "strict"
+) -> Event:
+    if coaching_policy not in ("strict", "cj"):
+        raise ValueError("Unknown coaching policy")
     event = replace(
         event,
         sport=event_sport(
@@ -35,22 +59,17 @@ def normalize_finalsurge(event: Event, *, recovery_choice: str = "lap") -> Event
         for line in event.description.splitlines()
         if line.strip() and not METADATA.fullmatch(line.strip())
     )
-    detail_draft = parse(details, sport=event.sport)
-    if (
-        details
-        and not detail_draft.unresolved
-        and all(
-            isinstance(step, Step) and step.kind in ("warm_up", "cool_down")
-            for step in detail_draft.steps
-        )
-        and re.search(r"\d\s*[x×]|\b(fartlek|tempo|strides|hills|intervals|fast)\b", title[1], re.I)
-    ):
+    if incomplete_description(title[1], details, event.sport):
         return replace(event, structured_text="Incomplete description: main workout missing")
     # Never hide substantive instructions behind the title's shorter summary.
-    return _normalize(event, details or title[1], recovery_choice)
+    return _normalize(event, details or title[1], recovery_choice, coaching_policy)
 
 
-def normalize_workout(event: Event, *, recovery_choice: str = "lap") -> Event:
+def normalize_workout(
+    event: Event, *, recovery_choice: str = "lap", coaching_policy: str = "strict"
+) -> Event:
+    if coaching_policy not in ("strict", "cj"):
+        raise ValueError("Unknown coaching policy")
     event = replace(
         event,
         sport=event_sport(
@@ -72,20 +91,24 @@ def normalize_workout(event: Event, *, recovery_choice: str = "lap") -> Event:
         ):
             return replace(event, structured_text=blocks[0].strip())
         return replace(event, structured_text="Invalid structured workout section; review required")
+    if incomplete_description(event.title, event.description, event.sport):
+        return replace(event, structured_text="Incomplete description: main workout missing")
     if not parse(event.prescription, sport=event.sport).unresolved:
         return event
     if re.search(r"(?im)^Workout:\s*(?:Run|Bike|Cycling)\b", event.description):
-        return normalize_finalsurge(event, recovery_choice=recovery_choice)
+        return normalize_finalsurge(
+            event, recovery_choice=recovery_choice, coaching_policy=coaching_policy
+        )
     text = re.sub(
         r"^\s*(?:Run(?:\s*-\s*Long Run)?|Bike|Cycling|Ride):\s*",
         "",
         event.prescription,
         flags=re.I,
     )
-    return _normalize(event, text, recovery_choice)
+    return _normalize(event, text, recovery_choice, coaching_policy)
 
 
-def _normalize(event: Event, text: str, recovery_choice: str) -> Event:
+def _normalize(event: Event, text: str, recovery_choice: str, coaching_policy: str) -> Event:
     if event.sport == "cycling":
         # Only add the cycling verb to an otherwise fully supported duration or
         # distance, never strip target instructions or borrow running shorthand.
@@ -95,11 +118,25 @@ def _normalize(event: Event, text: str, recovery_choice: str) -> Event:
         return replace(event, structured_text=text)
     if not parse(text, sport=event.sport).unresolved:
         return replace(event, structured_text=text)
+    # Only explicit distance fractions: effort ratios and unitless text remain unknown.
+    text = re.sub(r"(?<![\d/])(?:1/2|½)(?=\s*(?:mile|mi|km)\b)", "0.5", text, flags=re.I)
+    text = re.sub(r"(?<![\d/])(?:3/4|¾)(?=\s*(?:mile|mi|km)\b)", "0.75", text, flags=re.I)
     clauses = []
     fallback_used = False
     transition_added = False
-    for part in text.replace("×", "x").split("+"):
-        part = part.strip()
+    pace_metadata = re.search(r"(?im)^Planned:\s*\d+(?:\.\d+)?\s*(mi|km)\b", event.description)
+    pace_unit = pace_metadata[1].lower() if pace_metadata else None
+    parts = split_clauses(text.replace("×", "x"))
+    for index, part in enumerate(parts):
+        part = normalize_bookend(part.strip().removesuffix("."))
+        if coaching_policy == "cj":
+            part = cj_units(part)
+        if (
+            re.fullmatch(r"\d+\s*x\s*(uphill|downhill)", part, re.I)
+            and index + 1 < len(parts)
+            and re.fullmatch(r"\d+\s*x\s*(uphill|downhill)\s+strides", parts[index + 1], re.I)
+        ):
+            part += " strides"
         candidate = part if part.lower().startswith("run ") else "Run " + part
         if not parse(candidate).unresolved:
             clauses.append(candidate)
@@ -152,17 +189,41 @@ def _normalize(event: Event, text: str, recovery_choice: str) -> Event:
                 f"{count} x {work} sec {effort.lower()} with "
                 f"{recovery} sec {recovery_effort.lower()} recovery"
             )
+        elif (
+            converted := normalize_clause(
+                part, pace_unit=pace_unit, coaching_policy=coaching_policy
+            )
+        ) is not None and (not converted.implied_recovery or recovery_choice == "lap"):
+            canonical = converted.text
+            fallback_used |= converted.implied_recovery
         else:
             clauses.append(part)
             continue
-        if clauses and not parse(clauses[-1]).unresolved and clauses[-1].startswith("Run "):
+        previous = parse(clauses[-1]) if clauses else None
+        current = parse(canonical)
+        if (
+            previous
+            and not previous.unresolved
+            and previous.steps
+            and isinstance(previous.steps[-1], Step)
+            and previous.steps[-1].kind == "run"
+            and previous.steps[-1].unit != "lap_button"
+            and not current.unresolved
+            and current.steps
+            and isinstance(current.steps[0], Repeat)
+        ):
             clauses.append("Run until lap")
             transition_added = True
         clauses.append(canonical)
     notes = f"Original title: {event.title}\n{event.description}"
+    if coaching_policy == "cj":
+        notes += "\nCJ policy: unitless track reps in meters, fartlek phases in minutes, hill sprints in seconds; pace arrows use a progression band; approximate pace uses ±5 sec/mi."
     if fallback_used:
         notes += "\nDefault policy: implied interval recovery until Lap between reps."
-        if any("uphill sprints with lap recovery" in clause for clause in clauses):
+        if any(
+            re.search(r"\b(?:uphill |hill )?sprints with lap recovery", clause)
+            for clause in clauses
+        ):
             notes += "\nUphill sprint policy: retain recovery until Lap after the final sprint too."
     if transition_added:
         notes += "\nRun-until-Lap transition before intervals."

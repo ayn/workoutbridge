@@ -362,6 +362,37 @@ must be positive, with the finish shorter than the total. Extra unsupported
 instructions still require review, and substantive descriptions take precedence
 over title shorthand.
 
+#### Coaching notation and opt-in CJ policy
+
+The running parser accepts explicit mile/minute/second units, fractional mile
+distances, directional strides, timed hill sprints, multi-phase fartleks and
+explicit recovery. Qualitative efforts stay notes without invented pace alerts.
+Explicit pace ranges retain native Garmin and COROS targets; elapsed rep times
+(for example `4x800m at 2:50-2:55 (1:20 rest)`) use the rep distance, while
+`3x1.25 miles at 6:30-6:40 pace (2:15 rest)` uses the stated pace unit. Abbreviated
+clock ranges such as `6:35-45` retain the minutes. Unknown instructions, missing
+main sets and unresolved choices continue requiring review.
+
+Sources default to the `strict` coaching policy. An athlete can explicitly opt
+their own source into `cj` through authenticated
+`POST /api/v1/sources/{id}/coaching-policy` with `{"policy":"cj"}`; use
+`{"policy":"strict"}` to disable it. Library callers can pass
+`coaching_policy="cj"` to either prescription normalizer. This policy:
+
+- Treats unitless track reps from 100–10,000 as meters, unitless hill-sprint
+  durations as seconds, and unitless effort phases inside repeated fartleks as minutes.
+- Treats mile-rep clock targets as per-mile paces.
+- Converts progression arrows into the full target band with a progression note,
+  retaining the original direction and prescription in destination notes.
+- Expands a single approximate pace into ±5 seconds per mile (the equivalent,
+  rounded to whole seconds, for an explicitly stated per-kilometer pace).
+
+These are athlete conversion preferences, not universal coaching rules. They do
+not select between alternatives, choose recovery ranges or repair arbitrary
+missing text. Existing implied-recovery opt-outs still apply. Original text and
+the enabled policy are retained in notes. Changing policy changes the review
+plan; existing publishing history remains authoritative for duplicate prevention.
+
 Final Surge removes past runs from the feed. A future recurring importer must
 fetch at least daily, preserve prescriptions and revisions privately, and never
 interpret disappearing events as deletion requests. More frequent polling can
