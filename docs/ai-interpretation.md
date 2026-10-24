@@ -37,11 +37,12 @@ uv run --locked --extra ai python -m workoutbridge.ai_benchmark \
   --models gpt-6-luna gpt-6.1-sol --monthly-budget 5
 ```
 
-The seed corpus contains 43 hand-specified synthetic cases. Reports distinguish
+The seed corpus contains 47 hand-specified synthetic cases. Reports distinguish
 correct conversions, incorrect candidates, false clearances, correct reviews,
 unnecessary reviews and failed requests. Unsupported sports are reported
 separately, not credited as model successes. Executable steps and notes are
-compared strictly; semantically equivalent wording may need human adjudication.
+compared strictly; descriptive source-note matching tolerates capitalization only.
+Other semantically equivalent wording may need human adjudication.
 This small corpus is not representative launch-quality evidence. Extend it with
 checked synthetic fixtures and an independent holdout set; never commit real
 athlete data or raw private feeds. A model's confidence score is not acceptance
@@ -82,3 +83,13 @@ private records for local inspection, never public issue reports.
 Sources: [Luna](https://developers.openai.com/api/docs/models/gpt-6-luna),
 [Sol](https://developers.openai.com/api/docs/models/gpt-6.1-sol),
 [Structured Outputs](https://developers.openai.com/api/docs/guides/structured-outputs).
+
+The approved recovery policy applies to the AI interpreter too: clearly specified
+work with missing or unclear recovery duration uses recovery/rest until Lap.
+An identifiable recovery phase with no amount can use `Rest until lap` inside a
+cycle; explicit durations, distances and movement remain prescribed. The unclear
+source wording stays verbatim in notes. Applying this documented default is not an
+unsupported assumption and must not by itself force `unresolved`. Missing work,
+contradictory counts, primary alternatives and unsupported targets still require
+review. AI candidates remain separate and always require review before publishing.
+The shadow-v6 prompt/cache version distinguishes results produced under this policy.

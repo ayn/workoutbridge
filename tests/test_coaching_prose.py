@@ -148,7 +148,6 @@ class CoachingProseTests(unittest.TestCase):
 
     def test_unknown_recovery_and_malformed_numbers_still_require_review(self):
         for text in (
-            "4x1k at 4:00-4:05 (6:26-6:34 pace) (choose recovery)",
             "3x (2:00 hard: decide recovery)",
             "4x1k at 4:00-4:05 (90s rest) (4 min rest after 3rd)",
             "Right into 0.75 mile hard after last unknown work",

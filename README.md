@@ -474,6 +474,16 @@ is accepted only when the preceding continuous block ends with that exact phase.
 An optional easy-double suffix stays a note on a complete primary workout; it
 never creates another workout or makes an unknown primary instruction valid.
 Bare `Rest` or `short rest` becomes rest until Lap under the default policy.
+A clearly identifiable recovery with a missing or unclear duration defaults to
+recovery/rest until Lap. This covers full recovery, rest as needed, choose recovery,
+and recovery effort without an amount inside a complete interval pattern. Original
+recovery wording stays in a recovery-step `[buffer note: ...]`; no numeric duration
+is invented. An explicit but unlabeled recovery time remains a timed rest. Paced
+and elapsed-time running reps also support `with lap recovery`. A separate unclear
+after-set rest becomes a Lap-ended rest without changing timed between-rep recovery.
+Both strict mode and `--interval-recovery review` retain review for these added buffers.
+This rule does not supply missing work amounts or select a primary workout alternative.
+
 The default also retains the final Lap recovery after strides and between
 consecutive interval blocks. Timed rep rests keep their existing final-rest
 semantics; strict mode retains the former implied-Lap behavior. Explicit canonical

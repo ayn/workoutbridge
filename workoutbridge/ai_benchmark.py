@@ -122,7 +122,7 @@ CASES = (
     Case(
         "missing-recovery",
         "Five 20-second uphill sprints. No recovery or transition instructions were supplied.",
-        None,
+        "5 x 20 sec uphill sprints with lap recovery",
     ),
     Case("either-or", "Cross-train or jog depending on how your leg feels.", None),
     Case("range-choice", "Run 6 to 8 miles easy. Choose a distance yourself.", None),
@@ -148,11 +148,31 @@ CASES = (
     Case(
         "unknown-recovery",
         "Run 4 x 1 minute uphill, then jog downhill until ready for the next rep.",
-        None,
+        "4 x 60 sec uphill with lap recovery jog down",
     ),
     Case(
         "contradictory-count",
         "Do four intervals, specifically repeat the work/rest cycle six times.",
+        None,
+    ),
+    Case(
+        "lap-paced-missing",
+        "Run three 800-meter reps in 3:10 to 3:20 each. Recovery duration was not specified.",
+        "3 x 800 m in 3:10-3:20 sec with lap recovery",
+    ),
+    Case(
+        "lap-timed-vague",
+        "Run hard for 45 seconds four times. Recover until ready between reps, with no recovery after the final run.",
+        "4 x 45 sec hard with lap recovery",
+    ),
+    Case(
+        "lap-standalone-vague",
+        "Run 2 miles easy, rest as needed, then run 1 mile easy.",
+        "Run 2 miles easy; Rest until lap; Run 1 mile easy",
+    ),
+    Case(
+        "missing-work-not-recovery",
+        "Run four hard intervals of an unspecified duration. Recover until ready between them.",
         None,
     ),
 )
@@ -174,7 +194,9 @@ def score(case, result):
     if result["status"] != "candidate":
         return "unnecessary_review"
     expected = parse(case.expected, sport=case.sport).to_dict()
-    notes_supported = all(note in case.text for note in result.get("notes", []))
+    notes_supported = all(
+        note.casefold() in case.text.casefold() for note in result.get("notes", [])
+    )
     return (
         "correct"
         if notes_supported and semantic(result["draft"]) == semantic(expected)

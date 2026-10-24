@@ -25,3 +25,20 @@ class AIGrammarTests(unittest.TestCase):
                 self.assertFalse(draft.unresolved)
                 garmin_payload("Synthetic grammar", "", draft)
                 coros_payload("Synthetic grammar", "", draft)
+
+    def test_approved_lap_policy_does_not_require_recovery_assumptions(self):
+        self.assertIn("APPROVED RECOVERY POLICY", INSTRUCTIONS)
+        self.assertIn(
+            "do not list this approved policy as an assumption or unresolved item", INSTRUCTIONS
+        )
+        self.assertNotIn("No implicit Lap/recovery policy is enabled", INSTRUCTIONS)
+        for text in (
+            "4 x 800 m in 3:00-3:05 sec with lap recovery",
+            "Rest until lap",
+            "4 x [Run 45 sec hard | Rest until lap]",
+        ):
+            self.assertIn(text, INSTRUCTIONS)
+            draft = parse(text)
+            self.assertFalse(draft.unresolved)
+            garmin_payload("Synthetic", "", draft)
+            coros_payload("Synthetic", "", draft)

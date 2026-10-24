@@ -48,6 +48,19 @@ class AIBenchmarkTests(unittest.TestCase):
             score(case, {**result, "notes": ["Run another mile"]}), "incorrect_candidate"
         )
 
+    def test_note_capitalization_is_not_a_semantic_change_but_extra_work_is(self):
+        case = next(case for case in CASES if case.name == "unknown-recovery")
+        result = {
+            "status": "candidate",
+            "draft": parse(case.expected).to_dict(),
+            "notes": ["Jog downhill until ready for the next rep."],
+        }
+        self.assertEqual(score(case, result), "correct")
+        self.assertEqual(
+            score(case, {**result, "notes": ["Jog downhill then add two reps"]}),
+            "incorrect_candidate",
+        )
+
     def test_evaluation_counts_failures_separately_from_correct_abstention(self):
         engine = Mock()
         engine.model = "synthetic"
