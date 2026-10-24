@@ -46,7 +46,7 @@ class CoachingRangeTests(unittest.TestCase):
 
     def test_range_policy_does_not_resolve_conditional_distance_or_repetition_choices(self):
         for text in (
-            "5-6 miles if injured skip",
+            "5-6 miles or 4 miles if injured",
             "4-6x800m at 3:00 (1 min rest)",
             "5-6 miles or cross train",
         ):
