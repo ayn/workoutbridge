@@ -66,6 +66,45 @@ class WebTests(unittest.TestCase):
         ).json()["id"]
         return rule, source, profile
 
+    def test_new_and_existing_sources_use_shared_defaults_with_strict_opt_out(self):
+        import json
+        import sqlite3
+
+        from workoutbridge.calendar import Event
+
+        rule, source, _ = self.automatic_rule()
+        saved = self.client.get("/api/v1/state").json()["sources"][0]
+        self.assertEqual(saved["coaching_policy"], "athlete_preferences")
+        events = [Event(source, "range", "", "2030-01-01", "Run: 5-6 miles easy", "")]
+        with (
+            patch("workoutbridge.web.read_calendar", return_value=b"synthetic"),
+            patch("workoutbridge.web.import_calendar", return_value=events),
+        ):
+            for existing in (False, True):
+                if existing:
+                    with sqlite3.connect(self.root / "web.sqlite") as db:
+                        saved = json.loads(
+                            db.execute(
+                                "SELECT body FROM objects WHERE kind='source' AND id=?", (source,)
+                            ).fetchone()[0]
+                        )
+                        saved.pop("coaching_policy")
+                        db.execute(
+                            "UPDATE objects SET body=? WHERE kind='source' AND id=?",
+                            (json.dumps(saved), source),
+                        )
+                self.app.state.poll_once(rule)
+                item = self.client.get("/api/v1/state").json()["plans"][0]["items"][0]
+                self.assertNotIn("error", item)
+            response = self.client.post(
+                f"/api/v1/sources/{source}/coaching-policy",
+                json={"policy": "strict"},
+                headers=self.headers,
+            )
+            self.assertEqual(response.status_code, 200)
+            self.app.state.poll_once(rule)
+            self.assertIn("error", self.client.get("/api/v1/state").json()["plans"][0]["items"][0])
+
     def test_coaching_policy_is_validated_persisted_and_scoped_to_source(self):
         from workoutbridge.calendar import Event
 
@@ -78,6 +117,7 @@ class WebTests(unittest.TestCase):
                 ).status_code,
                 422,
             )
+        self.client.post(endpoint, json={"policy": "strict"}, headers=self.headers)
         events = [Event(source, "run", "", "2030-01-01", "Run: 3x1200", "")]
         with (
             patch("workoutbridge.web.read_calendar", return_value=b"synthetic"),

@@ -12,7 +12,11 @@ class TotalDistanceRunTests(unittest.TestCase):
 
     def test_with_intervals_uses_approved_lap_bookends_and_preserves_total(self):
         text = "10 miles easy with 6 x 20 seconds fast/2 min easy"
-        self.assertTrue(parse(normalize_workout(self.event(text)).prescription).unresolved)
+        self.assertTrue(
+            parse(
+                normalize_workout(self.event(text), coaching_policy="strict").prescription
+            ).unresolved
+        )
         event = normalize_workout(self.event(text), coaching_policy="cj")
         draft = parse(event.prescription)
         self.assertFalse(draft.unresolved)

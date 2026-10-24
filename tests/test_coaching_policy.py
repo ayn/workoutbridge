@@ -9,7 +9,7 @@ class CoachingPolicyTests(unittest.TestCase):
     def event(self, text):
         return Event("synthetic", "policy", "", "2030-01-01", "Run: " + text, "")
 
-    def test_unitless_cj_shorthand_is_explicit_opt_in(self):
+    def test_strict_policy_opts_out_of_unitless_shorthand(self):
         for text, duration, unit in (
             ("3x1200", 1200, "meters"),
             ("3x12 hill sprints", 12, "seconds"),
@@ -17,7 +17,9 @@ class CoachingPolicyTests(unittest.TestCase):
             ("3x (1 hard/1 easy)", 60, "seconds"),
         ):
             event = self.event(text)
-            self.assertTrue(parse(normalize_workout(event).prescription).unresolved)
+            self.assertTrue(
+                parse(normalize_workout(event, coaching_policy="strict").prescription).unresolved
+            )
             normalized = normalize_workout(event, coaching_policy="cj")
             draft = parse(normalized.prescription)
             self.assertFalse(draft.unresolved, text)
@@ -29,7 +31,9 @@ class CoachingPolicyTests(unittest.TestCase):
     def test_pace_progression_band_preserves_direction_in_notes(self):
         text = "4x1 mile at 6:25 -> 6:10 pace (2:00 rest)"
         event = self.event(text)
-        self.assertTrue(parse(normalize_workout(event).prescription).unresolved)
+        self.assertTrue(
+            parse(normalize_workout(event, coaching_policy="strict").prescription).unresolved
+        )
         normalized = normalize_workout(event, coaching_policy="cj")
         draft = parse(normalized.prescription)
         self.assertFalse(draft.unresolved)
@@ -41,7 +45,9 @@ class CoachingPolicyTests(unittest.TestCase):
 
     def test_approximate_pace_tolerance_is_five_seconds_per_mile(self):
         event = self.event("4 miles tempo at ~ 6:40/mi")
-        self.assertTrue(parse(normalize_workout(event).prescription).unresolved)
+        self.assertTrue(
+            parse(normalize_workout(event, coaching_policy="strict").prescription).unresolved
+        )
         draft = parse(normalize_workout(event, coaching_policy="cj").prescription)
         self.assertFalse(draft.unresolved)
         self.assertAlmostEqual(draft.steps[0].speed_min, 1609.344 / 405)
@@ -72,4 +78,6 @@ class CoachingPolicyTests(unittest.TestCase):
                 self.assertFalse(parse(current.prescription).unresolved)
                 self.assertIn("Athlete conversion preferences", current.description)
                 self.assertNotIn("CJ policy", current.description)
-                self.assertTrue(parse(normalizer(event).prescription).unresolved)
+                self.assertTrue(
+                    parse(normalizer(event, coaching_policy="strict").prescription).unresolved
+                )

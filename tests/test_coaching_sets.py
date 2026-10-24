@@ -37,7 +37,11 @@ class CoachingSetTests(unittest.TestCase):
             "100x (100x500m at 1:45-1:48 w/ 60s rest) 3:00 rest between sets",
             "2x (3x500m at 1:45-1:48 w/ 60s rest) 3:00 rest between sets if injured stop",
         ):
-            self.assertTrue(parse(normalize_workout(self.event(text)).prescription).unresolved)
+            self.assertTrue(
+                parse(
+                    normalize_workout(self.event(text), coaching_policy="strict").prescription
+                ).unresolved
+            )
 
     def test_timed_hills_keep_direction_and_recovery_movement_until_lap(self):
         for text, direction, recovery in (
@@ -140,12 +144,19 @@ class CoachingSetTests(unittest.TestCase):
             "~ 2hours easy/moderate",
         ):
             self.assertFalse(
-                parse(normalize_workout(self.event(text)).prescription).unresolved, text
+                parse(
+                    normalize_workout(self.event(text), coaching_policy="strict").prescription
+                ).unresolved,
+                text,
             )
 
     def test_cj_unitless_track_distances_with_effort_are_opt_in(self):
         text = "4x~150 fast (2:30 rest)"
-        self.assertTrue(parse(normalize_workout(self.event(text)).prescription).unresolved)
+        self.assertTrue(
+            parse(
+                normalize_workout(self.event(text), coaching_policy="strict").prescription
+            ).unresolved
+        )
         draft = parse(normalize_workout(self.event(text), coaching_policy="cj").prescription)
         self.assertFalse(draft.unresolved)
         self.assertEqual(draft.steps[0].steps[0].duration, 150)

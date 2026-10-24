@@ -15,7 +15,11 @@ class CoachingRangeTests(unittest.TestCase):
             ("5-6 miles easy", 6 * 1609.344, "5-6 miles"),
             ("10–12 km easy", 12000, "10–12 km"),
         ):
-            self.assertTrue(parse(normalize_workout(self.event(text)).prescription).unresolved)
+            self.assertTrue(
+                parse(
+                    normalize_workout(self.event(text), coaching_policy="strict").prescription
+                ).unresolved
+            )
             event = normalize_workout(self.event(text), coaching_policy="cj")
             draft = parse(event.prescription)
             self.assertFalse(draft.unresolved)
@@ -26,7 +30,11 @@ class CoachingRangeTests(unittest.TestCase):
 
     def test_recovery_range_uses_longer_time_with_range_on_recovery_only(self):
         text = "4x800m at 2:55-3:00 (2:30-3:00 rest)"
-        self.assertTrue(parse(normalize_workout(self.event(text)).prescription).unresolved)
+        self.assertTrue(
+            parse(
+                normalize_workout(self.event(text), coaching_policy="strict").prescription
+            ).unresolved
+        )
         event = normalize_workout(self.event(text), coaching_policy="cj")
         draft = parse(event.prescription)
         self.assertFalse(draft.unresolved)
@@ -89,7 +97,11 @@ class CoachingRangeTests(unittest.TestCase):
 
     def test_approximate_track_time_uses_the_same_approved_pace_tolerance(self):
         text = "4x1000m at ~ 4:00 (1:30 rest)"
-        self.assertTrue(parse(normalize_workout(self.event(text)).prescription).unresolved)
+        self.assertTrue(
+            parse(
+                normalize_workout(self.event(text), coaching_policy="strict").prescription
+            ).unresolved
+        )
         event = normalize_workout(self.event(text), coaching_policy="cj")
         draft = parse(event.prescription)
         self.assertFalse(draft.unresolved)

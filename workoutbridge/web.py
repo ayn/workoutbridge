@@ -26,7 +26,12 @@ from .calendar import Event, import_calendar
 from .cli import review_item
 from .feed import calendar_feed_url, read_calendar
 from .garmin import GarminProvider
-from .prescriptions import canonical_coaching_policy, normalize_finalsurge, normalize_workout
+from .prescriptions import (
+    DEFAULT_COACHING_POLICY,
+    canonical_coaching_policy,
+    normalize_finalsurge,
+    normalize_workout,
+)
 from .profiles import load_profile, profile_path
 from .publishing import Publisher, digest
 from .reviewed import review_progression
@@ -217,7 +222,7 @@ def create_app(
                 profile["account_id"],
                 normalize(
                     event,
-                    coaching_policy=source.get("coaching_policy", "strict"),
+                    coaching_policy=source.get("coaching_policy", DEFAULT_COACHING_POLICY),
                     distance_unit=source.get("distance_unit", "auto"),
                 ),
             )
@@ -652,6 +657,7 @@ def create_app(
                 "format": body["format"],
                 "timezone": body["timezone"],
                 "distance_unit": distance_unit,
+                "coaching_policy": DEFAULT_COACHING_POLICY,
             },
         )
         return {"id": key}

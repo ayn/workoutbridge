@@ -19,7 +19,7 @@ class PrescriptionVariantTests(unittest.TestCase):
         for text in ("Run: 8.5 Miles easy.", "Run: 1 mile easy", "Run: 35 minutes easy."):
             self.assertFalse(self.draft(text).unresolved, text)
         for text in ("Run: 8 miles easy. Add another set", "Run: 8 miles easy... coach to clarify"):
-            self.assertTrue(self.draft(text).unresolved)
+            self.assertTrue(self.draft(text, coaching_policy="strict").unresolved)
 
     def test_directional_strides_and_shared_noun_keep_terrain_and_final_recovery(self):
         for text in (
@@ -131,7 +131,7 @@ class PrescriptionVariantTests(unittest.TestCase):
             "Run: 8 miles + 3x3601s hill sprints",
             "Run: 8 miles + 4x (2 min hard; choose recovery)",
         ):
-            self.assertTrue(self.draft(text).unresolved, text)
+            self.assertTrue(self.draft(text, coaching_policy="strict").unresolved, text)
         self.assertTrue(self.draft("Run: 5x250m", "Warm up 1 mile").unresolved)
 
     def test_generic_repeat_grammar_rejects_nested_empty_or_excessive_cycles(self):
@@ -170,7 +170,7 @@ class PrescriptionVariantTests(unittest.TestCase):
             "Run: 3x (1 mile at ~ 6:30 pace; 1 mile moderate)",
             "Run: 3x (1 mile @ ~ 6:30 pace; 1 mile moderate)",
         ):
-            self.assertTrue(self.draft(text).unresolved)
+            self.assertTrue(self.draft(text, coaching_policy="strict").unresolved)
 
     def test_explicit_rest_phase_is_retained_after_every_cycle(self):
         draft = self.draft("Run: 8 miles + 3x (2 min hard; 90s rest)")

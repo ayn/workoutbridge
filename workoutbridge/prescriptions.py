@@ -9,6 +9,8 @@ from .shorthand import clauses as split_clauses
 from .shorthand import infer_shorthand_units, normalize_bookend, normalize_clause
 from .sports import event_sport
 
+DEFAULT_COACHING_POLICY = "athlete_preferences"
+
 METADATA = re.compile(
     r"(?:Workout:\s*(?:Run|Bike|Cycling)(?:\s*-\s*(?:Easy|Moderate|Hard|Long Run))?"
     r"|Planned:\s*(?:\d+(?:\.\d+)?\s*(?:mi|km)(?:\s*~\s*\d+:\d{2}:\d{2})?|\d+:\d{2}:\d{2}))",
@@ -47,7 +49,7 @@ def normalize_finalsurge(
     event: Event,
     *,
     recovery_choice: str = "lap",
-    coaching_policy: str = "strict",
+    coaching_policy: str = DEFAULT_COACHING_POLICY,
     distance_unit: str = "auto",
 ) -> Event:
     coaching_policy = canonical_coaching_policy(coaching_policy)
@@ -83,7 +85,7 @@ def normalize_workout(
     event: Event,
     *,
     recovery_choice: str = "lap",
-    coaching_policy: str = "strict",
+    coaching_policy: str = DEFAULT_COACHING_POLICY,
     distance_unit: str = "auto",
 ) -> Event:
     coaching_policy = canonical_coaching_policy(coaching_policy)
