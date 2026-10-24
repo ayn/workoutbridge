@@ -155,6 +155,18 @@ def _normalize(
     parts = split_clauses(text.replace("×", "x"))
     for index, part in enumerate(parts):
         part = normalize_bookend(part.strip().removesuffix("."))
+        original_part = part
+        condition = None
+        if coaching_policy == "cj" and len(parts) == 1:
+            condition = re.fullmatch(r"(.+?)\s+(if\s+\S[^\[\];\n|]{0,249})", part, re.I)
+            if condition and re.search(r"\d|\b(then|also|add|followed|plus)\b", condition[2], re.I):
+                condition = None
+            if condition is None:
+                condition = re.fullmatch(
+                    r"(.+?)\.\s+(Optional easy double(?: or x-train)?)", part, re.I
+                )
+        if condition:
+            part = condition[1].strip().removesuffix(".")
         if coaching_policy == "cj":
             part = cj_units(part)
             distance_range = re.fullmatch(
@@ -179,6 +191,18 @@ def _normalize(
         ):
             part += " strides"
         candidate = part if part.lower().startswith("run ") else "Run " + part
+        if condition:
+            nominal = parse(candidate)
+            if (
+                nominal.unresolved
+                or len(nominal.steps) != 1
+                or not isinstance(nominal.steps[0], Step)
+                or nominal.steps[0].kind != "run"
+                or nominal.steps[0].unit != "meters"
+            ):
+                clauses.append(original_part)
+                continue
+            candidate += f" [condition note: {condition[2]}]"
         if not parse(candidate).unresolved:
             clauses.append(candidate)
             continue
@@ -260,7 +284,7 @@ def _normalize(
     if unspecified_distance_used:
         notes += f"\nUnspecified distances interpreted as {bare_unit} from feed metadata or source preference."
     if coaching_policy == "cj":
-        notes += "\nCJ policy: unitless track reps in meters, fartlek phases in minutes, hill sprints in seconds; pace arrows use a progression band; approximate pace uses ±5 sec/mi; distance/recovery ranges use the longer bound with the original range on the step."
+        notes += "\nCJ policy: unitless track reps in meters, fartlek phases in minutes, hill sprints in seconds; pace arrows use a progression band; approximate pace uses ±5 sec/mi; distance/recovery ranges use the longer bound with the original range on the step; simple conditions stay on the nominal run as athlete-decision notes."
     if fallback_used:
         notes += "\nDefault policy: implied interval recovery until Lap between reps."
         if any(

@@ -387,6 +387,11 @@ Explicit pace ranges retain native Garmin and COROS targets; elapsed rep times
 clock ranges such as `6:35-45` retain the minutes. Unknown instructions, missing
 main sets and unresolved choices continue requiring review.
 
+The grammar is shared across coaches: `plus`, top-level commas, singular time
+units and slash-separated work/easy cycles are supported wherever the full
+instruction is explicit. Slashes inside fractions and pace units are preserved.
+No coach name is used to select a different wording parser.
+
 Repeated track sets such as
 `2x (3x500m at 1:45-1:48 w/ 60s rest) 3:00 rest between sets` retain each set's
 native repeat group and insert the set recovery only between groups. The final
@@ -417,12 +422,18 @@ their own source into `cj` through authenticated
 - Selects the longer distance for simple distance ranges and the longer recovery
   for explicit recovery ranges. The original range is retained on that specific
   run or recovery step, not only in overall workout notes.
+- Schedules a single nominal distance run with a simple `if ...` condition or an
+  optional easy-double instruction in that run's note. The athlete decides whether
+  to perform or adapt it. Additional executable instructions, conditional sets,
+  unclear condition scope and primary alternatives still require review.
 
 These are athlete conversion preferences, not universal coaching rules. They do
 not select between alternatives, choose variable repetition counts or repair arbitrary
 missing text. Existing implied-recovery opt-outs still apply. Original text and
 the enabled policy are retained in notes. Changing policy changes the review
 plan; existing publishing history remains authoritative for duplicate prevention.
+The legacy `cj` preset name groups these opted-in choices; its wording rules
+remain the same shared English grammar used for every source.
 
 Final Surge removes past runs from the feed. A future recurring importer must
 fetch at least daily, preserve prescriptions and revisions privately, and never

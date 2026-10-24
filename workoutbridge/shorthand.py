@@ -8,12 +8,15 @@ from .parser import (
     EFFORT,
     EFFORT_QUALIFIER,
     FACTORS,
+    TIME_UNITS,
     Repeat,
     Step,
     clock_label,
     clock_seconds,
     parse,
 )
+
+DURATION_UNITS = rf"(?:{TIME_UNITS}|s|')"
 
 
 @dataclass(frozen=True)
@@ -40,9 +43,17 @@ def clauses(text):
             depth -= 1
             if depth < 0:
                 return [text]
-        elif char in "+;\n" and depth == 0:
+        elif depth == 0 and (
+            char in "+;,\n"
+            or (
+                i > 0
+                and text[i - 1].isspace()
+                and text[i : i + 4].lower() == "plus"
+                and text[i + 4 : i + 5].isspace()
+            )
+        ):
             parts.append(text[start:i].strip())
-            start = i + 1
+            start = i + (4 if text[i : i + 4].lower() == "plus" else 1)
     if depth:
         return [text]
     parts.append(text[start:].strip())
@@ -65,12 +76,10 @@ def seconds(text):
     if match := re.fullmatch(r"(\d+:[0-5]\d)(?:\s*(?:min|mins|minutes))?", text):
         value = clock_seconds(match[1])
     else:
-        match = re.fullmatch(
-            r"(\d+(?:\.\d+)?)\s*(s|sec|secs|second|seconds|min|mins|minute|minutes|')", text
-        )
+        match = re.fullmatch(rf"(\d+(?:\.\d+)?)\s*({DURATION_UNITS})", text)
         if not match:
             return None
-        value = float(match[1]) * (1 if match[2].startswith("s") else 60)
+        value = float(match[1]) * {"s": 1, "'": 60}.get(match[2], FACTORS.get(match[2]))
     return value if 0 < value <= 86400 else None
 
 
@@ -300,7 +309,7 @@ def normalize_clause(part, *, pace_unit=None, coaching_policy="strict"):
                 work + "; " + recovery_annotation(recovery, span, scalar_rest[3].lower())
             )
     timed_rest = re.fullmatch(
-        rf"(\d+)\s*x\s*(\d+(?:\.\d+)?\s*(?:s|sec|seconds|min|mins|minutes))(?:\s+({EFFORT}))?\s*\(([^()]*)\s+rest\)",
+        rf"(\d+)\s*x\s*(\d+(?:\.\d+)?\s*{DURATION_UNITS})(?:\s+({EFFORT}))?\s*\(([^()]*)\s+rest\)",
         part,
         re.I,
     )
@@ -317,7 +326,7 @@ def normalize_clause(part, *, pace_unit=None, coaching_policy="strict"):
             )
         )
     hill = re.fullmatch(
-        rf"(\d+)\s*x\s*(~?\s*\d+(?:\.\d+)?\s*(?:s|sec|secs|seconds|min|mins|minutes))\s+"
+        rf"(\d+)\s*x\s*(~?\s*\d+(?:\.\d+)?\s*{DURATION_UNITS})\s+"
         rf"(uphill|downhill|hills|hill strides|strides uphill|strides downhill)(?:\s+({EFFORT}))?"
         r"(?:\s*\((jog down|walk down|jog up)\))?",
         part,
@@ -389,7 +398,7 @@ def normalize_clause(part, *, pace_unit=None, coaching_policy="strict"):
         return Conversion(f"{stride[1]} {direction}strides with lap recovery", True)
 
     timed = re.fullmatch(
-        rf"(\d+)\s*x\s*(\d+(?:\.\d+)?\s*(?:s|sec|secs|seconds|min|mins|minutes|'))\s+"
+        rf"(\d+)\s*x\s*(\d+(?:\.\d+)?\s*{DURATION_UNITS})\s+"
         rf"((?:uphill |downhill |hill |fast |hard |smooth )?(?:strides|sprints)|{EFFORT})",
         part,
         re.I,
@@ -412,12 +421,21 @@ def normalize_clause(part, *, pace_unit=None, coaching_policy="strict"):
             f"{count} x {amount} {unit.lower()} {label.lower()} with lap recovery", True
         )
 
-    repeated = re.fullmatch(r"(\d+)\s*x\s*\((.*)\)", part, re.I | re.S)
-    if repeated and "(" not in repeated[2] and ")" not in repeated[2]:
-        phases = re.split(r"\s*[,;+]\s*", repeated[2].strip())
+    repeated = re.fullmatch(r"(\d+)\s*x\s*(?:\((.*)\)|([^()]+))", part, re.I | re.S)
+    if (
+        repeated
+        and "(" not in (repeated[2] or repeated[3])
+        and ")" not in (repeated[2] or repeated[3])
+    ):
+        body = (repeated[2] or repeated[3]).strip()
+        phases = re.split(
+            rf"\s*[,;+]\s*|\s+plus\s+|(?<!\d)/\s*(?=~?(?:\d+:[0-5]\d\b|\d+(?:\.\d+)?\s*(?:{TIME_UNITS}|s|miles|mile|mi|km|m)\b))",
+            body,
+            flags=re.I,
+        )
         duration = r"(?:\d+(?:\.\d+)?\s*(?:seconds|secs|sec|s|minutes|mins|min)|\d+:[0-5]\d)"
         adjacent = re.fullmatch(
-            rf"\s*({duration}\s+{EFFORT})\s+({duration}\s+{EFFORT})\s*", repeated[2], re.I
+            rf"\s*({duration}\s+{EFFORT})\s+({duration}\s+{EFFORT})\s*", body, re.I
         )
         if len(phases) == 1 and adjacent:
             phases = [adjacent[1], adjacent[2]]

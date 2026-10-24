@@ -387,8 +387,7 @@ def parse(text: str, *, sport: str = "running") -> Draft:
     unresolved: list[str] = []
     for clause in filter(None, (part.strip() for part in text.split(";"))):
         annotation = re.fullmatch(
-            r"(.+?) \[(distance|recovery) note: (\d+(?::[0-5]\d|\.\d+)?\s*[-–]\s*\d+(?::[0-5]\d|\.\d+)?"
-            r"(?:\s*(?:miles|mile|mi|km|minutes|mins|min|seconds|sec|s))?(?:\s+(?:rest|easy|walk/jog))?)\]",
+            r"(.+?) ((?:\[(?:distance|recovery|condition) note: [^\[\];\n|]+\]\s*)+)",
             clause,
             re.I,
         )
@@ -398,13 +397,44 @@ def parse(text: str, *, sport: str = "running") -> Draft:
             )
             item = base.steps[0] if base and not base.unresolved and len(base.steps) == 1 else None
             target = item.steps[-1] if isinstance(item, Repeat) else item
-            wanted = "meters" if annotation[2].lower() == "distance" else "seconds"
-            if (
-                target
-                and target.unit == wanted
-                and (not isinstance(item, Repeat) or wanted == "seconds")
-            ):
-                target = replace(target, note="; ".join(filter(None, (target.note, annotation[3]))))
+            notes = re.findall(
+                r"\[(distance|recovery|condition) note: ([^\[\];\n|]+)\]", annotation[2], re.I
+            )
+            valid = (
+                target is not None
+                and len(notes) <= 2
+                and len({kind.lower() for kind, _ in notes}) == len(notes)
+            )
+            for kind, value in notes:
+                kind = kind.lower()
+                if kind == "condition":
+                    valid &= bool(
+                        target
+                        and target.kind == "run"
+                        and target.unit == "meters"
+                        and not isinstance(item, Repeat)
+                        and re.fullmatch(
+                            r"(?:if\s+\S.{0,249}|Optional easy double(?: or x-train)?)", value, re.I
+                        )
+                    )
+                else:
+                    wanted = "meters" if kind == "distance" else "seconds"
+                    valid &= bool(
+                        target
+                        and target.unit == wanted
+                        and (not isinstance(item, Repeat) or wanted == "seconds")
+                        and len(value) <= 80
+                        and re.fullmatch(
+                            r"\d+(?::[0-5]\d|\.\d+)?\s*[-–]\s*\d+(?::[0-5]\d|\.\d+)?(?:\s*(?:miles|mile|mi|km|minutes|mins|min|seconds|sec|s))?(?:\s+(?:rest|easy|walk/jog))?",
+                            value,
+                            re.I,
+                        )
+                    )
+            if valid:
+                target = replace(
+                    target,
+                    note="; ".join(filter(None, (target.note, *(value for _, value in notes)))),
+                )
                 steps.append(
                     replace(item, steps=(*item.steps[:-1], target))
                     if isinstance(item, Repeat)
