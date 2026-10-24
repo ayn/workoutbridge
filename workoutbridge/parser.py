@@ -186,6 +186,21 @@ def interval(clause: str, sport: str = "running") -> Repeat | None:
                 Step("rest", None, "lap_button"),
             ),
         )
+    sprints = re.fullmatch(
+        r"(\d+) x (\d+) sec uphill sprints with lap recovery", clause, re.IGNORECASE
+    )
+    if sprints:
+        count, seconds = map(int, sprints.groups())
+        if not 1 <= count <= 100 or not 0 < seconds <= 3600:
+            return None
+        return Repeat(
+            count,
+            (
+                Step("run", seconds, "seconds", note="uphill sprint"),
+                Step("rest", None, "lap_button"),
+            ),
+            skip_last_recovery=False,
+        )
     match = INTERVAL.fullmatch(clause)
     if not match:
         return None
@@ -225,6 +240,35 @@ def parse(text: str, *, sport: str = "running") -> Draft:
     steps: list[Step | Repeat] = []
     unresolved: list[str] = []
     for clause in filter(None, (part.strip() for part in text.split(";"))):
+        fast_finish = (
+            re.fullmatch(
+                r"Run (\d+(?:\.\d+)?) (miles|mi) (?:w/|with) last "
+                r"(\d+(?:\.\d+)?) (?:miles|mi) fast",
+                clause,
+                re.I,
+            )
+            if sport == "running"
+            else None
+        )
+        if fast_finish:
+            total, _, finish = fast_finish.groups()
+            total, amount = float(total), float(finish)
+            if not 0 < amount < total < float("inf") or total * FACTORS["mi"] == float("inf"):
+                unresolved.append(clause)
+                continue
+            steps.extend(
+                (
+                    Step("run", (total - amount) * FACTORS["mi"], "meters", display_unit="mi"),
+                    Step(
+                        "run",
+                        amount * FACTORS["mi"],
+                        "meters",
+                        note=f"last {finish} miles fast",
+                        display_unit="mi",
+                    ),
+                )
+            )
+            continue
         progression = (
             re.fullmatch(
                 r"Run (\d+(?:\.\d+)?) (?:miles|mi) progression from (\d{1,2}:[0-5]\d) to (\d{1,2}:[0-5]\d)/mi",
