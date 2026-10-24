@@ -86,11 +86,15 @@ class WebTests(unittest.TestCase):
             self.app.state.poll_once(rule)
             self.assertIn("error", self.client.get("/api/v1/state").json()["plans"][0]["items"][0])
 
-            response = self.client.post(endpoint, json={"policy": "cj"}, headers=self.headers)
+            response = self.client.post(
+                endpoint, json={"policy": "athlete_preferences"}, headers=self.headers
+            )
             self.assertEqual(response.status_code, 200)
             self.app.state.poll_once(rule)
             state = self.client.get("/api/v1/state").json()
-            self.assertEqual(state["sources"][0]["coaching_policy"], "cj")
+            self.assertEqual(state["sources"][0]["coaching_policy"], "athlete_preferences")
+            legacy = self.client.post(endpoint, json={"policy": "cj"}, headers=self.headers)
+            self.assertEqual(legacy.json()["coaching_policy"], "athlete_preferences")
             self.assertNotIn("error", state["plans"][0]["items"][0])
             self.client.post(endpoint, json={"policy": "strict"}, headers=self.headers)
             self.app.state.poll_once(rule)

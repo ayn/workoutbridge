@@ -107,7 +107,7 @@ def recovery_duration(text, coaching_policy):
     """Return an explicit duration, or the athlete-approved upper range bound."""
     if (duration := seconds(text)) is not None:
         return duration, ""
-    if coaching_policy != "cj":
+    if coaching_policy != "athlete_preferences":
         return None, ""
     match = re.fullmatch(
         r"\s*(\d+(?::[0-5]\d|\.\d+)?)\s*[-–]\s*(\d+(?::[0-5]\d|\.\d+)?)\s*(s|sec|seconds|min|mins|minutes)?\s*",
@@ -127,7 +127,7 @@ def recovery_annotation(text, span, effort="rest"):
     return text + (f" [recovery note: {span} {effort}]" if span else "")
 
 
-def cj_units(text):
+def infer_shorthand_units(text):
     """Opt-in dialect; only fill units in bounded, recognized rep positions."""
     text = re.sub(r"^(\d+\s*x\s*)(\d+)\s+(hill sprints)\b", r"\1\2 sec \3", text, flags=re.I)
     text = re.sub(
@@ -206,7 +206,7 @@ def targeted_clause(part, pace_unit=None, coaching_policy="strict"):
     fields = header.groupdict()
     progression = fields["separator"] in ("->", "→", ">")
     approximate = bool(fields["approx"] and fields["second"] is None)
-    if (progression or approximate) and coaching_policy != "cj":
+    if (progression or approximate) and coaching_policy != "athlete_preferences":
         return None
     if ":" in fields["first"] and fields["second"] and ":" not in fields["second"]:
         if not int(fields["first"].split(":")[1]) <= int(fields["second"]) < 60:
@@ -232,7 +232,7 @@ def targeted_clause(part, pace_unit=None, coaching_policy="strict"):
         not count
         or fields["pace"]
         or fields["pace_unit"]
-        or (coaching_policy == "cj" and unit == "mi")
+        or (coaching_policy == "athlete_preferences" and unit == "mi")
     )
     if count and unit == "mi" and float(fields["amount"]) != 1 and not target_is_pace:
         return None  # Multi-mile reps need an explicit pace/elapsed-time distinction.
@@ -329,7 +329,7 @@ def normalize_clause(part, *, pace_unit=None, coaching_policy="strict", allow_to
             part,
             re.I,
         )
-        if allow_total and coaching_policy == "cj"
+        if allow_total and coaching_policy == "athlete_preferences"
         else None
     )
     if total:
@@ -429,8 +429,8 @@ def normalize_clause(part, *, pace_unit=None, coaching_policy="strict", allow_to
     if sets:
         count, inner, rest = sets.groups()
         inner = re.sub(r"\s+w/\s+([^()]+)$", r" (\1)", inner, flags=re.I)
-        if coaching_policy == "cj":
-            inner = cj_units(inner)
+        if coaching_policy == "athlete_preferences":
+            inner = infer_shorthand_units(inner)
         converted = targeted_clause(inner, pace_unit, coaching_policy)
         duration, span = recovery_duration(rest, coaching_policy)
         if converted is None or duration is None or not 2 <= int(count) <= 20:
