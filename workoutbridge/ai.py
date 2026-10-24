@@ -38,7 +38,7 @@ def read_private_secret(path):
 MODELS = {"gpt-6-luna": (100, 500), "gpt-6.1-sol": (2000, 10000)}
 INPUT_RESERVATION = 32768
 MAX_OUTPUT = 2048
-VERSION = "shadow-v3"
+VERSION = "shadow-v4"
 SCHEMA = {
     "type": "object",
     "properties": {
@@ -63,14 +63,34 @@ Assumptions must list any interpretation that is not supported by the text.
 Supported steps, separated by semicolons:
 Warm up 10 min; Run 3 miles easy; Run 2 km moderate; Rest 90 sec;
 Cool down 5 min; Run until lap; Ride 40 min easy.
+Warm up 1.5 miles; Cool down 1 mile
+Warmups and cooldowns support the same distance and duration units as Run.
 Duration units: min, sec, hours. Distance units: miles, mi, km, m.
-Optional effort words: easy, moderate, hard, smooth. No arbitrary extra words.
+Optional effort words: easy, moderate, hard, smooth, fast, tempo, jog, very hard,
+easy/moderate, steady, progression, recovery. Named effort notes include tempo effort,
+long run pace, regular run pace, 5k effort, 10k effort, half marathon effort.
+Known relationships such as 'hard at 10k effort' and 'moderate around regular run pace'
+remain qualitative labels, without invented numeric pace targets. No arbitrary extra words.
 Explicit running intervals: 4 x 200 m in 62-64 sec with 2 min walk/jog recovery.
+4 x 800 m in 3:00-3:05 sec with 90 sec rest recovery
+Explicit recovery can be rest, easy running or walk/jog; do not require walk/jog.
 These recover between reps only, with no recovery after the final run.
+Paced single runs and repeats (these targets are per mile/km, not total rep times):
+Run 3 miles tempo at 6:30-6:40/mi
+3 x 1.25 mi at 6:30-6:40/mi with 120 sec rest recovery
+Explicit elapsed rep targets use the stated rep distance and elapsed time.
 Distance intervals: 4 x 400 m hard with lap recovery (only when recovery is explicitly Lap).
 Distance intervals also recover between reps only, with no recovery after the final run.
 Timed intervals: 4 x 30 sec hard with 60 sec easy recovery (includes final recovery).
+Timed repeats with rest: 4 x 45 sec fast with 90 sec rest recovery
+These rest-based timed repeats omit final recovery.
+Explicit repeated cycles of 2-8 Run/Rest phases retain all phases after every cycle:
+3 x [Run 120 sec hard | Run 60 sec easy | Run 30 sec fast | Run 90 sec moderate]
+Cycle phases can use distance or time and explicit per-mile/km pace targets.
+Do not use nested repeat syntax. Fully specified outer sets can be represented as
+separate repeat groups with the stated between-set rest, without adding final set rest.
 Timed hills/strides: 4 x 15 sec hills with lap recovery; 4 x 12 sec strides with lap recovery.
+Directional hills with explicit movement: 4 x 30 sec uphill with lap recovery jog down
 These timed hills/strides omit recovery after the final rep.
 Uphill sprints: 4 x 12 sec uphill sprints with lap recovery (includes final recovery).
 Unspecified strides: 4 strides with lap recovery (both stride and recovery end on Lap).
@@ -84,6 +104,11 @@ An unspecific 'fast' instruction without a numeric pace can remain a coaching no
 on an otherwise faithfully represented step. Do not invent numeric intensity targets.
 No implicit Lap/recovery policy is enabled for AI experiments: flag missing recovery
 or an added transition in assumptions. Ambiguous alternatives require unresolved.
+Preserve range-note annotations already present in supplied canonical text, such as:
+Run 6 miles [distance note: 5-6 miles]
+Recovery notes use [recovery note: 2:30-3:00 rest] on a Rest step or interval group.
+Do not introduce these annotations to select an unresolved range: no range selection,
+approximate pace tolerance or coaching shorthand preference is enabled for AI itself.
 Empty or unrelated input must produce unresolved and empty structured_text.
 """
 

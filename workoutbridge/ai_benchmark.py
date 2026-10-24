@@ -92,6 +92,34 @@ CASES = (
         "cycling",
     ),
     Case(
+        "distance-bookends",
+        "Warm up 1.5 miles. Run 3 miles at an easy effort. Cool down 1 mile.",
+        "Warm up 1.5 miles; Run 3 miles easy; Cool down 1 mile",
+    ),
+    Case(
+        "explicit-rest-repeats",
+        "Run four 800-meter repetitions, each in 3:00 to 3:05. Rest for 90 seconds between repetitions, omitting recovery after the final run.",
+        "4 x 800 m in 3:00-3:05 sec with 90 sec rest recovery",
+    ),
+    Case(
+        "tempo-pace-band",
+        "Run 3 miles tempo at 6:30 to 6:40 per mile, then rest for 5 minutes.",
+        "Run 3 miles tempo at 6:30-6:40/mi; Rest 300 sec",
+    ),
+    Case(
+        "mile-rep-pace-band",
+        "Run three repetitions of 1.25 miles each at 6:30 to 6:40 per mile, with 2 minutes rest between reps and no recovery after the final rep.",
+        "3 x 1.25 mi at 6:30-6:40/mi with 120 sec rest recovery",
+    ),
+    Case(
+        "four-phase-cycle",
+        "Repeat three cycles: run hard for 2 minutes, easy for 1 minute, fast for 30 seconds, and moderate for 90 seconds. Complete all four phases of every cycle, including the last.",
+        "3 x [Run 120 sec hard | Run 60 sec easy | Run 30 sec fast | Run 90 sec moderate]",
+    ),
+    Case("bare-distance-no-unit", "12 easy", None),
+    Case("unapproved-distance-range", "Run 5-6 miles easy.", None),
+    Case("unapproved-pace-tolerance", "Run 3 miles tempo at approximately 6:30 per mile.", None),
+    Case(
         "missing-recovery",
         "Five 20-second uphill sprints. No recovery or transition instructions were supplied.",
         None,
