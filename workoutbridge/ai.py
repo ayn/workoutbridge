@@ -38,7 +38,7 @@ def read_private_secret(path):
 MODELS = {"gpt-6-luna": (100, 500), "gpt-6.1-sol": (2000, 10000)}
 INPUT_RESERVATION = 32768
 MAX_OUTPUT = 2048
-VERSION = "shadow-v4"
+VERSION = "shadow-v5"
 SCHEMA = {
     "type": "object",
     "properties": {
@@ -74,6 +74,7 @@ remain qualitative labels, without invented numeric pace targets. No arbitrary e
 Explicit running intervals: 4 x 200 m in 62-64 sec with 2 min walk/jog recovery.
 4 x 800 m in 3:00-3:05 sec with 90 sec rest recovery
 Explicit recovery can be rest, easy running or walk/jog; do not require walk/jog.
+Recovery durations support explicit seconds, minutes or hours in all rest-based repeats.
 These recover between reps only, with no recovery after the final run.
 Paced single runs and repeats (these targets are per mile/km, not total rep times):
 Run 3 miles tempo at 6:30-6:40/mi
