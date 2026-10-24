@@ -39,8 +39,8 @@ class PrescriptionVariantTests(unittest.TestCase):
     def test_timed_hill_sprints_and_strides_preserve_count_and_duration(self):
         for activity, final_recovery in (
             ("Hill Sprints", True),
-            ("strides", False),
-            ("hill strides", False),
+            ("strides", True),
+            ("hill strides", True),
         ):
             draft = self.draft("Run: 8 miles + 3x14s " + activity)
             self.assertFalse(draft.unresolved)
@@ -61,7 +61,9 @@ class PrescriptionVariantTests(unittest.TestCase):
             self.assertEqual(group.steps[0].duration, duration)
             self.assertEqual(group.steps[0].unit, unit)
             self.assertEqual(group.steps[1].unit, "lap_button")
-            self.assertTrue(group.skip_last_recovery)
+            self.assertEqual(group.skip_last_recovery, "strides" not in title)
+            strict = self.draft(title, coaching_policy="strict")
+            self.assertTrue(strict.steps[-1].skip_last_recovery)
             self.assertTrue(self.draft(title, recovery_choice="review").unresolved)
 
     def test_explicit_distance_recovery_keeps_prescribed_time_and_effort(self):

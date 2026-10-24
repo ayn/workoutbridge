@@ -457,6 +457,36 @@ after-set rest replaces that omitted final recovery. Canonical examples:
 5 x [Run 300 m in 63-65 sec | Rest 100 m jog in 30-30 sec]
 ```
 
+Additional shared wording includes `easy strides`, bare `1k` reps, `starting at`
+progressions, `around` pace targets, colon-separated fartlek phases, `very easy`
+and `over hills`. Progression direction is retained on the work step. A second
+unlabelled rest block after the between-rep rest means after-set rest under the
+default policy; strict mode requires its role to be explicit. `after last one`
+and `after the last rep` are explicit after-set aliases.
+
+A parenthetical pace equivalent alongside an elapsed rep-time range is accepted
+only when both bounds agree to within one second per pace unit after converting
+the stated rep distance. Conflicting equivalents or missing pace-unit context
+remain in review. The explicit pace equivalent supplies the native target.
+
+A following-run phrase such as `Right into 0.75 mile hard after last 40s easy`
+is accepted only when the preceding continuous block ends with that exact phase.
+An optional easy-double suffix stays a note on a complete primary workout; it
+never creates another workout or makes an unknown primary instruction valid.
+Bare `Rest` or `short rest` becomes rest until Lap under the default policy.
+The default also retains the final Lap recovery after strides and between
+consecutive interval blocks. Timed rep rests keep their existing final-rest
+semantics; strict mode retains the former implied-Lap behavior. Explicit canonical
+intervals can request `including final recovery` for a Lap-ended recovery.
+Total-distance interval runs also support `w/`, `mixed in`, and an explicit
+opening distance (`... after 8 miles`); the finish remains Lap-ended with the
+overall total in notes, without adding the total again.
+
+Explicit structured text can attach `[coaching note: ...]` to a step or repeat
+(the first work step). This is an author-supplied note boundary, not permission
+to ignore arbitrary prose in a calendar description. Real athlete-specific pace
+choices and historical reviewed answers are not embedded in the shared parser.
+
 These are documented product conversion defaults, not claims about every coach. They do
 not select between primary alternatives or repair arbitrary
 missing text. Existing implied-recovery opt-outs still apply. Original text and
