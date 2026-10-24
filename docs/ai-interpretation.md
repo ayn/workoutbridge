@@ -37,7 +37,7 @@ uv run --locked --extra ai python -m workoutbridge.ai_benchmark \
   --models gpt-6-luna gpt-6.1-sol --monthly-budget 5
 ```
 
-The seed corpus contains 35 hand-specified synthetic cases. Reports distinguish
+The seed corpus contains 43 hand-specified synthetic cases. Reports distinguish
 correct conversions, incorrect candidates, false clearances, correct reviews,
 unnecessary reviews and failed requests. Unsupported sports are reported
 separately, not credited as model successes. Executable steps and notes are
