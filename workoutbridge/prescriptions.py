@@ -8,7 +8,7 @@ from .parser import Step, parse
 from .sports import event_sport
 
 METADATA = re.compile(
-    r"(?:Workout:\s*(?:Run|Bike|Cycling)(?:\s*-\s*(?:Easy|Moderate|Hard))?"
+    r"(?:Workout:\s*(?:Run|Bike|Cycling)(?:\s*-\s*(?:Easy|Moderate|Hard|Long Run))?"
     r"|Planned:\s*(?:\d+(?:\.\d+)?\s*(?:mi|km)(?:\s*~\s*\d+:\d{2}:\d{2})?|\d+:\d{2}:\d{2}))",
     re.I,
 )
@@ -24,7 +24,9 @@ def normalize_finalsurge(event: Event, *, recovery_choice: str = "lap") -> Event
     if event.structured_text:
         return event
     title = re.fullmatch(
-        r"\s*(?:Run|Bike|Cycling)(?:\s*-\s*(?:Easy|Moderate|Hard))?:\s*(.+)", event.title, re.I
+        r"\s*(?:Run|Bike|Cycling)(?:\s*-\s*(?:Easy|Moderate|Hard|Long Run))?:\s*(.+)",
+        event.title,
+        re.I,
     )
     if not title:
         return replace(event, structured_text="Unsupported Final Surge event: " + event.title)
@@ -41,7 +43,7 @@ def normalize_finalsurge(event: Event, *, recovery_choice: str = "lap") -> Event
             isinstance(step, Step) and step.kind in ("warm_up", "cool_down")
             for step in detail_draft.steps
         )
-        and re.search(r"\d\s*[x×]|\b(fartlek|tempo|strides|hills|intervals)\b", title[1], re.I)
+        and re.search(r"\d\s*[x×]|\b(fartlek|tempo|strides|hills|intervals|fast)\b", title[1], re.I)
     ):
         return replace(event, structured_text="Incomplete description: main workout missing")
     # Never hide substantive instructions behind the title's shorter summary.
@@ -74,7 +76,12 @@ def normalize_workout(event: Event, *, recovery_choice: str = "lap") -> Event:
         return event
     if re.search(r"(?im)^Workout:\s*(?:Run|Bike|Cycling)\b", event.description):
         return normalize_finalsurge(event, recovery_choice=recovery_choice)
-    text = re.sub(r"^\s*(?:Run|Bike|Cycling|Ride):\s*", "", event.prescription, flags=re.I)
+    text = re.sub(
+        r"^\s*(?:Run(?:\s*-\s*Long Run)?|Bike|Cycling|Ride):\s*",
+        "",
+        event.prescription,
+        flags=re.I,
+    )
     return _normalize(event, text, recovery_choice)
 
 
@@ -115,7 +122,13 @@ def _normalize(event: Event, text: str, recovery_choice: str) -> Event:
             re.I,
         )
         strides = re.fullmatch(r"(\d+)\s+strides", part, re.I)
-        if strides and recovery_choice == "lap":
+        sprints = re.fullmatch(
+            r"(\d+)\s*x\s*(\d+)\s*(?:s|sec|seconds)\s+uphill sprints", part, re.I
+        )
+        if sprints and recovery_choice == "lap":
+            canonical = f"{sprints[1]} x {sprints[2]} sec uphill sprints with lap recovery"
+            fallback_used = True
+        elif strides and recovery_choice == "lap":
             canonical = f"{strides[1]} strides with lap recovery"
             fallback_used = True
         elif distance and recovery_choice == "lap":
@@ -149,6 +162,8 @@ def _normalize(event: Event, text: str, recovery_choice: str) -> Event:
     notes = f"Original title: {event.title}\n{event.description}"
     if fallback_used:
         notes += "\nDefault policy: implied interval recovery until Lap between reps."
+        if any("uphill sprints with lap recovery" in clause for clause in clauses):
+            notes += "\nUphill sprint policy: retain recovery until Lap after the final sprint too."
     if transition_added:
         notes += "\nRun-until-Lap transition before intervals."
     notes += "\nNo added warm-up or cooldown."

@@ -343,6 +343,21 @@ the original text remains in the notes. Missing or unsupported instructions
 still require review.
 Non-running/race titles and unsupported formats require separate review.
 
+Timed uphill sprints such as `Run: 8 miles + 5x 12s uphill sprints`
+become the initial run, a Run-until-Lap transition, then five native repeats
+of 12 seconds (note: `uphill sprint`) and recovery until Lap. Like unspecified
+strides, this named policy retains the final recovery and uses the same
+`--interval-recovery review` opt-out. The added Lap steps are identified in
+the notes; no numeric sprint pace or recovery time is invented.
+
+Fast-finish long runs such as `Run - Long Run: 18 miles w/ last 6 miles fast`
+become 12 miles followed by 6 miles with the note `last 6 miles fast`.
+The finishing distance is part of the total, not additional mileage. There is
+no buffer between these two steps and no numeric pace target. Both distances
+must be positive, with the finish shorter than the total. Extra unsupported
+instructions still require review, and substantive descriptions take precedence
+over title shorthand.
+
 Final Surge removes past runs from the feed. A future recurring importer must
 fetch at least daily, preserve prescriptions and revisions privately, and never
 interpret disappearing events as deletion requests. More frequent polling can
