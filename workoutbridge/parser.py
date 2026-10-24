@@ -72,10 +72,11 @@ FACTORS = {
     "miles": 1609.344,
 }
 BASIC_EFFORT = r"(?:easy/moderate|easy/mod|super hard|very hard|easy jog|jog|easy|moderate|hard|smooth|fast|steady|tempo|progression|recovery)"
-EFFORT_QUALIFIER = r"(?:tempo effort|long run pace|regular run pace|(?:5k|10k) (?:effort|pace)|(?:half|1/2) marathon (?:race pace )?effort|marathon effort)"
+EFFORT_QUALIFIER = r"(?:tempo effort|long run pace|regular run pace|(?:5k|10k) (?:effort|pace)|(?:half|1/2) marathon (?:race pace )?effort|marathon (?:effort|pace)|MP)"
+RELATIVE_EFFORT = rf"(?:(?:slightly |a little |a bit )?(?:faster|slower) than {EFFORT_QUALIFIER})"
 EFFORT_CORE = rf"(?:{BASIC_EFFORT}(?: progression)?(?:(?: at | around | a little faster than | a bit faster than ){EFFORT_QUALIFIER}(?: or faster)?)?|{EFFORT_QUALIFIER})"
 TERRAIN = r"(?:on (?:trails|trail|hilly trails|rolling trails|rolling terrain|flat terrain|flat ground|a hilly route|a flat route))"
-EFFORT = rf"(?:{EFFORT_CORE}(?: {TERRAIN})?|{TERRAIN})"
+EFFORT = rf"(?:(?:{EFFORT_CORE}|{RELATIVE_EFFORT})(?: {TERRAIN})?|{TERRAIN})"
 DISTANCE_EFFORT = rf"(?:{EFFORT}|(?:(?:hard|smooth|fast) )?strides|sprints)"
 TIME_UNITS = r"(?:hours|hour|hr|minutes|minute|mins|min|seconds|second|secs|sec)"
 PATTERN = re.compile(
@@ -123,6 +124,34 @@ def pace_step(kind, amount, unit, effort, fast, slow, pace_unit):
     )
 
 
+def elapsed_distance_step(clause):
+    match = re.fullmatch(
+        rf"(Run|Rest) (\d+(?:\.\d+)?) (m|km|mi)(?: ({EFFORT}|walk/jog))? in "
+        r"(\d+(?::[0-5]\d)?)-(\d+(?::[0-5]\d)?) sec",
+        clause,
+        re.I,
+    )
+    if not match:
+        return None
+    kind, amount, unit, effort, fast, slow = match.groups()
+    distance = float(amount) * FACTORS[unit.lower()]
+    fast, slow = clock_seconds(fast), clock_seconds(slow)
+    if not 0 < distance < float("inf") or not 0 < fast <= slow <= 86400:
+        return None
+    label = effort.lower() if effort else None
+    note = (label + ": " if label else "") + f"{fast}-{slow}s for {amount}{unit.lower()}"
+    return Step(
+        kind.lower(),
+        distance,
+        "meters",
+        label,
+        note,
+        distance / slow,
+        distance / fast,
+        unit.lower(),
+    )
+
+
 def interval(clause: str, sport: str = "running") -> Repeat | None:
     if sport == "cycling":
         match = re.fullmatch(
@@ -146,6 +175,14 @@ def interval(clause: str, sport: str = "running") -> Repeat | None:
                 Step("rest", recovery, "seconds", recovery_effort.lower()),
             ),
         )
+
+    distance_recovery = re.fullmatch(r"(.+?) with (.+) recovery", clause, re.I)
+    if distance_recovery:
+        recovery = elapsed_distance_step("Rest " + distance_recovery[2])
+        if recovery:
+            work = interval(distance_recovery[1] + " with 1 sec rest recovery", sport)
+            if work and len(work.steps) == 2:
+                return replace(work, steps=(work.steps[0], recovery))
 
     strides = re.fullmatch(
         r"(\d+) (?:(uphill|downhill|hill) )?strides with lap recovery", clause, re.IGNORECASE
@@ -389,7 +426,7 @@ def parse(text: str, *, sport: str = "running") -> Draft:
     unresolved: list[str] = []
     for clause in filter(None, (part.strip() for part in text.split(";"))):
         annotation = re.fullmatch(
-            r"(.+?) ((?:\[(?:distance|recovery|condition|total) note: [^\[\];\n|]+\]\s*)+)",
+            r"(.+?) ((?:\[(?:distance|recovery|condition|total|target) note: [^\[\];\n|]+\]\s*)+)",
             clause,
             re.I,
         )
@@ -400,7 +437,9 @@ def parse(text: str, *, sport: str = "running") -> Draft:
             item = base.steps[0] if base and not base.unresolved and len(base.steps) == 1 else None
             target = item.steps[-1] if isinstance(item, Repeat) else item
             notes = re.findall(
-                r"\[(distance|recovery|condition|total) note: ([^\[\];\n|]+)\]", annotation[2], re.I
+                r"\[(distance|recovery|condition|total|target) note: ([^\[\];\n|]+)\]",
+                annotation[2],
+                re.I,
             )
             valid = (
                 target is not None
@@ -409,7 +448,14 @@ def parse(text: str, *, sport: str = "running") -> Draft:
             )
             for kind, value in notes:
                 kind = kind.lower()
-                if kind == "total":
+                if kind == "target":
+                    valid &= bool(
+                        target
+                        and target.speed_min is not None
+                        and not isinstance(item, Repeat)
+                        and re.fullmatch(r"\d{1,2}:[0-5]\d/(?:mi|km) or faster", value, re.I)
+                    )
+                elif kind == "total":
                     goal = re.fullmatch(
                         r"(?:Finish )?(\d+(?:\.\d+)?) (?:miles|mile|mi|km) total(?: \(prescribed \d+(?:\.\d+)?\s*[-–]\s*\d+(?:\.\d+)? (?:miles|mile|mi|km)\))?",
                         value,
@@ -462,6 +508,10 @@ def parse(text: str, *, sport: str = "running") -> Draft:
                 )
             else:
                 unresolved.append(clause)
+            continue
+        recovery = elapsed_distance_step(clause) if sport == "running" else None
+        if recovery:
+            steps.append(recovery)
             continue
         paced = (
             re.fullmatch(

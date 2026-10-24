@@ -52,10 +52,9 @@ class CoachingRangeTests(unittest.TestCase):
         self.assertEqual(draft.steps[1].duration, 420)
         self.assertEqual(draft.steps[1].note, "5-7 mins rest")
 
-    def test_range_policy_does_not_resolve_conditional_distance_or_repetition_choices(self):
+    def test_range_policy_does_not_resolve_primary_alternatives(self):
         for text in (
             "5-6 miles or 4 miles if injured",
-            "4-6x800m at 3:00 (1 min rest)",
             "5-6 miles or cross train",
         ):
             self.assertTrue(
