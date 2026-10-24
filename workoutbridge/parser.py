@@ -73,7 +73,9 @@ FACTORS = {
 }
 BASIC_EFFORT = r"(?:easy/moderate|easy/mod|super hard|very hard|easy jog|jog|easy|moderate|hard|smooth|fast|steady|tempo|progression|recovery)"
 EFFORT_QUALIFIER = r"(?:tempo effort|long run pace|regular run pace|(?:5k|10k) (?:effort|pace)|(?:half|1/2) marathon (?:race pace )?effort|marathon effort)"
-EFFORT = rf"(?:{BASIC_EFFORT}(?: progression)?(?:(?: at | around | a little faster than | a bit faster than ){EFFORT_QUALIFIER}(?: or faster)?)?|{EFFORT_QUALIFIER})"
+EFFORT_CORE = rf"(?:{BASIC_EFFORT}(?: progression)?(?:(?: at | around | a little faster than | a bit faster than ){EFFORT_QUALIFIER}(?: or faster)?)?|{EFFORT_QUALIFIER})"
+TERRAIN = r"(?:on (?:trails|trail|hilly trails|rolling trails|rolling terrain|flat terrain|flat ground|a hilly route|a flat route))"
+EFFORT = rf"(?:{EFFORT_CORE}(?: {TERRAIN})?|{TERRAIN})"
 DISTANCE_EFFORT = rf"(?:{EFFORT}|(?:(?:hard|smooth|fast) )?strides|sprints)"
 TIME_UNITS = r"(?:hours|hour|hr|minutes|minute|mins|min|seconds|second|secs|sec)"
 PATTERN = re.compile(
@@ -387,7 +389,7 @@ def parse(text: str, *, sport: str = "running") -> Draft:
     unresolved: list[str] = []
     for clause in filter(None, (part.strip() for part in text.split(";"))):
         annotation = re.fullmatch(
-            r"(.+?) ((?:\[(?:distance|recovery|condition) note: [^\[\];\n|]+\]\s*)+)",
+            r"(.+?) ((?:\[(?:distance|recovery|condition|total) note: [^\[\];\n|]+\]\s*)+)",
             clause,
             re.I,
         )
@@ -398,7 +400,7 @@ def parse(text: str, *, sport: str = "running") -> Draft:
             item = base.steps[0] if base and not base.unresolved and len(base.steps) == 1 else None
             target = item.steps[-1] if isinstance(item, Repeat) else item
             notes = re.findall(
-                r"\[(distance|recovery|condition) note: ([^\[\];\n|]+)\]", annotation[2], re.I
+                r"\[(distance|recovery|condition|total) note: ([^\[\];\n|]+)\]", annotation[2], re.I
             )
             valid = (
                 target is not None
@@ -407,7 +409,22 @@ def parse(text: str, *, sport: str = "running") -> Draft:
             )
             for kind, value in notes:
                 kind = kind.lower()
-                if kind == "condition":
+                if kind == "total":
+                    goal = re.fullmatch(
+                        r"(?:Finish )?(\d+(?:\.\d+)?) (?:miles|mile|mi|km) total(?: \(prescribed \d+(?:\.\d+)?\s*[-–]\s*\d+(?:\.\d+)? (?:miles|mile|mi|km)\))?",
+                        value,
+                        re.I,
+                    )
+                    valid &= bool(
+                        target
+                        and target.kind in ("warm_up", "cool_down")
+                        and target.unit == "lap_button"
+                        and not isinstance(item, Repeat)
+                        and len(value) <= 160
+                        and goal
+                        and 0 < float(goal[1]) < float("inf")
+                    )
+                elif kind == "condition":
                     valid &= bool(
                         target
                         and target.kind == "run"
@@ -431,9 +448,12 @@ def parse(text: str, *, sport: str = "running") -> Draft:
                         )
                     )
             if valid:
+                label = target.label if any(kind.lower() == "total" for kind, _ in notes) else None
                 target = replace(
                     target,
-                    note="; ".join(filter(None, (target.note, *(value for _, value in notes)))),
+                    note="; ".join(
+                        filter(None, (label, target.note, *(value for _, value in notes)))
+                    ),
                 )
                 steps.append(
                     replace(item, steps=(*item.steps[:-1], target))

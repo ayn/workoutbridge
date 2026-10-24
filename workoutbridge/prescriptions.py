@@ -147,6 +147,7 @@ def _normalize(
     clauses = []
     fallback_used = False
     transition_added = False
+    total_bookends_added = False
     pace_metadata = re.search(r"(?im)^Planned:\s*\d+(?:\.\d+)?\s*(mi|km)\b", event.description)
     pace_unit = pace_metadata[1].lower() if pace_metadata else None
     bare_unit = pace_unit or (distance_unit if distance_unit != "auto" else None)
@@ -256,11 +257,15 @@ def _normalize(
             )
         elif (
             converted := normalize_clause(
-                part, pace_unit=pace_unit, coaching_policy=coaching_policy
+                part,
+                pace_unit=pace_unit,
+                coaching_policy=coaching_policy,
+                allow_total=len(parts) == 1,
             )
         ) is not None and (not converted.implied_recovery or recovery_choice == "lap"):
             canonical = converted.text
             fallback_used |= converted.implied_recovery
+            total_bookends_added |= converted.total_bookends
         else:
             clauses.append(part)
             continue
@@ -294,5 +299,9 @@ def _normalize(
             notes += "\nUphill sprint policy: retain recovery until Lap after the final sprint too."
     if transition_added:
         notes += "\nRun-until-Lap transition before intervals."
-    notes += "\nNo added warm-up or cooldown."
+    notes += (
+        "\nAdded Lap-ended easy bookends under the approved total-distance policy; finish the stated total distance including the interval block."
+        if total_bookends_added
+        else "\nNo added warm-up or cooldown."
+    )
     return replace(event, structured_text="; ".join(clauses), description=notes)

@@ -10,6 +10,27 @@ class EnglishNotationTests(unittest.TestCase):
     def event(self, text):
         return Event("synthetic", "english", "", "2030-03-01", text, "")
 
+    def test_common_bookend_abbreviations_preserve_units_in_prefix_and_suffix_forms(self):
+        for warm, cool in (
+            ("WUP20min", "CD10min"),
+            ("wu: 20 minutes", "cd: 10 minutes"),
+            ("20 min WU", "10 min CD"),
+            ("20min wup", "10min cd"),
+        ):
+            with self.subTest(warm=warm, cool=cool):
+                draft = parse(
+                    normalize_workout(
+                        self.event(warm + ", 3 x 2 min fast/1 min easy, " + cool)
+                    ).prescription
+                )
+                self.assertFalse(draft.unresolved)
+                self.assertEqual((draft.steps[0].kind, draft.steps[0].duration), ("warm_up", 1200))
+                self.assertEqual(
+                    (draft.steps[-1].kind, draft.steps[-1].duration), ("cool_down", 600)
+                )
+        for text in ("WUP, Run 3 miles, CD", "WUP -1 mile, Run 3 miles, CD 1 mile"):
+            self.assertTrue(parse(normalize_workout(self.event(text)).prescription).unresolved)
+
     def test_plus_and_singular_second_are_shared_grammar(self):
         event = normalize_workout(self.event("8 miles easy plus 3 x 18 second hills"))
         draft = parse(event.prescription)
@@ -17,6 +38,24 @@ class EnglishNotationTests(unittest.TestCase):
         self.assertEqual(draft.steps[0].duration, 8 * 1609.344)
         self.assertEqual(draft.steps[-1].steps[0].duration, 18)
         self.assertIn("plus", event.description)
+
+    def test_terrain_words_remain_qualitative_instructions(self):
+        for text in (
+            "16 miles easy/mod on trails",
+            "12 km easy on rolling terrain",
+            "8 miles on hilly trails",
+        ):
+            event = normalize_workout(self.event(text))
+            draft = parse(event.prescription)
+            self.assertFalse(draft.unresolved, text)
+            self.assertIn("on ", draft.steps[0].label)
+            self.assertIsNone(draft.steps[0].speed_min)
+            self.assertNotIn("error", review_item("123", event))
+        self.assertTrue(
+            parse(
+                normalize_workout(self.event("16 miles easy on trails at 150 bpm")).prescription
+            ).unresolved
+        )
 
     def test_slash_cycles_with_explicit_units_preserve_all_phases(self):
         for text in (

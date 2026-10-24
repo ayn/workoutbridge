@@ -391,6 +391,9 @@ The grammar is shared across coaches: `plus`, top-level commas, singular time
 units and slash-separated work/easy cycles are supported wherever the full
 instruction is explicit. Slashes inside fractions and pace units are preserved.
 No coach name is used to select a different wording parser.
+`WU`, `WUP` and `CD` work as prefixes or suffixes with an explicit amount/unit,
+including compact and colon forms. Terrain such as `on trails` stays a
+qualitative instruction without inventing a numeric intensity target.
 
 Repeated track sets such as
 `2x (3x500m at 1:45-1:48 w/ 60s rest) 3:00 rest between sets` retain each set's
@@ -426,6 +429,11 @@ their own source into `cj` through authenticated
   optional easy-double instruction in that run's note. The athlete decides whether
   to perform or adapt it. Additional executable instructions, conditional sets,
   unclear condition scope and primary alternatives still require review.
+- For an easy total-distance run `with` or `including` a fully supported workout
+  block, uses Lap-ended easy bookends and keeps the overall total (and original
+  range) in their notes. The total includes the interval block. This does not
+  replace explicit warmups/cooldowns. Unknown instructions and blocks whose
+  prescribed minimum distance already consumes the total remain in review.
 
 These are athlete conversion preferences, not universal coaching rules. They do
 not select between alternatives, choose variable repetition counts or repair arbitrary

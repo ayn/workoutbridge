@@ -14,6 +14,11 @@ class CJConditionTests(unittest.TestCase):
         for text, distance, condition in (
             ("5-6 miles if feeling okay", 6 * 1609.344, "if feeling okay"),
             ("7 miles if weather allows", 7 * 1609.344, "if weather allows"),
+            (
+                "7 miles if feeling okay, but stop if needed",
+                7 * 1609.344,
+                "if feeling okay, but stop if needed",
+            ),
         ):
             self.assertTrue(parse(normalize_workout(self.event(text)).prescription).unresolved)
             event = normalize_workout(self.event(text), coaching_policy="cj")
