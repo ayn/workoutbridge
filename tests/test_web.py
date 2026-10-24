@@ -85,6 +85,7 @@ class WebTests(unittest.TestCase):
         ):
             self.app.state.poll_once(rule)
             self.assertIn("error", self.client.get("/api/v1/state").json()["plans"][0]["items"][0])
+
             response = self.client.post(endpoint, json={"policy": "cj"}, headers=self.headers)
             self.assertEqual(response.status_code, 200)
             self.app.state.poll_once(rule)
@@ -94,6 +95,29 @@ class WebTests(unittest.TestCase):
             self.client.post(endpoint, json={"policy": "strict"}, headers=self.headers)
             self.app.state.poll_once(rule)
             self.assertIn("error", self.client.get("/api/v1/state").json()["plans"][0]["items"][0])
+
+    def test_source_distance_units_are_saved_validated_and_used_for_preview(self):
+        from workoutbridge.calendar import Event
+
+        rule, source, _ = self.automatic_rule()
+        endpoint = f"/api/v1/sources/{source}/distance-unit"
+        self.assertEqual(
+            self.client.post(endpoint, json={"unit": "meters"}, headers=self.headers).status_code,
+            422,
+        )
+        self.assertEqual(
+            self.client.post(endpoint, json={"unit": "km"}, headers=self.headers).status_code, 200
+        )
+        events = [Event(source, "run", "", "2030-01-01", "Run: 12 easy", "")]
+        with (
+            patch("workoutbridge.web.read_calendar", return_value=b"synthetic"),
+            patch("workoutbridge.web.import_calendar", return_value=events),
+        ):
+            self.app.state.poll_once(rule)
+            state = self.client.get("/api/v1/state").json()
+            self.assertEqual(state["sources"][0]["distance_unit"], "km")
+            self.assertNotIn("error", state["plans"][0]["items"][0])
+            self.assertEqual(state["plans"][0]["items"][0]["draft"]["steps"][0]["duration"], 12000)
 
     def test_owner_session_survives_restart_without_storing_bearer_token(self):
         self.login()

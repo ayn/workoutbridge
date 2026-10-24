@@ -319,6 +319,7 @@ test("calendar source dialog receives focus and submits a private URL", async ()
   await userEvent.click(screen.getByRole("button", { name: "Add source" }));
   expect(screen.getByRole("button", { name: "Close dialog" })).toHaveFocus();
   await userEvent.type(screen.getByLabelText("Name"), "Example feed");
+  await userEvent.selectOptions(screen.getByRole("combobox", {name: "Unspecified distances"}), "km");
   await userEvent.type(
     screen.getByLabelText("Calendar link or iCal URL"),
     "https://log.finalsurge.com/delivery/ical/EXAMPLE",
@@ -331,6 +332,26 @@ test("calendar source dialog receives focus and submits a private URL", async ()
       true,
     ),
   );
+  const sourceRequest = fetcher.mock.calls.find(([url]) => url === "/api/v1/sources")!;
+  expect(JSON.parse(sourceRequest[1]!.body as string).distance_unit).toBe("km");
+});
+
+test("existing source distance defaults can be changed without replacing its feed", async () => {
+  const fetcher = vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response(JSON.stringify(initial)));
+  render(<App />);
+  await screen.findByText("Upcoming workouts");
+  await userEvent.click(screen.getByRole("button", {name: "Sources"}));
+  await userEvent.selectOptions(screen.getByLabelText(`Unspecified distances for ${initial.sources[0].name}`), "mi");
+  await waitFor(() => expect(fetcher.mock.calls.some(([url, options]) => url === `/api/v1/sources/${initial.sources[0].id}/distance-unit` && JSON.parse(options!.body as string).unit === "mi")).toBe(true));
+});
+
+test("new sources can inherit the hosted account distance default", async () => {
+  vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response(JSON.stringify(initial)));
+  render(<App defaultDistanceUnit="mi" />);
+  await screen.findByText("Upcoming workouts");
+  await userEvent.click(screen.getByRole("button", {name: "Sources"}));
+  await userEvent.click(screen.getByRole("button", {name: "Add source"}));
+  expect(screen.getByRole("combobox", {name: "Unspecified distances"})).toHaveValue("mi");
 });
 
 test("hourly publishing requires destination confirmation", async () => {

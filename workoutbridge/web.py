@@ -215,7 +215,11 @@ def create_app(
             planned_item(
                 rule_id,
                 profile["account_id"],
-                normalize(event, coaching_policy=source.get("coaching_policy", "strict")),
+                normalize(
+                    event,
+                    coaching_policy=source.get("coaching_policy", "strict"),
+                    distance_unit=source.get("distance_unit", "auto"),
+                ),
             )
             for event in events
         ]
@@ -615,6 +619,9 @@ def create_app(
                 422, "Use a Final Surge, Google Calendar, public iCloud or Teamup feed"
             )
         name = body.get("name", "")
+        distance_unit = body.get("distance_unit", "auto")
+        if distance_unit not in ("auto", "mi", "km"):
+            raise HTTPException(422, "Choose feed units, kilometers or miles")
         if (
             not isinstance(name, str)
             or not 1 <= len(name.strip()) <= 80
@@ -644,6 +651,7 @@ def create_app(
                 "url": url,
                 "format": body["format"],
                 "timezone": body["timezone"],
+                "distance_unit": distance_unit,
             },
         )
         return {"id": key}
@@ -657,6 +665,16 @@ def create_app(
         source["coaching_policy"] = policy
         put("source", key, source)
         return {"id": key, "coaching_policy": policy}
+
+    @app.post(API_PREFIX + "/sources/{key}/distance-unit")
+    def source_distance_unit(key: str, body: dict):
+        unit = body.get("unit")
+        if unit not in ("auto", "mi", "km"):
+            raise HTTPException(422, "Choose feed units, kilometers or miles")
+        source = get("source", key)
+        source["distance_unit"] = unit
+        put("source", key, source)
+        return {"id": key, "distance_unit": unit}
 
     @app.post(API_PREFIX + "/syncs")
     def sync(body: dict):

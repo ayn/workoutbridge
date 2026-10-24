@@ -362,6 +362,20 @@ must be positive, with the finish shorter than the total. Extra unsupported
 instructions still require review, and substantive descriptions take precedence
 over title shorthand.
 
+#### Unspecified distance units
+
+Choose **Unspecified distances** when adding a source or change it in **Sources**.
+For shorthand such as `12 easy`, kilometers produces a 12 km run and miles a
+12-mile run. Written workout units take priority, followed by Final Surge feed
+units, then this source preference. **Use feed units** requires review when the
+feed does not provide units. This preference also supplies missing pace units;
+it does not reinterpret explicitly timed or meter-based track reps.
+
+The authenticated source API accepts `distance_unit` (`auto`, `km`, `mi`) at
+creation and `POST /api/v1/sources/{id}/distance-unit` with `{"unit":"km"}` for
+updates. Library normalizers accept the same `distance_unit` argument. Existing
+sources default to `auto`; changing units does not clear publishing history.
+
 #### Coaching notation and opt-in CJ policy
 
 The running parser accepts explicit mile/minute/second units, fractional mile

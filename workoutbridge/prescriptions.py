@@ -4,7 +4,7 @@ import re
 from dataclasses import replace
 
 from .calendar import Event
-from .parser import Repeat, Step, parse
+from .parser import EFFORT, Repeat, Step, parse
 from .shorthand import cj_units, normalize_bookend, normalize_clause
 from .shorthand import clauses as split_clauses
 from .sports import event_sport
@@ -35,10 +35,16 @@ def incomplete_description(title, details, sport):
 
 
 def normalize_finalsurge(
-    event: Event, *, recovery_choice: str = "lap", coaching_policy: str = "strict"
+    event: Event,
+    *,
+    recovery_choice: str = "lap",
+    coaching_policy: str = "strict",
+    distance_unit: str = "auto",
 ) -> Event:
     if coaching_policy not in ("strict", "cj"):
         raise ValueError("Unknown coaching policy")
+    if distance_unit not in ("auto", "mi", "km"):
+        raise ValueError("Unknown distance unit")
     event = replace(
         event,
         sport=event_sport(
@@ -62,14 +68,20 @@ def normalize_finalsurge(
     if incomplete_description(title[1], details, event.sport):
         return replace(event, structured_text="Incomplete description: main workout missing")
     # Never hide substantive instructions behind the title's shorter summary.
-    return _normalize(event, details or title[1], recovery_choice, coaching_policy)
+    return _normalize(event, details or title[1], recovery_choice, coaching_policy, distance_unit)
 
 
 def normalize_workout(
-    event: Event, *, recovery_choice: str = "lap", coaching_policy: str = "strict"
+    event: Event,
+    *,
+    recovery_choice: str = "lap",
+    coaching_policy: str = "strict",
+    distance_unit: str = "auto",
 ) -> Event:
     if coaching_policy not in ("strict", "cj"):
         raise ValueError("Unknown coaching policy")
+    if distance_unit not in ("auto", "mi", "km"):
+        raise ValueError("Unknown distance unit")
     event = replace(
         event,
         sport=event_sport(
@@ -97,7 +109,10 @@ def normalize_workout(
         return event
     if re.search(r"(?im)^Workout:\s*(?:Run|Bike|Cycling)\b", event.description):
         return normalize_finalsurge(
-            event, recovery_choice=recovery_choice, coaching_policy=coaching_policy
+            event,
+            recovery_choice=recovery_choice,
+            coaching_policy=coaching_policy,
+            distance_unit=distance_unit,
         )
     text = re.sub(
         r"^\s*(?:Run(?:\s*-\s*Long Run)?|Bike|Cycling|Ride):\s*",
@@ -105,10 +120,12 @@ def normalize_workout(
         event.prescription,
         flags=re.I,
     )
-    return _normalize(event, text, recovery_choice, coaching_policy)
+    return _normalize(event, text, recovery_choice, coaching_policy, distance_unit)
 
 
-def _normalize(event: Event, text: str, recovery_choice: str, coaching_policy: str) -> Event:
+def _normalize(
+    event: Event, text: str, recovery_choice: str, coaching_policy: str, distance_unit: str
+) -> Event:
     if event.sport == "cycling":
         # Only add the cycling verb to an otherwise fully supported duration or
         # distance, never strip target instructions or borrow running shorthand.
@@ -126,11 +143,18 @@ def _normalize(event: Event, text: str, recovery_choice: str, coaching_policy: s
     transition_added = False
     pace_metadata = re.search(r"(?im)^Planned:\s*\d+(?:\.\d+)?\s*(mi|km)\b", event.description)
     pace_unit = pace_metadata[1].lower() if pace_metadata else None
+    bare_unit = pace_unit or (distance_unit if distance_unit != "auto" else None)
+    pace_unit = bare_unit
+    unspecified_distance_used = False
     parts = split_clauses(text.replace("×", "x"))
     for index, part in enumerate(parts):
         part = normalize_bookend(part.strip().removesuffix("."))
         if coaching_policy == "cj":
             part = cj_units(part)
+        bare = re.fullmatch(rf"(?:Run\s+)?(\d+(?:\.\d+)?)\s+({EFFORT})", part, re.I)
+        if bare and bare_unit:
+            part = f"{bare[1]} {bare_unit} {bare[2]}"
+            unspecified_distance_used = True
         if (
             re.fullmatch(r"\d+\s*x\s*(uphill|downhill)", part, re.I)
             and index + 1 < len(parts)
@@ -216,6 +240,8 @@ def _normalize(event: Event, text: str, recovery_choice: str, coaching_policy: s
             transition_added = True
         clauses.append(canonical)
     notes = f"Original title: {event.title}\n{event.description}"
+    if unspecified_distance_used:
+        notes += f"\nUnspecified distances interpreted as {bare_unit} from feed metadata or source preference."
     if coaching_policy == "cj":
         notes += "\nCJ policy: unitless track reps in meters, fartlek phases in minutes, hill sprints in seconds; pace arrows use a progression band; approximate pace uses ±5 sec/mi."
     if fallback_used:
