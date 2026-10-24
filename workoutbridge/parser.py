@@ -75,6 +75,7 @@ BASIC_EFFORT = r"(?:easy/moderate|easy/mod|super hard|very hard|easy jog|jog|eas
 EFFORT_QUALIFIER = r"(?:tempo effort|long run pace|regular run pace|(?:5k|10k) (?:effort|pace)|(?:half|1/2) marathon (?:race pace )?effort|marathon effort)"
 EFFORT = rf"(?:{BASIC_EFFORT}(?: progression)?(?:(?: at | around | a little faster than | a bit faster than ){EFFORT_QUALIFIER}(?: or faster)?)?|{EFFORT_QUALIFIER})"
 DISTANCE_EFFORT = rf"(?:{EFFORT}|(?:(?:hard|smooth|fast) )?strides|sprints)"
+TIME_UNITS = r"(?:hours|hour|hr|minutes|minute|mins|min|seconds|second|secs|sec)"
 PATTERN = re.compile(
     r"(warm up|run|ride|bike|cycle|rest|cool down)\s+"
     r"(?:(\d+(?:\.\d+)?)\s*(hours|hour|hr|minutes|minute|mins|min|seconds|second|secs|sec|miles|mile|mi|km|m)"
@@ -85,7 +86,7 @@ PATTERN = re.compile(
 INTERVAL = re.compile(
     rf"(\d+)\s*x\s*(\d+(?:\.\d+)?)\s*(miles|mile|mi|km|m)(?:\s+({EFFORT}))?\s+in\s+"
     r"(\d+(?::[0-5]\d)?)-(\d+(?::[0-5]\d)?)(?:\s+sec)?\s+with\s+"
-    r"(\d+(?:\.\d+)?)\s*(min|sec)\s+(walk/jog|easy|rest)\s+recovery",
+    rf"(\d+(?:\.\d+)?)\s*({TIME_UNITS})\s+(walk/jog|easy|rest)\s+recovery",
     re.IGNORECASE,
 )
 
@@ -252,10 +253,13 @@ def interval(clause: str, sport: str = "running") -> Repeat | None:
             ),
         )
     timed_rest = re.fullmatch(
-        rf"(\d+) x (\d+) sec(?: ({EFFORT}))? with (\d+(?:\.\d+)?) sec rest recovery", clause, re.I
+        rf"(\d+) x (\d+) sec(?: ({EFFORT}))? with (\d+(?:\.\d+)?) ({TIME_UNITS}) rest recovery",
+        clause,
+        re.I,
     )
     if timed_rest:
-        count, duration, effort, recovery = timed_rest.groups()
+        count, duration, effort, recovery, recovery_unit = timed_rest.groups()
+        recovery = float(recovery) * FACTORS[recovery_unit.lower()]
         if (
             not 1 <= int(count) <= 100
             or not 0 < int(duration) <= 3600
@@ -271,14 +275,16 @@ def interval(clause: str, sport: str = "running") -> Repeat | None:
         )
     distance_rest = re.fullmatch(
         rf"(\d+) x (\d+(?:\.\d+)?) (m|km|mi|miles)(?: ({DISTANCE_EFFORT}))? with "
-        r"(\d+(?:\.\d+)?) sec (rest|easy|walk/jog) recovery",
+        rf"(\d+(?:\.\d+)?) ({TIME_UNITS}) (rest|easy|walk/jog) recovery",
         clause,
         re.I,
     )
     if distance_rest:
-        count, amount, unit, effort, recovery, recovery_effort = distance_rest.groups()
+        count, amount, unit, effort, recovery, recovery_unit, recovery_effort = (
+            distance_rest.groups()
+        )
         distance = float(amount) * FACTORS[unit.lower()]
-        recovery = float(recovery)
+        recovery = float(recovery) * FACTORS[recovery_unit.lower()]
         if (
             not 1 <= int(count) <= 100
             or not 0 < distance < float("inf")
@@ -306,15 +312,25 @@ def interval(clause: str, sport: str = "running") -> Repeat | None:
     paced = re.fullmatch(
         rf"(\d+) x (\d+(?:\.\d+)?) (miles|mile|mi|km|m)(?: ({EFFORT}))? at "
         r"(\d{1,2}:[0-5]\d)-(\d{1,2}:[0-5]\d)/(mi|km) with "
-        r"(\d+(?:\.\d+)?) sec (rest|easy|walk/jog) recovery",
+        rf"(\d+(?:\.\d+)?) ({TIME_UNITS}) (rest|easy|walk/jog) recovery",
         clause,
         re.I,
     )
     if paced:
-        count, amount, unit, effort, fast, slow, pace_unit, recovery, recovery_effort = (
-            paced.groups()
-        )
+        (
+            count,
+            amount,
+            unit,
+            effort,
+            fast,
+            slow,
+            pace_unit,
+            recovery,
+            recovery_unit,
+            recovery_effort,
+        ) = paced.groups()
         work = pace_step("run", amount, unit, effort, fast, slow, pace_unit)
+        recovery = float(recovery) * FACTORS[recovery_unit.lower()]
         if work is None or not 1 <= int(count) <= 100 or not 0 < float(recovery) <= 86400:
             return None
         return Repeat(
@@ -341,7 +357,7 @@ def interval(clause: str, sport: str = "running") -> Repeat | None:
         1 <= count <= 100
         and 0 < fast <= slow
         and 0 < distance < float("inf")
-        and 0 < recovery < float("inf")
+        and 0 < recovery <= 86400
     ):
         return None
     effort = effort.lower()
