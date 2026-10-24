@@ -243,6 +243,8 @@ def phase_clause(phase, pace_unit, coaching_policy="strict"):
 
 
 def targeted_clause(part, pace_unit=None, coaching_policy="strict", *, elapsed_target=False):
+    part = re.sub(r"\bstarting\s+at\b", "at", part, flags=re.I)
+    part = re.sub(r"\b(at|@)\s+around\s+(?=\d)", r"\1 ~", part, flags=re.I)
     part = re.sub(
         r"^(\d+\s*x\s*)(mile|kilometer|metre|meter)\b",
         lambda m: (
@@ -299,6 +301,35 @@ def targeted_clause(part, pace_unit=None, coaching_policy="strict", *, elapsed_t
     target_unit = fields["pace_unit"] or pace_unit or ("mi" if unit == "mi" else None)
     if target_is_pace and (target_unit not in {"mi", "km"} or ":" not in fields["first"]):
         return None
+    equivalent_blocks = re.findall(
+        r"\((\d{1,2}:[0-5]\d)\s*[-–]\s*(\d{1,2}:[0-5]\d)\s+(?:pace(?:/(mi|km))?|/(mi|km))\)",
+        fields["tail"],
+        re.I,
+    )
+    equivalent = None
+    if equivalent_blocks:
+        if len(equivalent_blocks) != 1 or target_is_pace:
+            return None
+        first, second, explicit_unit, alternate_unit = equivalent_blocks[0]
+        equivalent_unit = explicit_unit or alternate_unit or target_unit
+        distance = float(fields["amount"]) * FACTORS[unit]
+        if equivalent_unit not in {"mi", "km"} or not 0 < distance < float("inf"):
+            return None
+        bounds = sorted((clock_seconds(first), clock_seconds(second)))
+        if any(
+            abs(a - b) > 1
+            for a, b in zip(
+                bounds,
+                (
+                    fast * FACTORS[equivalent_unit] / distance,
+                    slow * FACTORS[equivalent_unit] / distance,
+                ),
+            )
+        ):
+            return None
+        fast, slow = bounds
+        target_is_pace, target_unit = True, equivalent_unit
+        equivalent = equivalent_blocks[0]
     if approximate:
         if not target_is_pace:
             distance = float(fields["amount"]) * FACTORS[unit]
@@ -321,9 +352,17 @@ def targeted_clause(part, pace_unit=None, coaching_policy="strict", *, elapsed_t
     recovery, after = None, None
     recovery_note, after_note = "", ""
     for block in blocks:
+        if equivalent and re.fullmatch(
+            r"\d{1,2}:[0-5]\d\s*[-–]\s*\d{1,2}:[0-5]\d\s+(?:pace(?:/(mi|km))?|/(mi|km))",
+            block.strip(),
+            re.I,
+        ):
+            continue
         rest = re.fullmatch(r"(.+?)\s+(rest|easy|walk/jog)(?:\s+recovery)?", block.strip(), re.I)
         post = re.fullmatch(
-            r"(.+?)\s+(?:rest\s+)?after\s+(?:the\s+)?(set|\d+(?:st|nd|rd|th))", block.strip(), re.I
+            r"(.+?)\s+(?:rest\s+)?after\s+(?:the\s+)?(set|last one|last rep|last repetition|\d+(?:st|nd|rd|th))",
+            block.strip(),
+            re.I,
         )
         rest_duration, rest_range = (
             recovery_duration(rest[1], coaching_policy) if rest else (None, "")
@@ -334,8 +373,18 @@ def targeted_clause(part, pace_unit=None, coaching_policy="strict", *, elapsed_t
         if rest and recovery is None and rest_duration is not None:
             recovery = (rest_duration, rest[2].lower())
             recovery_note = rest_range + " " + rest[2].lower() if rest_range else ""
+        elif (
+            rest
+            and recovery is not None
+            and after is None
+            and rest_duration is not None
+            and count
+            and coaching_policy == "athlete_preferences"
+        ):
+            after = rest_duration
+            after_note = rest_range + " rest" if rest_range else ""
         elif post and after is None and post_duration is not None:
-            if post[2].lower() != "set" and (
+            if post[2].lower() not in {"set", "last one", "last rep", "last repetition"} and (
                 count is None or int(re.match(r"\d+", post[2])[0]) != int(count)
             ):
                 return None
@@ -350,6 +399,8 @@ def targeted_clause(part, pace_unit=None, coaching_policy="strict", *, elapsed_t
             return None
         target = f"at {band}/{target_unit}" if target_is_pace else f"in {band} sec"
         canonical = f"{count} x {fields['amount']} {unit}{label} {target} with {recovery[0]:g} sec {recovery[1]} recovery"
+        if progression:
+            canonical += f" [target note: {fields['first']} -> {fields['second']}/{target_unit if target_is_pace else 'sec'} progression]"
         if recovery_note:
             canonical += f" [recovery note: {recovery_note}]"
         if after is not None:
@@ -362,6 +413,8 @@ def targeted_clause(part, pace_unit=None, coaching_policy="strict", *, elapsed_t
         verb = fields["verb"] or "Run"
         target = f"at {band}/{target_unit}" if target_is_pace else f"in {band} sec"
         canonical = f"{verb} {fields['amount']} {unit}{label} {target}"
+        if progression:
+            canonical += f" [target note: {fields['first']} -> {fields['second']}/{target_unit if target_is_pace else 'sec'} progression]"
         if recovery is not None:
             recovery_label = "" if recovery[1] == "rest" else " " + recovery[1]
             canonical += f"; {'Run' if recovery[1] == 'easy' else 'Rest'} {recovery[0]:g} sec{recovery_label}"
@@ -384,6 +437,9 @@ def minimum_distance(step):
 
 
 def normalize_clause(part, *, pace_unit=None, coaching_policy="strict", allow_total=False):
+    part = re.sub(r"^(\d+\s*x\s*\d+(?:\.\d+)?)k(?=\s|$)", r"\1km", part, flags=re.I)
+    if coaching_policy == "athlete_preferences" and part.lower() in {"rest", "short rest"}:
+        return Conversion("Rest until lap")
     if recovery := distance_recovery_clause(part):
         return Conversion(recovery)
     if limited := one_sided_pace(part, pace_unit, coaching_policy):
@@ -431,7 +487,7 @@ def normalize_clause(part, *, pace_unit=None, coaching_policy="strict", allow_to
                 return Conversion(text)
     total = (
         re.fullmatch(
-            rf"(?P<range>(?P<low>\d+(?:\.\d+)?)(?:\s*[-–]\s*(?P<high>\d+(?:\.\d+)?))?)\s*(?P<unit>miles|mile|mi|km)\s+(?P<effort>easy(?:/mod(?:erate)?)?(?: {TERRAIN})?)\s+(?:with|including)\s+(?P<block>.+)",
+            rf"(?P<range>(?P<low>\d+(?:\.\d+)?)(?:\s*[-–]\s*(?P<high>\d+(?:\.\d+)?))?)\s*(?P<unit>miles|mile|mi|km)\s+(?P<effort>(?:easy(?:/mod(?:erate)?)?|moderate)(?: {TERRAIN})?)?\s*(?:with|including|w/)\s+(?P<block>.+)",
             part,
             re.I,
         )
@@ -443,6 +499,14 @@ def normalize_clause(part, *, pace_unit=None, coaching_policy="strict", allow_to
         if not 0 < min(bounds) <= max(bounds) < float("inf"):
             return None
         body = total["block"]
+        body = re.sub(r"\s+mixed in(?=\s*\)$)", "", body, flags=re.I)
+        opening = re.fullmatch(r"(.+)\s+after (\d+(?:\.\d+)?)\s*(miles|mile|mi|km)", body, re.I)
+        opening_distance = 0
+        if opening:
+            body = opening[1]
+            opening_distance = float(opening[2]) * FACTORS[opening[3].lower()]
+            if not 0 < opening_distance < max(bounds) * FACTORS[total["unit"].lower()]:
+                return None
         draft = parse(body)
         inner = None
         if draft.unresolved:
@@ -464,13 +528,20 @@ def normalize_clause(part, *, pace_unit=None, coaching_policy="strict", allow_to
         distance_goal = max(bounds) * FACTORS[unit]
         if (
             not 0 < distance_goal < float("inf")
-            or sum(minimum_distance(step) for step in draft.steps) >= distance_goal
+            or opening_distance + sum(minimum_distance(step) for step in draft.steps)
+            >= distance_goal
         ):
             return None
         goal = f"{max(bounds):g} {unit} total"
         if total["high"]:
             goal += f" (prescribed {total['range']} {unit})"
-        text = f"Warm up until lap {total['effort'].lower()} [total note: {goal}]; {body}; Cool down until lap {total['effort'].lower()} [total note: Finish {goal}]"
+        label = (" " + total["effort"].lower()) if total["effort"] else ""
+        start = (
+            f"Run {opening[2]} {opening[3]}{label}"
+            if opening
+            else f"Warm up until lap{label} [total note: {goal}]"
+        )
+        text = f"{start}; {body}; Cool down until lap{label} [total note: Finish {goal}]"
         return Conversion(text, inner.implied_recovery if inner else False, True)
     rest = re.fullmatch(r"Rest\s+(.+)", part, re.I)
     if rest:
@@ -574,10 +645,16 @@ def normalize_clause(part, *, pace_unit=None, coaching_policy="strict", allow_to
             )
         )
 
-    stride = re.fullmatch(r"(\d+)\s*(?:x\s*)?(?:(uphill|downhill|hill)\s+)?strides", part, re.I)
+    stride = re.fullmatch(
+        r"(\d+)\s*(?:x\s*)?(?:(easy|smooth|hard|fast)\s+)?(?:(uphill|downhill|hill)\s+)?strides",
+        part,
+        re.I,
+    )
     if stride:
-        direction = (stride[2].lower() + " ") if stride[2] else ""
-        return Conversion(f"{stride[1]} {direction}strides with lap recovery", True)
+        label = " ".join(filter(None, ((stride[2] or "").lower(), (stride[3] or "").lower())))
+        return Conversion(
+            f"{stride[1]} " + (label + " " if label else "") + "strides with lap recovery", True
+        )
 
     timed = re.fullmatch(
         rf"(\d+)\s*x\s*(\d+(?:\.\d+)?\s*{DURATION_UNITS})\s+"
@@ -593,14 +670,17 @@ def normalize_clause(part, *, pace_unit=None, coaching_policy="strict", allow_to
         return Conversion(f"{count} x {int(duration)} sec {label.lower()} with lap recovery", True)
 
     distance = re.fullmatch(
-        rf"(\d+)\s*x\s*(\d+(?:\.\d+)?)\s*(miles|mi|km|m)\s+({DISTANCE_EFFORT})",
+        rf"(\d+)\s*x\s*(\d+(?:\.\d+)?)\s*(miles|mi|km|m)(?:\s+({DISTANCE_EFFORT}))?",
         part,
         re.I,
     )
     if distance:
         count, amount, unit, label = distance.groups()
         return Conversion(
-            f"{count} x {amount} {unit.lower()} {label.lower()} with lap recovery", True
+            f"{count} x {amount} {unit.lower()}"
+            + (f" {label.lower()}" if label else "")
+            + " with lap recovery",
+            True,
         )
 
     repeated = re.fullmatch(r"(\d+)\s*x\s*(?:\((.*)\)|([^()]+))", part, re.I | re.S)
@@ -611,7 +691,7 @@ def normalize_clause(part, *, pace_unit=None, coaching_policy="strict", allow_to
     ):
         body = (repeated[2] or repeated[3]).strip()
         phases = re.split(
-            rf"\s*[,;+]\s*|\s+plus\s+|(?<!\d)/\s*(?=~?(?:\d+:[0-5]\d\b|\d+(?:\.\d+)?\s*(?:{TIME_UNITS}|s|miles|mile|mi|km|m)\b))",
+            rf"\s*[,;+]\s*|(?<=[a-z])\s*:\s*(?=\d)|\s+plus\s+|(?<!\d)/\s*(?=~?(?:\d+:[0-5]\d\b|\d+(?:\.\d+)?\s*(?:{TIME_UNITS}|s|miles|mile|mi|km|m)\b))",
             body,
             flags=re.I,
         )

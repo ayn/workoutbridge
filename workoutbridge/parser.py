@@ -71,11 +71,11 @@ FACTORS = {
     "mile": 1609.344,
     "miles": 1609.344,
 }
-BASIC_EFFORT = r"(?:easy/moderate|easy/mod|super hard|very hard|easy jog|jog|easy|moderate|hard|smooth|fast|steady|tempo|progression|recovery)"
+BASIC_EFFORT = r"(?:easy/moderate|easy/mod|super hard|very hard|very easy|easy jog|jog|easy|moderate|hard|smooth|fast|steady|tempo|progression|recovery)"
 EFFORT_QUALIFIER = r"(?:tempo effort|long run pace|regular run pace|(?:5k|10k) (?:effort|pace)|(?:half|1/2) marathon (?:race pace )?effort|marathon (?:effort|pace)|MP)"
 RELATIVE_EFFORT = rf"(?:(?:slightly |a little |a bit )?(?:faster|slower) than {EFFORT_QUALIFIER})"
 EFFORT_CORE = rf"(?:{BASIC_EFFORT}(?: progression)?(?:(?: at | around | a little faster than | a bit faster than ){EFFORT_QUALIFIER}(?: or faster)?)?|{EFFORT_QUALIFIER})"
-TERRAIN = r"(?:on (?:trails|trail|hilly trails|rolling trails|rolling terrain|flat terrain|flat ground|a hilly route|a flat route))"
+TERRAIN = r"(?:on (?:trails|trail|hilly trails|rolling trails|rolling terrain|flat terrain|flat ground|a hilly route|hilly route|a flat route)|over (?:hills|rolling hills))"
 EFFORT = rf"(?:(?:{EFFORT_CORE}|{RELATIVE_EFFORT})(?: {TERRAIN})?|{TERRAIN})"
 DISTANCE_EFFORT = rf"(?:{EFFORT}|(?:(?:hard|smooth|fast) )?strides|sprints)"
 TIME_UNITS = r"(?:hours|hour|hr|minutes|minute|mins|min|seconds|second|secs|sec)"
@@ -184,8 +184,19 @@ def interval(clause: str, sport: str = "running") -> Repeat | None:
             if work and len(work.steps) == 2:
                 return replace(work, steps=(work.steps[0], recovery))
 
+    suffix = " including final recovery"
+    if clause.lower().endswith(suffix):
+        body = clause[: -len(suffix)]
+        if suffix in body.lower():
+            return None
+        base = interval(body, sport)
+        if base and base.steps[-1].kind == "rest" and base.steps[-1].unit == "lap_button":
+            return replace(base, skip_last_recovery=False)
+        return None
     strides = re.fullmatch(
-        r"(\d+) (?:(uphill|downhill|hill) )?strides with lap recovery", clause, re.IGNORECASE
+        r"(\d+) (?:(easy|smooth|hard|fast) )?(?:(uphill|downhill|hill) )?strides with lap recovery",
+        clause,
+        re.IGNORECASE,
     )
     if strides and 1 <= int(strides[1]) <= 100:
         return Repeat(
@@ -195,7 +206,11 @@ def interval(clause: str, sport: str = "running") -> Repeat | None:
                     "run",
                     None,
                     "lap_button",
-                    note=((strides[2].lower() + " ") if strides[2] else "") + "stride",
+                    note=" ".join(
+                        filter(
+                            None, ((strides[2] or "").lower(), (strides[3] or "").lower(), "stride")
+                        )
+                    ),
                 ),
                 Step("rest", None, "lap_button"),
             ),
@@ -426,7 +441,7 @@ def parse(text: str, *, sport: str = "running") -> Draft:
     unresolved: list[str] = []
     for clause in filter(None, (part.strip() for part in text.split(";"))):
         annotation = re.fullmatch(
-            r"(.+?) ((?:\[(?:distance|recovery|condition|total|target) note: [^\[\];\n|]+\]\s*)+)",
+            r"(.+?) ((?:\[(?:distance|recovery|condition|total|target|coaching) note: [^\[\];\n|]+\]\s*)+)",
             clause,
             re.I,
         )
@@ -435,25 +450,31 @@ def parse(text: str, *, sport: str = "running") -> Draft:
                 parse(annotation[1], sport=sport) if " note:" not in annotation[1].lower() else None
             )
             item = base.steps[0] if base and not base.unresolved and len(base.steps) == 1 else None
-            target = item.steps[-1] if isinstance(item, Repeat) else item
             notes = re.findall(
-                r"\[(distance|recovery|condition|total|target) note: ([^\[\];\n|]+)\]",
+                r"\[(distance|recovery|condition|total|target|coaching) note: ([^\[\];\n|]+)\]",
                 annotation[2],
                 re.I,
             )
             valid = (
-                target is not None
+                item is not None
                 and len(notes) <= 2
                 and len({kind.lower() for kind, _ in notes}) == len(notes)
             )
             for kind, value in notes:
                 kind = kind.lower()
-                if kind == "target":
+                position = 0 if kind in {"target", "coaching"} else -1
+                target = item.steps[position] if isinstance(item, Repeat) else item
+                if kind == "coaching":
+                    valid &= bool(target and len(value) <= 500)
+                elif kind == "target":
                     valid &= bool(
                         target
                         and target.speed_min is not None
-                        and not isinstance(item, Repeat)
-                        and re.fullmatch(r"\d{1,2}:[0-5]\d/(?:mi|km) or faster", value, re.I)
+                        and re.fullmatch(
+                            r"(?:\d{1,2}:[0-5]\d/(?:mi|km) or faster|\d+(?::[0-5]\d)? -> \d+(?::[0-5]\d)?/(?:mi|km|sec) progression)",
+                            value,
+                            re.I,
+                        )
                     )
                 elif kind == "total":
                     goal = re.fullmatch(
@@ -493,19 +514,19 @@ def parse(text: str, *, sport: str = "running") -> Draft:
                             re.I,
                         )
                     )
+                if valid:
+                    label = target.label if kind == "total" else None
+                    target = replace(
+                        target, note="; ".join(filter(None, (label, target.note, value)))
+                    )
+                    if isinstance(item, Repeat):
+                        members = list(item.steps)
+                        members[position] = target
+                        item = replace(item, steps=tuple(members))
+                    else:
+                        item = target
             if valid:
-                label = target.label if any(kind.lower() == "total" for kind, _ in notes) else None
-                target = replace(
-                    target,
-                    note="; ".join(
-                        filter(None, (label, target.note, *(value for _, value in notes)))
-                    ),
-                )
-                steps.append(
-                    replace(item, steps=(*item.steps[:-1], target))
-                    if isinstance(item, Repeat)
-                    else target
-                )
+                steps.append(item)
             else:
                 unresolved.append(clause)
             continue
@@ -533,7 +554,7 @@ def parse(text: str, *, sport: str = "running") -> Draft:
             else:
                 steps.append(work)
             continue
-        group = re.fullmatch(r"(\d+) x \[([^\[\]]+)\]", clause, re.I)
+        group = re.fullmatch(r"(\d+) x \[((?:[^\[\]]|\[[^\[\]]+\])+)\]", clause, re.I)
         if group:
             members = [parse(part.strip(), sport=sport) for part in group[2].split("|")]
             if (

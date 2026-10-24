@@ -153,6 +153,15 @@ def _normalize(
         text,
         flags=re.I,
     )
+    optional_note = None
+    if coaching_policy == "athlete_preferences":
+        optional = re.fullmatch(
+            r"(.+?)(?:\.\s*|\s+)(Optional easy double(?: or (?:x-train|cross train|uphill TM))?)\.?",
+            text,
+            re.I | re.S,
+        )
+        if optional:
+            text, optional_note = optional[1].strip(), optional[2]
     clauses = []
     fallback_used = False
     transition_added = False
@@ -167,6 +176,26 @@ def _normalize(
     for index, part in enumerate(parts):
         part = normalize_bookend(part.strip().removesuffix("."))
         original_part = part
+        following = re.fullmatch(
+            rf"Right into (\d+(?:\.\d+)?)\s*(miles|mile|mi|km)\s+({EFFORT}) after (?:the )?last (.+)",
+            part,
+            re.I,
+        )
+        if following and clauses:
+            previous = parse(clauses[-1])
+            reference = normalize_clause(
+                "2x (1 sec hard; " + following[4] + ")", coaching_policy=coaching_policy
+            )
+            referenced = parse(reference.text) if reference else None
+            if (
+                not previous.unresolved
+                and isinstance(previous.steps[-1], Repeat)
+                and not previous.steps[-1].skip_last_recovery
+                and referenced
+                and not referenced.unresolved
+                and previous.steps[-1].steps[-1] == referenced.steps[0].steps[-1]
+            ):
+                part = f"Run {following[1]} {following[2]} {following[3]}"
         if coaching_policy == "athlete_preferences":
             repetitions = re.match(r"(\d+)\s*[-–]\s*(\d+)\s*x\s*(.+)", part, re.I | re.S)
             if repetitions and 1 <= int(repetitions[1]) <= int(repetitions[2]) <= 100:
@@ -302,7 +331,39 @@ def _normalize(
             clauses.append("Run until lap")
             transition_added = True
         clauses.append(canonical)
+    lap_buffers_retained = False
+    if coaching_policy == "athlete_preferences":
+        for index, clause in enumerate(clauses):
+            current = parse(clause)
+            next_draft = parse(clauses[index + 1]) if index + 1 < len(clauses) else None
+            group = current.steps[0] if not current.unresolved and len(current.steps) == 1 else None
+            following_group = bool(
+                next_draft and not next_draft.unresolved and isinstance(next_draft.steps[0], Repeat)
+            )
+            if (
+                isinstance(group, Repeat)
+                and group.skip_last_recovery
+                and group.steps[-1].kind == "rest"
+                and group.steps[-1].unit == "lap_button"
+                and (
+                    following_group
+                    or re.search(
+                        r"\bstrides?\b",
+                        (group.steps[0].label or "") + " " + group.steps[0].note,
+                        re.I,
+                    )
+                )
+                and "with lap recovery" in clause.lower()
+            ):
+                boundary = clause.find(" [")
+                boundary = boundary if boundary >= 0 else len(clause)
+                clauses[index] = clause[:boundary] + " including final recovery" + clause[boundary:]
+                lap_buffers_retained = True
+    if optional_note and clauses:
+        clauses[-1] += f" [coaching note: {optional_note}]"
     notes = f"Original title: {event.title}\n{event.description}"
+    if lap_buffers_retained:
+        notes += "\nRetained the final Lap recovery after strides and between consecutive interval blocks."
     if repetition_ranges:
         notes += (
             "\nRepetition range policy: "
