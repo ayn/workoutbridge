@@ -26,6 +26,9 @@ Issues = "https://github.com/ayn/workoutbridge/issues"
 workoutbridge = "workoutbridge.cli:main"
 
 [project.optional-dependencies]
+ai = [
+    "httpx>=0.28.1,<1",
+]
 coros = [
     "httpx>=0.28.1,<1",
     "httpx-sse>=0.4,<0.5",

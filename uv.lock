@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 5
 requires-python = ">=3.11"
 resolution-markers = [
     "python_full_version >= '3.12'",
@@ -763,6 +763,9 @@ dependencies = [
 ]
 
 [package.optional-dependencies]
+ai = [
+    { name = "httpx" },
+]
 coros = [
     { name = "httpx" },
     { name = "httpx-sse" },
@@ -785,6 +788,7 @@ dev = [
 requires-dist = [
     { name = "fastapi", marker = "extra == 'web'", specifier = ">=0.156.4" },
     { name = "garminconnect", marker = "python_full_version >= '3.12' and extra == 'garmin'", specifier = "==0.3.19" },
+    { name = "httpx", marker = "extra == 'ai'", specifier = ">=0.28.1,<1" },
     { name = "httpx", marker = "extra == 'coros'", specifier = ">=0.28.1,<1" },
     { name = "httpx", marker = "extra == 'web'", specifier = ">=0.28.1" },
     { name = "httpx-sse", marker = "extra == 'coros'", specifier = ">=0.4,<0.5" },
@@ -792,7 +796,7 @@ requires-dist = [
     { name = "recurring-ical-events", specifier = ">=3,<4" },
     { name = "uvicorn", marker = "extra == 'web'", specifier = ">=0.54.0" },
 ]
-provides-extras = ["coros", "garmin", "web"]
+provides-extras = ["ai", "coros", "garmin", "web"]
 
 [package.metadata.requires-dev]
 dev = [{ name = "ruff", specifier = "==0.17.1" }]
