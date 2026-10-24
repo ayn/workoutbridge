@@ -193,6 +193,12 @@ def interval(clause: str, sport: str = "running") -> Repeat | None:
         if base and base.steps[-1].kind == "rest" and base.steps[-1].unit == "lap_button":
             return replace(base, skip_last_recovery=False)
         return None
+    targeted_lap = re.fullmatch(r"(.+? (?:at|in) .+?) with lap recovery", clause, re.I)
+    if targeted_lap:
+        base = interval(targeted_lap[1] + " with 1 sec rest recovery", sport)
+        if base and len(base.steps) == 2:
+            return replace(base, steps=(base.steps[0], Step("rest", None, "lap_button")))
+        return None
     strides = re.fullmatch(
         r"(\d+) (?:(easy|smooth|hard|fast) )?(?:(uphill|downhill|hill) )?strides with lap recovery",
         clause,
@@ -258,13 +264,15 @@ def interval(clause: str, sport: str = "running") -> Repeat | None:
             skip_last_recovery=False,
         )
     timed = re.fullmatch(
-        rf"(\d+) x (\d+) sec (hills|uphill|downhill|strides|hill strides|uphill strides|downhill strides|fast strides|hard strides|smooth strides)(?: ({EFFORT}))? with lap recovery(?: (jog down|walk down|jog up))?",
+        rf"(\d+) x (\d+(?:\.\d+)?) ({TIME_UNITS}) (hills|uphill|downhill|strides|hill strides|uphill strides|downhill strides|fast strides|hard strides|smooth strides)(?: ({EFFORT}))? with lap recovery(?: (jog down|walk down|jog up))?",
         clause,
         re.IGNORECASE,
     )
     if timed:
-        count, seconds = map(int, timed.groups()[:2])
-        activity, effort = timed[3], timed[4]
+        count = int(timed[1])
+        seconds = float(timed[2]) * FACTORS[timed[3].lower()]
+        seconds = int(seconds) if seconds.is_integer() else seconds
+        activity, effort = timed[4], timed[5]
         if not 1 <= count <= 100 or not 0 < seconds <= 3600:
             return None
         return Repeat(
@@ -276,33 +284,41 @@ def interval(clause: str, sport: str = "running") -> Repeat | None:
                     "seconds",
                     note=activity.capitalize() + (f" {effort.lower()}" if effort else ""),
                 ),
-                Step("rest", None, "lap_button", note=(timed[5] or "").lower()),
+                Step("rest", None, "lap_button", note=(timed[6] or "").lower()),
             ),
         )
     sprints = re.fullmatch(
-        r"(\d+) x (\d+) sec ((?:uphill |hill )?sprints) with lap recovery", clause, re.IGNORECASE
+        rf"(\d+) x (\d+(?:\.\d+)?) ({TIME_UNITS}) ((?:uphill |hill )?sprints) with lap recovery",
+        clause,
+        re.IGNORECASE,
     )
     if sprints:
-        count, seconds = map(int, sprints.groups()[:2])
+        count = int(sprints[1])
+        seconds = float(sprints[2]) * FACTORS[sprints[3].lower()]
+        seconds = int(seconds) if seconds.is_integer() else seconds
         if not 1 <= count <= 100 or not 0 < seconds <= 3600:
             return None
         return Repeat(
             count,
             (
-                Step("run", seconds, "seconds", note=sprints[3].lower().removesuffix("s")),
+                Step("run", seconds, "seconds", note=sprints[4].lower().removesuffix("s")),
                 Step("rest", None, "lap_button"),
             ),
             skip_last_recovery=False,
         )
-    timed_lap = re.fullmatch(rf"(\d+) x (\d+) sec ({EFFORT}) with lap recovery", clause, re.I)
+    timed_lap = re.fullmatch(
+        rf"(\d+) x (\d+(?:\.\d+)?) ({TIME_UNITS}) ({EFFORT}) with lap recovery", clause, re.I
+    )
     if timed_lap:
-        count, seconds, effort = timed_lap.groups()
-        if not 1 <= int(count) <= 100 or not 0 < int(seconds) <= 3600:
+        count, amount, unit, effort = timed_lap.groups()
+        seconds = float(amount) * FACTORS[unit.lower()]
+        seconds = int(seconds) if seconds.is_integer() else seconds
+        if not 1 <= int(count) <= 100 or not 0 < seconds <= 3600:
             return None
         return Repeat(
             int(count),
             (
-                Step("run", int(seconds), "seconds", effort.lower()),
+                Step("run", seconds, "seconds", effort.lower()),
                 Step("rest", None, "lap_button"),
             ),
         )
@@ -441,7 +457,7 @@ def parse(text: str, *, sport: str = "running") -> Draft:
     unresolved: list[str] = []
     for clause in filter(None, (part.strip() for part in text.split(";"))):
         annotation = re.fullmatch(
-            r"(.+?) ((?:\[(?:distance|recovery|condition|total|target|coaching) note: [^\[\];\n|]+\]\s*)+)",
+            r"(.+?) ((?:\[(?:distance|recovery|condition|total|target|coaching|buffer) note: [^\[\];\n|]+\]\s*)+)",
             clause,
             re.I,
         )
@@ -451,7 +467,7 @@ def parse(text: str, *, sport: str = "running") -> Draft:
             )
             item = base.steps[0] if base and not base.unresolved and len(base.steps) == 1 else None
             notes = re.findall(
-                r"\[(distance|recovery|condition|total|target|coaching) note: ([^\[\];\n|]+)\]",
+                r"\[(distance|recovery|condition|total|target|coaching|buffer) note: ([^\[\];\n|]+)\]",
                 annotation[2],
                 re.I,
             )
@@ -464,7 +480,14 @@ def parse(text: str, *, sport: str = "running") -> Draft:
                 kind = kind.lower()
                 position = 0 if kind in {"target", "coaching"} else -1
                 target = item.steps[position] if isinstance(item, Repeat) else item
-                if kind == "coaching":
+                if kind == "buffer":
+                    valid &= bool(
+                        target
+                        and target.kind == "rest"
+                        and target.unit == "lap_button"
+                        and len(value) <= 160
+                    )
+                elif kind == "coaching":
                     valid &= bool(target and len(value) <= 500)
                 elif kind == "target":
                     valid &= bool(

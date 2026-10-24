@@ -209,8 +209,29 @@ def one_sided_pace(part, pace_unit, coaching_policy):
     return Conversion(candidate) if not parse(candidate).unresolved else None
 
 
-def phase_clause(phase, pace_unit, coaching_policy="strict"):
+def unclear_recovery_clause(part, *, phase=False):
+    """Recognize the recovery role without fabricating its endpoint duration."""
+    part = part.strip()
+    vague = re.fullmatch(
+        r"(?:(?:a )?(?:short|full|brief|unspecified|unclear|unknown)?\s*(?:rest|recovery)(?: (?:as needed|as required|by feel|until ready))?"
+        r"|recover (?:until ready|as needed|by feel)|choose (?:your own |own )?recovery)",
+        part,
+        re.I,
+    )
+    effort = phase and part.lower() in {"easy", "moderate", "jog", "walk/jog", "recovery"}
+    if not vague and not effort:
+        return None
+    label = " " + part.lower() if effort and part.lower() != "recovery" else ""
+    return f"Rest until lap{label} [buffer note: {part}]"
+
+
+def phase_clause(phase, pace_unit, coaching_policy="strict", *, recovery_phase=False):
     phase = re.sub(r"^~\s*(?=\d)", "", phase.strip().removesuffix("."))
+    if coaching_policy == "athlete_preferences":
+        if buffer := unclear_recovery_clause(phase, phase=recovery_phase):
+            return buffer
+        if recovery_phase and (duration := seconds(phase)) is not None:
+            return f"Rest {duration:g} sec"
     if recovery := distance_recovery_clause(phase):
         return recovery
     target_source = phase
@@ -351,7 +372,16 @@ def targeted_clause(part, pace_unit=None, coaching_policy="strict", *, elapsed_t
         return None
     recovery, after = None, None
     recovery_note, after_note = "", ""
+    recovery_buffer, after_buffer = None, None
+    implied_recovery = False
     for block in blocks:
+        buffer = (
+            unclear_recovery_clause(block) if coaching_policy == "athlete_preferences" else None
+        )
+        if buffer and recovery is None:
+            recovery, recovery_buffer = ("lap", "rest"), block.strip()
+            implied_recovery = True
+            continue
         if equivalent and re.fullmatch(
             r"\d{1,2}:[0-5]\d\s*[-–]\s*\d{1,2}:[0-5]\d\s+(?:pace(?:/(mi|km))?|/(mi|km))",
             block.strip(),
@@ -370,6 +400,20 @@ def targeted_clause(part, pace_unit=None, coaching_policy="strict", *, elapsed_t
         post_duration, post_range = (
             recovery_duration(post[1], coaching_policy) if post else (None, "")
         )
+        if (
+            post
+            and post_duration is None
+            and after is None
+            and coaching_policy == "athlete_preferences"
+        ):
+            if unclear_recovery_clause(post[1]) or unclear_recovery_clause(post[1] + " rest"):
+                if post[2].lower() not in {"set", "last one", "last rep", "last repetition"} and (
+                    count is None or int(re.match(r"\d+", post[2])[0]) != int(count)
+                ):
+                    return None
+                after, after_buffer = "lap", block.strip()
+                implied_recovery = True
+                continue
         if rest and recovery is None and rest_duration is not None:
             recovery = (rest_duration, rest[2].lower())
             recovery_note = rest_range + " " + rest[2].lower() if rest_range else ""
@@ -396,15 +440,29 @@ def targeted_clause(part, pace_unit=None, coaching_policy="strict", *, elapsed_t
     band = f"{clock_label(fast)}-{clock_label(slow)}"
     if count:
         if recovery is None:
-            return None
+            if coaching_policy != "athlete_preferences":
+                return None
+            recovery, recovery_buffer = ("lap", "rest"), "Recovery unspecified"
+            implied_recovery = True
         target = f"at {band}/{target_unit}" if target_is_pace else f"in {band} sec"
-        canonical = f"{count} x {fields['amount']} {unit}{label} {target} with {recovery[0]:g} sec {recovery[1]} recovery"
+        endpoint = (
+            "lap recovery"
+            if recovery[0] == "lap"
+            else f"{recovery[0]:g} sec {recovery[1]} recovery"
+        )
+        canonical = f"{count} x {fields['amount']} {unit}{label} {target} with {endpoint}"
+        if recovery_buffer:
+            canonical += f" [buffer note: {recovery_buffer}]"
         if progression:
             canonical += f" [target note: {fields['first']} -> {fields['second']}/{target_unit if target_is_pace else 'sec'} progression]"
         if recovery_note:
             canonical += f" [recovery note: {recovery_note}]"
         if after is not None:
-            canonical += f"; Rest {after:g} sec"
+            canonical += (
+                f"; Rest until lap [buffer note: {after_buffer}]"
+                if after == "lap"
+                else f"; Rest {after:g} sec"
+            )
             if after_note:
                 canonical += f" [recovery note: {after_note}]"
     else:
@@ -417,10 +475,14 @@ def targeted_clause(part, pace_unit=None, coaching_policy="strict", *, elapsed_t
             canonical += f" [target note: {fields['first']} -> {fields['second']}/{target_unit if target_is_pace else 'sec'} progression]"
         if recovery is not None:
             recovery_label = "" if recovery[1] == "rest" else " " + recovery[1]
-            canonical += f"; {'Run' if recovery[1] == 'easy' else 'Rest'} {recovery[0]:g} sec{recovery_label}"
+            canonical += (
+                f"; Rest until lap [buffer note: {recovery_buffer}]"
+                if recovery[0] == "lap"
+                else f"; {'Run' if recovery[1] == 'easy' else 'Rest'} {recovery[0]:g} sec{recovery_label}"
+            )
             if recovery_note:
                 canonical += f" [recovery note: {recovery_note}]"
-    return Conversion(canonical)
+    return Conversion(canonical, implied_recovery)
 
 
 def minimum_distance(step):
@@ -438,8 +500,20 @@ def minimum_distance(step):
 
 def normalize_clause(part, *, pace_unit=None, coaching_policy="strict", allow_total=False):
     part = re.sub(r"^(\d+\s*x\s*\d+(?:\.\d+)?)k(?=\s|$)", r"\1km", part, flags=re.I)
-    if coaching_policy == "athlete_preferences" and part.lower() in {"rest", "short rest"}:
-        return Conversion("Rest until lap")
+    if coaching_policy == "athlete_preferences":
+        if buffer := unclear_recovery_clause(part):
+            return Conversion(buffer, True)
+        bracket = re.fullmatch(r"([^()]+)\s*\(([^()]+)\)", part, re.I)
+        if bracket and (buffer := unclear_recovery_clause(bracket[2])):
+            work = normalize_clause(
+                bracket[1].strip(), pace_unit=pace_unit, coaching_policy=coaching_policy
+            )
+            if work and "with lap recovery" in work.text:
+                base = re.sub(r" \[buffer note: [^\[\]]+\]", "", work.text)
+                return Conversion(base + f" [buffer note: {bracket[2].strip()}]", True)
+            phase = phase_clause(bracket[1], pace_unit, coaching_policy)
+            if phase:
+                return Conversion(phase + "; " + buffer, True)
     if recovery := distance_recovery_clause(part):
         return Conversion(recovery)
     if limited := one_sided_pace(part, pace_unit, coaching_policy):
@@ -704,8 +778,8 @@ def normalize_clause(part, *, pace_unit=None, coaching_policy="strict", allow_to
         if not 2 <= len(phases) <= 8:
             return None
         steps = []
-        for phase in phases:
-            step = phase_clause(phase, pace_unit, coaching_policy)
+        for phase_index, phase in enumerate(phases):
+            step = phase_clause(phase, pace_unit, coaching_policy, recovery_phase=phase_index > 0)
             if step is None:
                 return None
             steps.append(step)
@@ -714,5 +788,8 @@ def normalize_clause(part, *, pace_unit=None, coaching_policy="strict", allow_to
             legacy = f"{repeated[1]} x {steps[0][4:]} with {steps[1][4:]} recovery"
             if not parse(legacy).unresolved:
                 return Conversion(legacy)
-        return Conversion(f"{repeated[1]} x [" + " | ".join(steps) + "]")
+        return Conversion(
+            f"{repeated[1]} x [" + " | ".join(steps) + "]",
+            any("[buffer note:" in step for step in steps),
+        )
     return None
