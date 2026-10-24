@@ -376,7 +376,7 @@ creation and `POST /api/v1/sources/{id}/distance-unit` with `{"unit":"km"}` for
 updates. Library normalizers accept the same `distance_unit` argument. Existing
 sources default to `auto`; changing units does not clear publishing history.
 
-#### Coaching notation and opt-in CJ policy
+#### Shared notation and athlete conversion preferences
 
 The running parser accepts explicit mile/minute/second units, fractional mile
 distances, directional strides, timed hill sprints, multi-phase fartleks and
@@ -408,10 +408,10 @@ standalone clock rests and tempo-effort phases followed by easy running are
 also supported without adding extra Lap transitions.
 
 Sources default to the `strict` coaching policy. An athlete can explicitly opt
-their own source into `cj` through authenticated
-`POST /api/v1/sources/{id}/coaching-policy` with `{"policy":"cj"}`; use
+their own source into `athlete_preferences` through authenticated
+`POST /api/v1/sources/{id}/coaching-policy` with `{"policy":"athlete_preferences"}`; use
 `{"policy":"strict"}` to disable it. Library callers can pass
-`coaching_policy="cj"` to either prescription normalizer. This policy:
+`coaching_policy="athlete_preferences"` to either prescription normalizer. This policy:
 
 - Treats unitless track reps from 100–10,000 as meters, unitless hill-sprint
   durations as seconds, and unitless effort phases inside repeated fartleks as minutes.
@@ -440,7 +440,9 @@ not select between alternatives, choose variable repetition counts or repair arb
 missing text. Existing implied-recovery opt-outs still apply. Original text and
 the enabled policy are retained in notes. Changing policy changes the review
 plan; existing publishing history remains authoritative for duplicate prevention.
-The legacy `cj` preset name groups these opted-in choices; its wording rules
+The legacy `cj` value remains a compatibility alias for existing sources and
+API clients; new writes save `athlete_preferences`. No coach identification or
+coach-specific grammar is involved. These opted-in choices and their wording rules
 remain the same shared English grammar used for every source.
 
 Final Surge removes past runs from the feed. A future recurring importer must

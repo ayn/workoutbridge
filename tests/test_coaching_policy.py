@@ -2,7 +2,7 @@ import unittest
 
 from workoutbridge.calendar import Event
 from workoutbridge.parser import parse
-from workoutbridge.prescriptions import normalize_workout
+from workoutbridge.prescriptions import normalize_finalsurge, normalize_workout
 
 
 class CoachingPolicyTests(unittest.TestCase):
@@ -23,7 +23,7 @@ class CoachingPolicyTests(unittest.TestCase):
             self.assertFalse(draft.unresolved, text)
             self.assertEqual(draft.steps[0].steps[0].duration, duration)
             self.assertEqual(draft.steps[0].steps[0].unit, unit)
-            self.assertIn("CJ policy", normalized.description)
+            self.assertIn("Athlete conversion preferences", normalized.description)
             self.assertIn(text, normalized.description)
 
     def test_pace_progression_band_preserves_direction_in_notes(self):
@@ -61,3 +61,15 @@ class CoachingPolicyTests(unittest.TestCase):
             )
         with self.assertRaises(ValueError):
             normalize_workout(self.event("3x1200"), coaching_policy="unknown")
+
+    def test_preferences_are_coach_independent_and_legacy_settings_still_work(self):
+        for normalizer in (normalize_workout, normalize_finalsurge):
+            for text in ("3x1200", "5-6 miles easy", "4 miles tempo at ~ 6:40/mi"):
+                event = self.event(text)
+                current = normalizer(event, coaching_policy="athlete_preferences")
+                legacy = normalizer(event, coaching_policy="cj")
+                self.assertEqual(current, legacy)
+                self.assertFalse(parse(current.prescription).unresolved)
+                self.assertIn("Athlete conversion preferences", current.description)
+                self.assertNotIn("CJ policy", current.description)
+                self.assertTrue(parse(normalizer(event).prescription).unresolved)

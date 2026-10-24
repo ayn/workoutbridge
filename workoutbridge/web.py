@@ -26,7 +26,7 @@ from .calendar import Event, import_calendar
 from .cli import review_item
 from .feed import calendar_feed_url, read_calendar
 from .garmin import GarminProvider
-from .prescriptions import normalize_finalsurge, normalize_workout
+from .prescriptions import canonical_coaching_policy, normalize_finalsurge, normalize_workout
 from .profiles import load_profile, profile_path
 from .publishing import Publisher, digest
 from .reviewed import review_progression
@@ -658,9 +658,10 @@ def create_app(
 
     @app.post(API_PREFIX + "/sources/{key}/coaching-policy")
     def source_coaching_policy(key: str, body: dict):
-        policy = body.get("policy")
-        if policy not in ("strict", "cj"):
-            raise HTTPException(422, "Choose strict or cj coaching policy")
+        try:
+            policy = canonical_coaching_policy(body.get("policy"))
+        except ValueError:
+            raise HTTPException(422, "Choose strict or athlete_preferences conversion policy")
         source = get("source", key)
         source["coaching_policy"] = policy
         put("source", key, source)

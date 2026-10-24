@@ -5,8 +5,8 @@ from dataclasses import replace
 
 from .calendar import Event
 from .parser import EFFORT, Repeat, Step, parse
-from .shorthand import cj_units, normalize_bookend, normalize_clause
 from .shorthand import clauses as split_clauses
+from .shorthand import infer_shorthand_units, normalize_bookend, normalize_clause
 from .sports import event_sport
 
 METADATA = re.compile(
@@ -14,6 +14,15 @@ METADATA = re.compile(
     r"|Planned:\s*(?:\d+(?:\.\d+)?\s*(?:mi|km)(?:\s*~\s*\d+:\d{2}:\d{2})?|\d+:\d{2}:\d{2}))",
     re.I,
 )
+
+
+def canonical_coaching_policy(value):
+    # Read old saved sources without requiring a migration or guessing a coach.
+    if value == "cj":
+        return "athlete_preferences"
+    if value not in ("strict", "athlete_preferences"):
+        raise ValueError("Unknown conversion policy")
+    return value
 
 
 def incomplete_description(title, details, sport):
@@ -41,8 +50,7 @@ def normalize_finalsurge(
     coaching_policy: str = "strict",
     distance_unit: str = "auto",
 ) -> Event:
-    if coaching_policy not in ("strict", "cj"):
-        raise ValueError("Unknown coaching policy")
+    coaching_policy = canonical_coaching_policy(coaching_policy)
     if distance_unit not in ("auto", "mi", "km"):
         raise ValueError("Unknown distance unit")
     event = replace(
@@ -78,8 +86,7 @@ def normalize_workout(
     coaching_policy: str = "strict",
     distance_unit: str = "auto",
 ) -> Event:
-    if coaching_policy not in ("strict", "cj"):
-        raise ValueError("Unknown coaching policy")
+    coaching_policy = canonical_coaching_policy(coaching_policy)
     if distance_unit not in ("auto", "mi", "km"):
         raise ValueError("Unknown distance unit")
     event = replace(
@@ -158,7 +165,7 @@ def _normalize(
         part = normalize_bookend(part.strip().removesuffix("."))
         original_part = part
         condition = None
-        if coaching_policy == "cj" and len(parts) == 1:
+        if coaching_policy == "athlete_preferences" and len(parts) == 1:
             condition = re.fullmatch(r"(.+?)\s+(if\s+\S[^\[\];\n|]{0,249})", part, re.I)
             if condition and re.search(r"\d|\b(then|also|add|followed|plus)\b", condition[2], re.I):
                 condition = None
@@ -168,8 +175,8 @@ def _normalize(
                 )
         if condition:
             part = condition[1].strip().removesuffix(".")
-        if coaching_policy == "cj":
-            part = cj_units(part)
+        if coaching_policy == "athlete_preferences":
+            part = infer_shorthand_units(part)
             distance_range = re.fullmatch(
                 rf"(?P<range>(\d+(?:\.\d+)?)\s*[-–]\s*(\d+(?:\.\d+)?)(?:\s*(miles|mile|mi|km))?)(?:\s+({EFFORT}))?",
                 part,
@@ -288,8 +295,8 @@ def _normalize(
     notes = f"Original title: {event.title}\n{event.description}"
     if unspecified_distance_used:
         notes += f"\nUnspecified distances interpreted as {bare_unit} from feed metadata or source preference."
-    if coaching_policy == "cj":
-        notes += "\nCJ policy: unitless track reps in meters, fartlek phases in minutes, hill sprints in seconds; pace arrows use a progression band; approximate pace uses ±5 sec/mi; distance/recovery ranges use the longer bound with the original range on the step; simple conditions stay on the nominal run as athlete-decision notes."
+    if coaching_policy == "athlete_preferences":
+        notes += "\nAthlete conversion preferences: unitless track reps in meters, fartlek phases in minutes, hill sprints in seconds; pace arrows use a progression band; approximate pace uses ±5 sec/mi; distance/recovery ranges use the longer bound with the original range on the step; simple conditions stay on the nominal run as athlete-decision notes."
     if fallback_used:
         notes += "\nDefault policy: implied interval recovery until Lap between reps."
         if any(
