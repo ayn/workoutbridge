@@ -66,6 +66,35 @@ class WebTests(unittest.TestCase):
         ).json()["id"]
         return rule, source, profile
 
+    def test_coaching_policy_is_validated_persisted_and_scoped_to_source(self):
+        from workoutbridge.calendar import Event
+
+        rule, source, _ = self.automatic_rule()
+        endpoint = f"/api/v1/sources/{source}/coaching-policy"
+        for value in ("unknown", True, None):
+            self.assertEqual(
+                self.client.post(
+                    endpoint, json={"policy": value}, headers=self.headers
+                ).status_code,
+                422,
+            )
+        events = [Event(source, "run", "", "2030-01-01", "Run: 3x1200", "")]
+        with (
+            patch("workoutbridge.web.read_calendar", return_value=b"synthetic"),
+            patch("workoutbridge.web.import_calendar", return_value=events),
+        ):
+            self.app.state.poll_once(rule)
+            self.assertIn("error", self.client.get("/api/v1/state").json()["plans"][0]["items"][0])
+            response = self.client.post(endpoint, json={"policy": "cj"}, headers=self.headers)
+            self.assertEqual(response.status_code, 200)
+            self.app.state.poll_once(rule)
+            state = self.client.get("/api/v1/state").json()
+            self.assertEqual(state["sources"][0]["coaching_policy"], "cj")
+            self.assertNotIn("error", state["plans"][0]["items"][0])
+            self.client.post(endpoint, json={"policy": "strict"}, headers=self.headers)
+            self.app.state.poll_once(rule)
+            self.assertIn("error", self.client.get("/api/v1/state").json()["plans"][0]["items"][0])
+
     def test_owner_session_survives_restart_without_storing_bearer_token(self):
         self.login()
         token = self.client.cookies.get("wb_session")

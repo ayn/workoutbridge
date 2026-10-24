@@ -211,7 +211,14 @@ def create_app(
             end=start + timedelta(days=15),
         )
         normalize = normalize_finalsurge if source["format"] == "finalsurge" else normalize_workout
-        items = [planned_item(rule_id, profile["account_id"], normalize(event)) for event in events]
+        items = [
+            planned_item(
+                rule_id,
+                profile["account_id"],
+                normalize(event, coaching_policy=source.get("coaching_policy", "strict")),
+            )
+            for event in events
+        ]
         plan = {"id": rule_id, "account": profile["account_id"], "items": items, "created": stamp()}
         plan["hash"] = digest(plan)
         put("plan", rule_id, plan)
@@ -640,6 +647,16 @@ def create_app(
             },
         )
         return {"id": key}
+
+    @app.post(API_PREFIX + "/sources/{key}/coaching-policy")
+    def source_coaching_policy(key: str, body: dict):
+        policy = body.get("policy")
+        if policy not in ("strict", "cj"):
+            raise HTTPException(422, "Choose strict or cj coaching policy")
+        source = get("source", key)
+        source["coaching_policy"] = policy
+        put("source", key, source)
+        return {"id": key, "coaching_policy": policy}
 
     @app.post(API_PREFIX + "/syncs")
     def sync(body: dict):
