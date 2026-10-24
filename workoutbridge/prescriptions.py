@@ -136,8 +136,14 @@ def _normalize(
     if not parse(text, sport=event.sport).unresolved:
         return replace(event, structured_text=text)
     # Only explicit distance fractions: effort ratios and unitless text remain unknown.
-    text = re.sub(r"(?<![\d/])(?:1/2|½)(?=\s*(?:mile|mi|km)\b)", "0.5", text, flags=re.I)
-    text = re.sub(r"(?<![\d/])(?:3/4|¾)(?=\s*(?:mile|mi|km)\b)", "0.75", text, flags=re.I)
+    text = re.sub(r"(?<![\d/])(?:1/2|½)(?=\s*(?:miles|mile|mi|km)\b)", "0.5", text, flags=re.I)
+    text = re.sub(r"(?<![\d/])(?:3/4|¾)(?=\s*(?:miles|mile|mi|km)\b)", "0.75", text, flags=re.I)
+    text = re.sub(
+        r"~\s*(?=\d+(?:\.\d+)?\s*(?:miles|mile|mi|km|m|hours|hour|hr|minutes|mins|min|seconds|sec|s)\b)",
+        "",
+        text,
+        flags=re.I,
+    )
     clauses = []
     fallback_used = False
     transition_added = False
@@ -151,6 +157,17 @@ def _normalize(
         part = normalize_bookend(part.strip().removesuffix("."))
         if coaching_policy == "cj":
             part = cj_units(part)
+            distance_range = re.fullmatch(
+                rf"(?P<range>(\d+(?:\.\d+)?)\s*[-–]\s*(\d+(?:\.\d+)?)(?:\s*(miles|mile|mi|km))?)(?:\s+({EFFORT}))?",
+                part,
+                re.I,
+            )
+            if distance_range:
+                first, second, unit, effort = distance_range.group(2, 3, 4, 5)
+                unit = unit or bare_unit
+                if unit and 0 < min(float(first), float(second)):
+                    label = " " + effort if effort else ""
+                    part = f"Run {max(float(first), float(second)):g} {unit}{label} [distance note: {distance_range['range']}]"
         bare = re.fullmatch(rf"(?:Run\s+)?(\d+(?:\.\d+)?)\s+({EFFORT})", part, re.I)
         if bare and bare_unit:
             part = f"{bare[1]} {bare_unit} {bare[2]}"
@@ -243,7 +260,7 @@ def _normalize(
     if unspecified_distance_used:
         notes += f"\nUnspecified distances interpreted as {bare_unit} from feed metadata or source preference."
     if coaching_policy == "cj":
-        notes += "\nCJ policy: unitless track reps in meters, fartlek phases in minutes, hill sprints in seconds; pace arrows use a progression band; approximate pace uses ±5 sec/mi."
+        notes += "\nCJ policy: unitless track reps in meters, fartlek phases in minutes, hill sprints in seconds; pace arrows use a progression band; approximate pace uses ±5 sec/mi; distance/recovery ranges use the longer bound with the original range on the step."
     if fallback_used:
         notes += "\nDefault policy: implied interval recovery until Lap between reps."
         if any(

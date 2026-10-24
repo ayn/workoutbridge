@@ -52,7 +52,7 @@ class CoachingPolicyTests(unittest.TestCase):
             "3x1200 or 4x800",
             "3x12 hill sprints if injured skip",
             "3x (1 hard; choose recovery)",
-            "3x1200 at 4:00 (1-2 min rest)",
+            "3x1200 at 4:00 (choose recovery)",
         ):
             self.assertTrue(
                 parse(
