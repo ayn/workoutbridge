@@ -38,7 +38,7 @@ def read_private_secret(path):
 MODELS = {"gpt-6-luna": (100, 500), "gpt-6.1-sol": (2000, 10000)}
 INPUT_RESERVATION = 32768
 MAX_OUTPUT = 2048
-VERSION = "shadow-v2"
+VERSION = "shadow-v3"
 SCHEMA = {
     "type": "object",
     "properties": {
@@ -66,12 +66,18 @@ Cool down 5 min; Run until lap; Ride 40 min easy.
 Duration units: min, sec, hours. Distance units: miles, mi, km, m.
 Optional effort words: easy, moderate, hard, smooth. No arbitrary extra words.
 Explicit running intervals: 4 x 200 m in 62-64 sec with 2 min walk/jog recovery.
+These recover between reps only, with no recovery after the final run.
 Distance intervals: 4 x 400 m hard with lap recovery (only when recovery is explicitly Lap).
+Distance intervals also recover between reps only, with no recovery after the final run.
 Timed intervals: 4 x 30 sec hard with 60 sec easy recovery (includes final recovery).
 Timed hills/strides: 4 x 15 sec hills with lap recovery; 4 x 12 sec strides with lap recovery.
+These timed hills/strides omit recovery after the final rep.
 Uphill sprints: 4 x 12 sec uphill sprints with lap recovery (includes final recovery).
 Unspecified strides: 4 strides with lap recovery (both stride and recovery end on Lap).
 Cycling intervals: 4 x 3 min hard with 2 min easy recovery.
+Cycling intervals recover between reps only, with no recovery after the final rep.
+If the prescription explicitly requires final recovery for these cycling intervals,
+the supported grammar cannot represent it; keep it unresolved.
 Fast finish: Run 18 miles w/ last 6 miles fast (18 total, not 24; no numeric pace).
 Progression: Run 4 miles progression from 7:40 to 7:00/mi (a pace band, not fixed splits).
 An unspecific 'fast' instruction without a numeric pace can remain a coaching note

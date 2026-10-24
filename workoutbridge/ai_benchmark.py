@@ -146,9 +146,10 @@ def score(case, result):
     if result["status"] != "candidate":
         return "unnecessary_review"
     expected = parse(case.expected, sport=case.sport).to_dict()
+    notes_supported = all(note in case.text for note in result.get("notes", []))
     return (
         "correct"
-        if not result.get("notes") and semantic(result["draft"]) == semantic(expected)
+        if notes_supported and semantic(result["draft"]) == semantic(expected)
         else "incorrect_candidate"
     )
 

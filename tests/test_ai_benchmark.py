@@ -36,6 +36,18 @@ class AIBenchmarkTests(unittest.TestCase):
         case = next(case for case in CASES if case.sport == "swimming")
         self.assertEqual(score(case, {"status": "input_rejected"}), "unsupported_sport")
 
+    def test_verbatim_source_notes_do_not_make_correct_steps_incorrect(self):
+        case = next(case for case in CASES if case.name == "fast-finish")
+        result = {
+            "status": "candidate",
+            "draft": parse(case.expected).to_dict(),
+            "notes": ["No pace specified."],
+        }
+        self.assertEqual(score(case, result), "correct")
+        self.assertEqual(
+            score(case, {**result, "notes": ["Run another mile"]}), "incorrect_candidate"
+        )
+
     def test_evaluation_counts_failures_separately_from_correct_abstention(self):
         engine = Mock()
         engine.model = "synthetic"
