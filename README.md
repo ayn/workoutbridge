@@ -424,6 +424,14 @@ same defaults; callers can pass `coaching_policy="strict"` to opt out. The defau
   rounded to whole seconds, for an explicitly stated per-kilometer pace).
   Approximate elapsed rep targets use this same tolerance after converting the
   stated rep distance and time to pace.
+- Selects the larger count for a bounded leading repetition range such as
+  `4-6x (3 min hard; 3 min moderate)`, retaining the range and original conditions
+  in workout notes. Zero, reversed and excessive repetition ranges require review.
+- Converts a one-sided numeric pace instruction such as `6:15/mi or faster` into
+  a 5:30–6:15/mi band, retaining the stated limit and "or faster" in the step note.
+  The band is 45 seconds per mile wide (28 seconds per kilometer). An explicit
+  pace unit or source/distance context is required. Qualitative relative efforts
+  such as "faster than marathon effort" stay notes without invented numeric targets.
 - Selects the longer distance for simple distance ranges and the longer recovery
   for explicit recovery ranges. The original range is retained on that specific
   run or recovery step, not only in overall workout notes.
@@ -437,8 +445,20 @@ same defaults; callers can pass `coaching_policy="strict"` to opt out. The defau
   replace explicit warmups/cooldowns. Unknown instructions and blocks whose
   prescribed minimum distance already consumes the total remain in review.
 
+A distance recovery with an elapsed target, such as `200m jog in 75-90s`, ends
+at 200 meters and uses native pace bounds equivalent to 75–90 seconds for that
+distance. The time range stays on the recovery note. This works after targeted
+reps and inside continuous cycles. Between-rep recoveries omit the final recovery;
+a continuous cycle explicitly containing the recovery retains it. An explicit
+after-set rest replaces that omitted final recovery. Canonical examples:
+
+```text
+4 x 800 m in 3:10-3:15 sec with 200 m jog in 75-90 sec recovery
+5 x [Run 300 m in 63-65 sec | Rest 100 m jog in 30-30 sec]
+```
+
 These are documented product conversion defaults, not claims about every coach. They do
-not select between alternatives, choose variable repetition counts or repair arbitrary
+not select between primary alternatives or repair arbitrary
 missing text. Existing implied-recovery opt-outs still apply. Original text and
 the enabled policy are retained in notes. Changing policy changes the review
 plan; existing publishing history remains authoritative for duplicate prevention.

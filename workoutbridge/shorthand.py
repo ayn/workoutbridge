@@ -153,8 +153,66 @@ def infer_shorthand_units(text):
     return text
 
 
+def distance_recovery_clause(part):
+    match = re.fullmatch(
+        r"(?:Rest\s+)?(\d+(?:\.\d+)?)\s*(m|km|mi)\s+(jog|easy|walk/jog)\s+in\s+"
+        r"(?:~\s*|about\s+|around\s+)?(\d+(?::[0-5]\d)?)(?:\s*[-–]\s*(\d+(?::[0-5]\d)?))?"
+        r"\s*(s|secs|sec|seconds)?",
+        part,
+        re.I,
+    )
+    if not match or (not match[6] and ":" not in match[4]):
+        return None
+    amount, unit, effort, fast, slow, _ = match.groups()
+    candidate = f"Rest {amount} {unit.lower()} {effort.lower()} in {fast}-{slow or fast} sec"
+    return candidate if not parse(candidate).unresolved else None
+
+
+def one_sided_pace(part, pace_unit, coaching_policy):
+    if coaching_policy != "athlete_preferences":
+        return None
+    header = (
+        r"(?P<head>(?:Run\s+)?\d+(?:\.\d+)?\s*(?P<unit>miles|mile|mi|km|m|min|sec)(?:\s+"
+        + EFFORT
+        + r")?)"
+    )
+    match = re.fullmatch(
+        header
+        + r"\s+(?:(?:at|@)\s+)?(?P<before>under|sub)\s*~?\s*(?P<limit>\d{1,2}:[0-5]\d)(?:/(?P<pace_unit>mi|km))?",
+        part,
+        re.I,
+    )
+    if match is None:
+        match = re.fullmatch(
+            header
+            + r"\s+(?:at|@)\s*~?\s*(?P<limit>\d{1,2}:[0-5]\d)(?:/(?P<pace_unit>mi|km))?\s+(?:or faster|or under|and faster)",
+            part,
+            re.I,
+        )
+    if match is None:
+        return None
+    unit = (
+        match["pace_unit"]
+        or pace_unit
+        or ("mi" if match["unit"].lower() in {"miles", "mile", "mi"} else None)
+    )
+    if unit not in {"mi", "km"}:
+        return None
+    limit = clock_seconds(match["limit"])
+    width = 45 if unit == "mi" else round(45 / 1.609344)
+    if limit <= width:
+        return None
+    head = match["head"]
+    if not head.lower().startswith("run "):
+        head = "Run " + head
+    candidate = f"{head} at {clock_label(limit - width)}-{clock_label(limit)}/{unit} [target note: {match['limit']}/{unit} or faster]"
+    return Conversion(candidate) if not parse(candidate).unresolved else None
+
+
 def phase_clause(phase, pace_unit, coaching_policy="strict"):
     phase = re.sub(r"^~\s*(?=\d)", "", phase.strip().removesuffix("."))
+    if recovery := distance_recovery_clause(phase):
+        return recovery
     target_source = phase
     phase = re.sub(r"\bharda little\b", "hard a little", phase, flags=re.I)
     phase = re.sub(rf"\s*@\s*~?\s*(?={EFFORT}\b)", " at ", phase, flags=re.I)
@@ -175,14 +233,16 @@ def phase_clause(phase, pace_unit, coaching_policy="strict"):
         draft = parse(candidate)
         if not draft.unresolved and len(draft.steps) == 1 and isinstance(draft.steps[0], Step):
             return candidate
-    if (targeted := targeted_clause(target_source, pace_unit, coaching_policy)) is not None:
+    if (
+        targeted := targeted_clause(target_source, pace_unit, coaching_policy, elapsed_target=True)
+    ) is not None:
         draft = parse(targeted.text)
         if not draft.unresolved and len(draft.steps) == 1 and isinstance(draft.steps[0], Step):
             return targeted.text
     return None
 
 
-def targeted_clause(part, pace_unit=None, coaching_policy="strict"):
+def targeted_clause(part, pace_unit=None, coaching_policy="strict", *, elapsed_target=False):
     part = re.sub(
         r"^(\d+\s*x\s*)(mile|kilometer|metre|meter)\b",
         lambda m: (
@@ -229,7 +289,7 @@ def targeted_clause(part, pace_unit=None, coaching_policy="strict"):
     if count is not None and (fields["verb"] or unit in {"min", "sec"}):
         return None
     target_is_pace = bool(
-        not count
+        (not count and not (elapsed_target and unit in {"m", "km"}))
         or fields["pace"]
         or fields["pace_unit"]
         or (coaching_policy == "athlete_preferences" and unit == "mi")
@@ -300,7 +360,8 @@ def targeted_clause(part, pace_unit=None, coaching_policy="strict"):
         if after is not None:
             return None
         verb = fields["verb"] or "Run"
-        canonical = f"{verb} {fields['amount']} {unit}{label} at {band}/{target_unit}"
+        target = f"at {band}/{target_unit}" if target_is_pace else f"in {band} sec"
+        canonical = f"{verb} {fields['amount']} {unit}{label} {target}"
         if recovery is not None:
             recovery_label = "" if recovery[1] == "rest" else " " + recovery[1]
             canonical += f"; {'Run' if recovery[1] == 'easy' else 'Rest'} {recovery[0]:g} sec{recovery_label}"
@@ -323,6 +384,51 @@ def minimum_distance(step):
 
 
 def normalize_clause(part, *, pace_unit=None, coaching_policy="strict", allow_total=False):
+    if recovery := distance_recovery_clause(part):
+        return Conversion(recovery)
+    if limited := one_sided_pace(part, pace_unit, coaching_policy):
+        return limited
+    distance_rest = re.fullmatch(
+        r"(.+?)\s+(?:w/|with)\s+([^()]+?)(?:\s*\(([^()]+)\))?",
+        part,
+        re.I,
+    )
+    if distance_rest is None:
+        distance_rest = re.fullmatch(r"([^()]+)\s*\(([^()]+)\)(?:\s*\(([^()]+)\))?", part, re.I)
+    if distance_rest and (recovery := distance_recovery_clause(distance_rest[2])):
+        work = targeted_clause(
+            distance_rest[1].strip() + " (1 sec rest)", pace_unit, coaching_policy
+        )
+        if work is None and re.fullmatch(
+            rf"\d+\s*x\s*\d+(?:\.\d+)?\s*(?:m|km|mi)(?:\s+{DISTANCE_EFFORT})?",
+            distance_rest[1].strip(),
+            re.I,
+        ):
+            work = normalize_clause(
+                distance_rest[1].strip() + " (1 sec rest)",
+                pace_unit=pace_unit,
+                coaching_policy=coaching_policy,
+            )
+        if work:
+            draft = parse(work.text)
+            if (
+                not draft.unresolved
+                and len(draft.steps) == 1
+                and isinstance(draft.steps[0], Repeat)
+            ):
+                text = work.text.removesuffix(" with 1 sec rest recovery")
+                if text == work.text:
+                    return None
+                text += " with " + recovery.removeprefix("Rest ") + " recovery"
+                if distance_rest[3]:
+                    after = re.fullmatch(r"(.+?)\s+rest after (?:the )?set", distance_rest[3], re.I)
+                    duration, span = (
+                        recovery_duration(after[1], coaching_policy) if after else (None, "")
+                    )
+                    if duration is None:
+                        return None
+                    text += "; " + recovery_annotation(f"Rest {duration:g} sec", span)
+                return Conversion(text)
     total = (
         re.fullmatch(
             rf"(?P<range>(?P<low>\d+(?:\.\d+)?)(?:\s*[-–]\s*(?P<high>\d+(?:\.\d+)?))?)\s*(?P<unit>miles|mile|mi|km)\s+(?P<effort>easy(?:/mod(?:erate)?)?(?: {TERRAIN})?)\s+(?:with|including)\s+(?P<block>.+)",

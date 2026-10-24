@@ -162,10 +162,18 @@ def _normalize(
     bare_unit = pace_unit or (distance_unit if distance_unit != "auto" else None)
     pace_unit = bare_unit
     unspecified_distance_used = False
+    repetition_ranges = []
     parts = split_clauses(text.replace("×", "x"))
     for index, part in enumerate(parts):
         part = normalize_bookend(part.strip().removesuffix("."))
         original_part = part
+        if coaching_policy == "athlete_preferences":
+            repetitions = re.match(r"(\d+)\s*[-–]\s*(\d+)\s*x\s*(.+)", part, re.I | re.S)
+            if repetitions and 1 <= int(repetitions[1]) <= int(repetitions[2]) <= 100:
+                repetition_ranges.append(
+                    f"{repetitions[1]}-{repetitions[2]} reps: programmed {repetitions[2]}"
+                )
+                part = repetitions[2] + "x " + repetitions[3]
         condition = None
         if coaching_policy == "athlete_preferences" and len(parts) == 1:
             condition = re.fullmatch(r"(.+?)\s+(if\s+\S[^\[\];\n|]{0,249})", part, re.I)
@@ -295,6 +303,12 @@ def _normalize(
             transition_added = True
         clauses.append(canonical)
     notes = f"Original title: {event.title}\n{event.description}"
+    if repetition_ranges:
+        notes += (
+            "\nRepetition range policy: "
+            + "; ".join(repetition_ranges)
+            + ". Original conditions remain in the prescription notes."
+        )
     if unspecified_distance_used:
         notes += f"\nUnspecified distances interpreted as {bare_unit} from feed metadata or source preference."
     if coaching_policy == "athlete_preferences":
