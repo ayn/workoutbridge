@@ -7,12 +7,12 @@ from workoutbridge.prescriptions import normalize_workout
 
 
 class CoachingTargetTests(unittest.TestCase):
-    def convert(self, description, title="Synthetic workout", metadata=True):
+    def convert(self, description, title="Synthetic workout", metadata=True, **options):
         if metadata:
             title = "Run: " + title
             description = "Workout: Run\nPlanned: 9 mi\n\n" + description
         return normalize_workout(
-            Event("synthetic", "target-workout", "", "2031-02-02", title, description)
+            Event("synthetic", "target-workout", "", "2031-02-02", title, description), **options
         )
 
     def test_track_rep_times_are_not_misread_as_per_mile_paces(self):
@@ -103,7 +103,9 @@ class CoachingTargetTests(unittest.TestCase):
             "4x800m at 3:00-3:10 (1:20 rest) (160 bpm target)",
             "3x2 miles at 6:30-6:40 (2:00 rest)",
         ):
-            self.assertTrue(parse(self.convert(text).prescription).unresolved, text)
+            self.assertTrue(
+                parse(self.convert(text, coaching_policy="strict").prescription).unresolved, text
+            )
 
     def test_canonical_pace_steps_compile_without_losing_native_targets(self):
         draft = parse(

@@ -20,7 +20,11 @@ class CJConditionTests(unittest.TestCase):
                 "if feeling okay, but stop if needed",
             ),
         ):
-            self.assertTrue(parse(normalize_workout(self.event(text)).prescription).unresolved)
+            self.assertTrue(
+                parse(
+                    normalize_workout(self.event(text), coaching_policy="strict").prescription
+                ).unresolved
+            )
             event = normalize_workout(self.event(text), coaching_policy="cj")
             draft = parse(event.prescription)
             self.assertFalse(draft.unresolved)

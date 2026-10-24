@@ -26,7 +26,9 @@ class SourceUnitTests(unittest.TestCase):
         for text in ("12 easy if pain stops", "10-12 easy", "3x1200"):
             self.assertTrue(
                 parse(
-                    normalize_workout(self.event(text), distance_unit="km").prescription
+                    normalize_workout(
+                        self.event(text), distance_unit="km", coaching_policy="strict"
+                    ).prescription
                 ).unresolved
             )
         with self.assertRaises(ValueError):

@@ -407,11 +407,13 @@ policy is enabled. Timed hills with `jog down`,
 standalone clock rests and tempo-effort phases followed by easy running are
 also supported without adding extra Lap transitions.
 
-Sources default to the `strict` coaching policy. An athlete can explicitly opt
-their own source into `athlete_preferences` through authenticated
+All new sources and existing sources without an explicit policy use the shared
+`athlete_preferences` conversion defaults. No coach identity or account allowlist
+is required. A source can choose its policy through authenticated
 `POST /api/v1/sources/{id}/coaching-policy` with `{"policy":"athlete_preferences"}`; use
-`{"policy":"strict"}` to disable it. Library callers can pass
-`coaching_policy="athlete_preferences"` to either prescription normalizer. This policy:
+`{"policy":"strict"}` to require review for these interpretations. An explicitly
+saved strict choice is retained. Both library prescription normalizers use the
+same defaults; callers can pass `coaching_policy="strict"` to opt out. The defaults:
 
 - Treats unitless track reps from 100–10,000 as meters, unitless hill-sprint
   durations as seconds, and unitless effort phases inside repeated fartleks as minutes.
@@ -435,14 +437,14 @@ their own source into `athlete_preferences` through authenticated
   replace explicit warmups/cooldowns. Unknown instructions and blocks whose
   prescribed minimum distance already consumes the total remain in review.
 
-These are athlete conversion preferences, not universal coaching rules. They do
+These are documented product conversion defaults, not claims about every coach. They do
 not select between alternatives, choose variable repetition counts or repair arbitrary
 missing text. Existing implied-recovery opt-outs still apply. Original text and
 the enabled policy are retained in notes. Changing policy changes the review
 plan; existing publishing history remains authoritative for duplicate prevention.
 The legacy `cj` value remains a compatibility alias for existing sources and
 API clients; new writes save `athlete_preferences`. No coach identification or
-coach-specific grammar is involved. These opted-in choices and their wording rules
+coach-specific grammar is involved. These conversion choices and their wording rules
 remain the same shared English grammar used for every source.
 
 Final Surge removes past runs from the feed. A future recurring importer must
