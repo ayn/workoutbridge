@@ -387,6 +387,17 @@ Explicit pace ranges retain native Garmin and COROS targets; elapsed rep times
 clock ranges such as `6:35-45` retain the minutes. Unknown instructions, missing
 main sets and unresolved choices continue requiring review.
 
+Repeated track sets such as
+`2x (3x500m at 1:45-1:48 w/ 60s rest) 3:00 rest between sets` retain each set's
+native repeat group and insert the set recovery only between groups. The final
+rep recovery is replaced by that between-set rest, rather than added to it.
+Expansion is limited to 20 sets and 100 total reps; incomplete set instructions
+and variable recovery choices remain blocked. Timed hills with `jog down`,
+`jog up` or `walk down` retain that movement on the Lap-ended recovery; the usual
+`--interval-recovery review` opt-out applies. Explicit timed rep recovery,
+standalone clock rests and tempo-effort phases followed by easy running are
+also supported without adding extra Lap transitions.
+
 Sources default to the `strict` coaching policy. An athlete can explicitly opt
 their own source into `cj` through authenticated
 `POST /api/v1/sources/{id}/coaching-policy` with `{"policy":"cj"}`; use

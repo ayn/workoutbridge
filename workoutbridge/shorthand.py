@@ -7,6 +7,7 @@ from .parser import (
     DISTANCE_EFFORT,
     EFFORT,
     EFFORT_QUALIFIER,
+    Repeat,
     Step,
     clock_label,
     clock_seconds,
@@ -44,13 +45,24 @@ def clauses(text):
     if depth:
         return [text]
     parts.append(text[start:].strip())
-    return [part for part in parts if part]
+    parts = [part for part in parts if part]
+    joined = []
+    for part in parts:
+        if (
+            joined
+            and re.match(r"^\d+\s*x\s*\(\s*\d+\s*x", joined[-1], re.I)
+            and re.fullmatch(r".+? rest (?:in-between|between) sets", part, re.I)
+        ):
+            joined[-1] += " " + part
+        else:
+            joined.append(part)
+    return joined
 
 
 def seconds(text):
     text = text.strip().lower().lstrip("~").strip()
-    if re.fullmatch(r"\d+:[0-5]\d", text):
-        value = clock_seconds(text)
+    if match := re.fullmatch(r"(\d+:[0-5]\d)(?:\s*(?:min|mins|minutes))?", text):
+        value = clock_seconds(match[1])
     else:
         match = re.fullmatch(
             r"(\d+(?:\.\d+)?)\s*(s|sec|secs|second|seconds|min|mins|minute|minutes|')", text
@@ -72,7 +84,12 @@ def cj_units(text):
     )
     group = re.fullmatch(r"(\d+\s*x\s*)\(([^()]*)\)", text, re.I)
     if group:
-        phases = re.split(r"[;/]", group[2])
+        phases = group[2].split(";")
+        slash = re.fullmatch(
+            rf"\s*(\d+(?:\.\d+)?\s+{EFFORT})\s*/\s*(\d+(?:\.\d+)?\s+{EFFORT})\s*", group[2], re.I
+        )
+        if slash:
+            phases = [slash[1], slash[2]]
         if 2 <= len(phases) <= 8:
             converted = []
             for phase in phases:
@@ -218,6 +235,77 @@ def targeted_clause(part, pace_unit=None, coaching_policy="strict"):
 
 
 def normalize_clause(part, *, pace_unit=None, coaching_policy="strict"):
+    rest = re.fullmatch(r"Rest\s+(.+)", part, re.I)
+    if rest and (duration := seconds(rest[1])) is not None:
+        return Conversion(f"Rest {duration:g} sec")
+    scalar_rest = re.fullmatch(r"([^()]+)\s*\(([^()]+)\s+(rest|easy)\)", part, re.I)
+    if scalar_rest:
+        work = phase_clause(scalar_rest[1], pace_unit, coaching_policy)
+        duration = seconds(scalar_rest[2])
+        if work and duration is not None:
+            recovery = (
+                f"Run {duration:g} sec easy"
+                if scalar_rest[3].lower() == "easy"
+                else f"Rest {duration:g} sec"
+            )
+            return Conversion(work + "; " + recovery)
+    timed_rest = re.fullmatch(
+        rf"(\d+)\s*x\s*(\d+(?:\.\d+)?\s*(?:s|sec|seconds|min|mins|minutes))(?:\s+({EFFORT}))?\s*\(([^()]*)\s+rest\)",
+        part,
+        re.I,
+    )
+    if timed_rest:
+        count, duration, effort, recovery = timed_rest.groups()
+        duration, recovery = seconds(duration), seconds(recovery)
+        if duration is None or recovery is None or not float(duration).is_integer():
+            return None
+        label = " " + effort.lower() if effort else ""
+        return Conversion(
+            f"{count} x {int(duration)} sec{label} with {recovery:g} sec rest recovery"
+        )
+    hill = re.fullmatch(
+        rf"(\d+)\s*x\s*(~?\s*\d+(?:\.\d+)?\s*(?:s|sec|secs|seconds|min|mins|minutes))\s+"
+        rf"(uphill|downhill|hills|hill strides|strides uphill|strides downhill)(?:\s+({EFFORT}))?"
+        r"(?:\s*\((jog down|walk down|jog up)\))?",
+        part,
+        re.I,
+    )
+    if hill:
+        count, duration, activity, effort, recovery = hill.groups()
+        duration = seconds(duration)
+        if duration is None or not float(duration).is_integer():
+            return None
+        activity = {"strides uphill": "uphill strides", "strides downhill": "downhill strides"}.get(
+            activity.lower(), activity.lower()
+        )
+        label = " " + effort.lower() if effort else ""
+        movement = " " + recovery.lower() if recovery else ""
+        return Conversion(
+            f"{count} x {int(duration)} sec {activity}{label} with lap recovery{movement}", True
+        )
+    sets = re.fullmatch(
+        r"(\d+)\s*x\s*\((\d+\s*x\s*.+)\)\s*(.+?)\s+rest (?:in-between|between) sets",
+        part,
+        re.I,
+    )
+    if sets:
+        count, inner, rest = sets.groups()
+        inner = re.sub(r"\s+w/\s+([^()]+)$", r" (\1)", inner, flags=re.I)
+        if coaching_policy == "cj":
+            inner = cj_units(inner)
+        converted = targeted_clause(inner, pace_unit, coaching_policy)
+        duration = seconds(rest)
+        if converted is None or duration is None or not 2 <= int(count) <= 20:
+            return None
+        draft = parse(converted.text)
+        if (
+            draft.unresolved
+            or len(draft.steps) != 1
+            or not isinstance(draft.steps[0], Repeat)
+            or int(count) * draft.steps[0].count > 100
+        ):
+            return None
+        return Conversion(f"; Rest {duration:g} sec; ".join([converted.text] * int(count)))
     if (targeted := targeted_clause(part, pace_unit, coaching_policy)) is not None:
         return targeted
     explicit = re.fullmatch(
