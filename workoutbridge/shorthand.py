@@ -7,6 +7,7 @@ from .parser import (
     DISTANCE_EFFORT,
     EFFORT,
     EFFORT_QUALIFIER,
+    FACTORS,
     Repeat,
     Step,
     clock_label,
@@ -73,11 +74,35 @@ def seconds(text):
     return value if 0 < value <= 86400 else None
 
 
+def recovery_duration(text, coaching_policy):
+    """Return an explicit duration, or the athlete-approved upper range bound."""
+    if (duration := seconds(text)) is not None:
+        return duration, ""
+    if coaching_policy != "cj":
+        return None, ""
+    match = re.fullmatch(
+        r"\s*(\d+(?::[0-5]\d|\.\d+)?)\s*[-–]\s*(\d+(?::[0-5]\d|\.\d+)?)\s*(s|sec|seconds|min|mins|minutes)?\s*",
+        text,
+    )
+    if not match:
+        return None, ""
+    first, second, unit = match.groups()
+    unit = " " + unit if unit else ""
+    values = [seconds(value + unit) for value in (first, second)]
+    if any(value is None for value in values):
+        return None, ""
+    return max(values), text.strip()
+
+
+def recovery_annotation(text, span, effort="rest"):
+    return text + (f" [recovery note: {span} {effort}]" if span else "")
+
+
 def cj_units(text):
     """Opt-in dialect; only fill units in bounded, recognized rep positions."""
     text = re.sub(r"^(\d+\s*x\s*)(\d+)\s+(hill sprints)\b", r"\1\2 sec \3", text, flags=re.I)
     text = re.sub(
-        r"^(\d+\s*x\s*)(\d+)(?=\s*(?:at\b|@|\(|$))",
+        rf"^(\d+\s*x\s*)~?\s*(\d+)(?=\s*(?:at\b|@|\(|$|{DISTANCE_EFFORT}\b))",
         lambda m: m[1] + m[2] + ("m" if 100 <= int(m[2]) <= 10000 else ""),
         text,
         flags=re.I,
@@ -108,7 +133,7 @@ def phase_clause(phase, pace_unit, coaching_policy="strict"):
     phase = re.sub(rf"\s+at\s*~\s*(?={EFFORT}\b)", " at ", phase, flags=re.I)
     phase = re.sub(r"\s+", " ", phase).strip()
     rest = re.fullmatch(r"(.+?)\s+(rest|walk/jog)", phase, re.I)
-    effort = re.fullmatch(rf"(.+?)\s+(?:at\s+)?({EFFORT})", phase, re.I)
+    effort = re.fullmatch(rf"(.+?)\s+(?:at\s+)?({DISTANCE_EFFORT})", phase, re.I)
     if rest or effort:
         match = rest or effort
         amount, label = match.groups()
@@ -187,7 +212,13 @@ def targeted_clause(part, pace_unit=None, coaching_policy="strict"):
         return None
     if approximate:
         if not target_is_pace:
-            return None  # The approved tolerance applies to pace, not elapsed rep times.
+            distance = float(fields["amount"]) * FACTORS[unit]
+            if not 0 < distance < float("inf"):
+                return None
+            # Garmin/COROS express elapsed rep targets as pace alerts; apply the
+            # same approved tolerance after converting the stated rep time.
+            fast = slow = fast * FACTORS["mi"] / distance
+            target_is_pace, target_unit = True, "mi"
         tolerance = 5 if target_unit == "mi" else 5 / 1.609344
         fast, slow = round(fast - tolerance), round(slow + tolerance)
         if fast <= 0:
@@ -199,19 +230,28 @@ def targeted_clause(part, pace_unit=None, coaching_policy="strict"):
     if re.sub(r"\([^()]*\)", "", tail).strip():
         return None
     recovery, after = None, None
+    recovery_note, after_note = "", ""
     for block in blocks:
         rest = re.fullmatch(r"(.+?)\s+(rest|easy|walk/jog)(?:\s+recovery)?", block.strip(), re.I)
         post = re.fullmatch(
             r"(.+?)\s+(?:rest\s+)?after\s+(?:the\s+)?(set|\d+(?:st|nd|rd|th))", block.strip(), re.I
         )
-        if rest and recovery is None and (duration := seconds(rest[1])) is not None:
-            recovery = (duration, rest[2].lower())
-        elif post and after is None and (duration := seconds(post[1])) is not None:
+        rest_duration, rest_range = (
+            recovery_duration(rest[1], coaching_policy) if rest else (None, "")
+        )
+        post_duration, post_range = (
+            recovery_duration(post[1], coaching_policy) if post else (None, "")
+        )
+        if rest and recovery is None and rest_duration is not None:
+            recovery = (rest_duration, rest[2].lower())
+            recovery_note = rest_range + " " + rest[2].lower() if rest_range else ""
+        elif post and after is None and post_duration is not None:
             if post[2].lower() != "set" and (
                 count is None or int(re.match(r"\d+", post[2])[0]) != int(count)
             ):
                 return None
-            after = duration
+            after = post_duration
+            after_note = post_range + " rest" if post_range else ""
         else:
             return None
     label = f" {effort.lower()}" if effort else ""
@@ -221,8 +261,12 @@ def targeted_clause(part, pace_unit=None, coaching_policy="strict"):
             return None
         target = f"at {band}/{target_unit}" if target_is_pace else f"in {band} sec"
         canonical = f"{count} x {fields['amount']} {unit}{label} {target} with {recovery[0]:g} sec {recovery[1]} recovery"
+        if recovery_note:
+            canonical += f" [recovery note: {recovery_note}]"
         if after is not None:
             canonical += f"; Rest {after:g} sec"
+            if after_note:
+                canonical += f" [recovery note: {after_note}]"
     else:
         if after is not None:
             return None
@@ -231,24 +275,30 @@ def targeted_clause(part, pace_unit=None, coaching_policy="strict"):
         if recovery is not None:
             recovery_label = "" if recovery[1] == "rest" else " " + recovery[1]
             canonical += f"; {'Run' if recovery[1] == 'easy' else 'Rest'} {recovery[0]:g} sec{recovery_label}"
+            if recovery_note:
+                canonical += f" [recovery note: {recovery_note}]"
     return Conversion(canonical)
 
 
 def normalize_clause(part, *, pace_unit=None, coaching_policy="strict"):
     rest = re.fullmatch(r"Rest\s+(.+)", part, re.I)
-    if rest and (duration := seconds(rest[1])) is not None:
-        return Conversion(f"Rest {duration:g} sec")
+    if rest:
+        duration, span = recovery_duration(rest[1], coaching_policy)
+        if duration is not None:
+            return Conversion(recovery_annotation(f"Rest {duration:g} sec", span))
     scalar_rest = re.fullmatch(r"([^()]+)\s*\(([^()]+)\s+(rest|easy)\)", part, re.I)
     if scalar_rest:
         work = phase_clause(scalar_rest[1], pace_unit, coaching_policy)
-        duration = seconds(scalar_rest[2])
+        duration, span = recovery_duration(scalar_rest[2], coaching_policy)
         if work and duration is not None:
             recovery = (
                 f"Run {duration:g} sec easy"
                 if scalar_rest[3].lower() == "easy"
                 else f"Rest {duration:g} sec"
             )
-            return Conversion(work + "; " + recovery)
+            return Conversion(
+                work + "; " + recovery_annotation(recovery, span, scalar_rest[3].lower())
+            )
     timed_rest = re.fullmatch(
         rf"(\d+)\s*x\s*(\d+(?:\.\d+)?\s*(?:s|sec|seconds|min|mins|minutes))(?:\s+({EFFORT}))?\s*\(([^()]*)\s+rest\)",
         part,
@@ -256,12 +306,15 @@ def normalize_clause(part, *, pace_unit=None, coaching_policy="strict"):
     )
     if timed_rest:
         count, duration, effort, recovery = timed_rest.groups()
-        duration, recovery = seconds(duration), seconds(recovery)
+        duration = seconds(duration)
+        recovery, span = recovery_duration(recovery, coaching_policy)
         if duration is None or recovery is None or not float(duration).is_integer():
             return None
         label = " " + effort.lower() if effort else ""
         return Conversion(
-            f"{count} x {int(duration)} sec{label} with {recovery:g} sec rest recovery"
+            recovery_annotation(
+                f"{count} x {int(duration)} sec{label} with {recovery:g} sec rest recovery", span
+            )
         )
     hill = re.fullmatch(
         rf"(\d+)\s*x\s*(~?\s*\d+(?:\.\d+)?\s*(?:s|sec|secs|seconds|min|mins|minutes))\s+"
@@ -294,7 +347,7 @@ def normalize_clause(part, *, pace_unit=None, coaching_policy="strict"):
         if coaching_policy == "cj":
             inner = cj_units(inner)
         converted = targeted_clause(inner, pace_unit, coaching_policy)
-        duration = seconds(rest)
+        duration, span = recovery_duration(rest, coaching_policy)
         if converted is None or duration is None or not 2 <= int(count) <= 20:
             return None
         draft = parse(converted.text)
@@ -305,24 +358,29 @@ def normalize_clause(part, *, pace_unit=None, coaching_policy="strict"):
             or int(count) * draft.steps[0].count > 100
         ):
             return None
-        return Conversion(f"; Rest {duration:g} sec; ".join([converted.text] * int(count)))
+        separator = "; " + recovery_annotation(f"Rest {duration:g} sec", span) + "; "
+        return Conversion(separator.join([converted.text] * int(count)))
     if (targeted := targeted_clause(part, pace_unit, coaching_policy)) is not None:
         return targeted
     explicit = re.fullmatch(
         rf"(\d+)\s*x\s*(\d+(?:\.\d+)?)\s*(miles|mi|km|m)(?:\s+({DISTANCE_EFFORT}))?"
-        r"\s*\(\s*(~?\s*\d+(?::[0-5]\d|\.\d+)?\s*(?:s|sec|secs|seconds|min|mins|minutes)?)"
+        r"\s*\(\s*([^()]+?)"
         r"\s+(rest|easy|walk/jog)(?:\s+recovery)?\s*\)",
         part,
         re.I,
     )
     if explicit:
         count, amount, unit, effort, rest, recovery_effort = explicit.groups()
-        duration = seconds(rest)
+        duration, span = recovery_duration(rest, coaching_policy)
         if duration is None:
             return None
         label = f" {effort.lower()}" if effort else ""
         return Conversion(
-            f"{count} x {amount} {unit.lower()}{label} with {duration:g} sec {recovery_effort.lower()} recovery"
+            recovery_annotation(
+                f"{count} x {amount} {unit.lower()}{label} with {duration:g} sec {recovery_effort.lower()} recovery",
+                span,
+                recovery_effort.lower(),
+            )
         )
 
     stride = re.fullmatch(r"(\d+)\s*(?:x\s*)?(?:(uphill|downhill|hill)\s+)?strides", part, re.I)
@@ -332,7 +390,7 @@ def normalize_clause(part, *, pace_unit=None, coaching_policy="strict"):
 
     timed = re.fullmatch(
         rf"(\d+)\s*x\s*(\d+(?:\.\d+)?\s*(?:s|sec|secs|seconds|min|mins|minutes|'))\s+"
-        rf"((?:uphill |downhill |hill )?(?:strides|sprints)|{EFFORT})",
+        rf"((?:uphill |downhill |hill |fast |hard |smooth )?(?:strides|sprints)|{EFFORT})",
         part,
         re.I,
     )
@@ -357,6 +415,12 @@ def normalize_clause(part, *, pace_unit=None, coaching_policy="strict"):
     repeated = re.fullmatch(r"(\d+)\s*x\s*\((.*)\)", part, re.I | re.S)
     if repeated and "(" not in repeated[2] and ")" not in repeated[2]:
         phases = re.split(r"\s*[,;+]\s*", repeated[2].strip())
+        duration = r"(?:\d+(?:\.\d+)?\s*(?:seconds|secs|sec|s|minutes|mins|min)|\d+:[0-5]\d)"
+        adjacent = re.fullmatch(
+            rf"\s*({duration}\s+{EFFORT})\s+({duration}\s+{EFFORT})\s*", repeated[2], re.I
+        )
+        if len(phases) == 1 and adjacent:
+            phases = [adjacent[1], adjacent[2]]
         if not 2 <= len(phases) <= 8:
             return None
         steps = []

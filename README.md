@@ -392,7 +392,8 @@ Repeated track sets such as
 native repeat group and insert the set recovery only between groups. The final
 rep recovery is replaced by that between-set rest, rather than added to it.
 Expansion is limited to 20 sets and 100 total reps; incomplete set instructions
-and variable recovery choices remain blocked. Timed hills with `jog down`,
+and variable recovery choices require review unless an explicit upper-bound
+policy is enabled. Timed hills with `jog down`,
 `jog up` or `walk down` retain that movement on the Lap-ended recovery; the usual
 `--interval-recovery review` opt-out applies. Explicit timed rep recovery,
 standalone clock rests and tempo-effort phases followed by easy running are
@@ -411,9 +412,14 @@ their own source into `cj` through authenticated
   retaining the original direction and prescription in destination notes.
 - Expands a single approximate pace into ±5 seconds per mile (the equivalent,
   rounded to whole seconds, for an explicitly stated per-kilometer pace).
+  Approximate elapsed rep targets use this same tolerance after converting the
+  stated rep distance and time to pace.
+- Selects the longer distance for simple distance ranges and the longer recovery
+  for explicit recovery ranges. The original range is retained on that specific
+  run or recovery step, not only in overall workout notes.
 
 These are athlete conversion preferences, not universal coaching rules. They do
-not select between alternatives, choose recovery ranges or repair arbitrary
+not select between alternatives, choose variable repetition counts or repair arbitrary
 missing text. Existing implied-recovery opt-outs still apply. Original text and
 the enabled policy are retained in notes. Changing policy changes the review
 plan; existing publishing history remains authoritative for duplicate prevention.

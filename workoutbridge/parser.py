@@ -1,7 +1,7 @@
 """Deliberately narrow parser: unknown clauses remain visible for review."""
 
 import re
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 
 
 @dataclass(frozen=True)
@@ -79,7 +79,7 @@ PATTERN = re.compile(
     r"(warm up|run|ride|bike|cycle|rest|cool down)\s+"
     r"(?:(\d+(?:\.\d+)?)\s*(hours|hour|hr|minutes|minute|mins|min|seconds|second|secs|sec|miles|mile|mi|km|m)"
     r"|until lap)"
-    rf"(?:\s+({EFFORT}|walk/jog))?",
+    rf"(?:\s+({DISTANCE_EFFORT}|walk/jog))?",
     re.IGNORECASE,
 )
 INTERVAL = re.compile(
@@ -203,7 +203,7 @@ def interval(clause: str, sport: str = "running") -> Repeat | None:
             skip_last_recovery=False,
         )
     timed = re.fullmatch(
-        rf"(\d+) x (\d+) sec (hills|uphill|downhill|strides|hill strides|uphill strides|downhill strides)(?: ({EFFORT}))? with lap recovery(?: (jog down|walk down|jog up))?",
+        rf"(\d+) x (\d+) sec (hills|uphill|downhill|strides|hill strides|uphill strides|downhill strides|fast strides|hard strides|smooth strides)(?: ({EFFORT}))? with lap recovery(?: (jog down|walk down|jog up))?",
         clause,
         re.IGNORECASE,
     )
@@ -370,6 +370,33 @@ def parse(text: str, *, sport: str = "running") -> Draft:
     steps: list[Step | Repeat] = []
     unresolved: list[str] = []
     for clause in filter(None, (part.strip() for part in text.split(";"))):
+        annotation = re.fullmatch(
+            r"(.+?) \[(distance|recovery) note: (\d+(?::[0-5]\d|\.\d+)?\s*[-–]\s*\d+(?::[0-5]\d|\.\d+)?"
+            r"(?:\s*(?:miles|mile|mi|km|minutes|mins|min|seconds|sec|s))?(?:\s+(?:rest|easy|walk/jog))?)\]",
+            clause,
+            re.I,
+        )
+        if annotation:
+            base = (
+                parse(annotation[1], sport=sport) if " note:" not in annotation[1].lower() else None
+            )
+            item = base.steps[0] if base and not base.unresolved and len(base.steps) == 1 else None
+            target = item.steps[-1] if isinstance(item, Repeat) else item
+            wanted = "meters" if annotation[2].lower() == "distance" else "seconds"
+            if (
+                target
+                and target.unit == wanted
+                and (not isinstance(item, Repeat) or wanted == "seconds")
+            ):
+                target = replace(target, note="; ".join(filter(None, (target.note, annotation[3]))))
+                steps.append(
+                    replace(item, steps=(*item.steps[:-1], target))
+                    if isinstance(item, Repeat)
+                    else target
+                )
+            else:
+                unresolved.append(clause)
+            continue
         paced = (
             re.fullmatch(
                 rf"(Run|Warm up|Cool down) (\d+(?:\.\d+)?) (miles|mile|mi|km|m|min|sec)(?: ({EFFORT}))? at "

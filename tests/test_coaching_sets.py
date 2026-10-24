@@ -120,3 +120,40 @@ class CoachingSetTests(unittest.TestCase):
             self.assertFalse(draft.unresolved)
             self.assertEqual([s.duration for s in draft.steps], [11 * 1609.344, 3 * 1609.344])
             self.assertIn(finish.split(" ", 2)[2], draft.steps[-1].note)
+
+    def test_two_explicit_fartlek_phases_can_be_separated_by_whitespace(self):
+        event = normalize_workout(self.event("4x (3 mins hard 2 mins easy)"))
+        draft = parse(event.prescription)
+        self.assertFalse(draft.unresolved)
+        self.assertEqual([s.duration for s in draft.steps[0].steps], [180, 120])
+        self.assertFalse(draft.steps[0].skip_last_recovery)
+        self.assertTrue(
+            parse(
+                normalize_workout(self.event("4x (3 mins hard then decide)")).prescription
+            ).unresolved
+        )
+
+    def test_approximate_distances_and_fractional_plural_bookends_keep_written_units(self):
+        for text in (
+            "Warm up 1 mile\n3x (2 min hard; 1 min easy)\nCool down 1/2 miles",
+            "4x~180m smooth",
+            "~ 2hours easy/moderate",
+        ):
+            self.assertFalse(
+                parse(normalize_workout(self.event(text)).prescription).unresolved, text
+            )
+
+    def test_cj_unitless_track_distances_with_effort_are_opt_in(self):
+        text = "4x~150 fast (2:30 rest)"
+        self.assertTrue(parse(normalize_workout(self.event(text)).prescription).unresolved)
+        draft = parse(normalize_workout(self.event(text), coaching_policy="cj").prescription)
+        self.assertFalse(draft.unresolved)
+        self.assertEqual(draft.steps[0].steps[0].duration, 150)
+
+    def test_timed_stride_modifiers_and_distance_cycles_keep_all_phases(self):
+        for text in ("4x20s fast strides", "4x (60m sprints; 60m jog)"):
+            event = normalize_workout(self.event(text))
+            draft = parse(event.prescription)
+            self.assertFalse(draft.unresolved, text)
+            for profile in ("123", "coros:us:synthetic"):
+                self.assertNotIn("error", review_item(profile, event))
