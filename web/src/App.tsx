@@ -51,7 +51,7 @@ type Plan = {
   created: string;
   items: Item[];
 };
-type Source = { id: string; name: string; format: string; timezone: string };
+type Source = { id: string; name: string; format: string; timezone: string; distance_unit?: "auto" | "mi" | "km" };
 type Sync = {
   id: string;
   source: string;
@@ -211,7 +211,7 @@ function SetupChecklist({state, navigate, dismiss, busy}: {state: State; navigat
   </section>;
 }
 
-export function App({ brand = "WorkoutBridge", multiuser = false, suggestedEmail = "", onLogout, request = defaultApi, view: externalView, onViewChange, showSetupChecklist = true, onDismissSetup }: { brand?: string; multiuser?: boolean; suggestedEmail?: string; onLogout?: () => void; request?: typeof defaultApi; view?: View; onViewChange?: (view: View) => void; showSetupChecklist?: boolean; onDismissSetup?: () => Promise<void> }) {
+export function App({ brand = "WorkoutBridge", multiuser = false, suggestedEmail = "", onLogout, request = defaultApi, view: externalView, onViewChange, showSetupChecklist = true, onDismissSetup, defaultDistanceUnit = "auto" }: { brand?: string; multiuser?: boolean; suggestedEmail?: string; onLogout?: () => void; request?: typeof defaultApi; view?: View; onViewChange?: (view: View) => void; showSetupChecklist?: boolean; onDismissSetup?: () => Promise<void>; defaultDistanceUnit?: "auto" | "mi" | "km" }) {
   const api = request;
   const [setupDismissed, setSetupDismissed] = useState(false);
   const [state, setState] = useState<State | null>(null);
@@ -639,6 +639,17 @@ export function App({ brand = "WorkoutBridge", multiuser = false, suggestedEmail
                         : "iCal calendar"}{" "}
                       · {s.timezone}
                     </p>
+                    <div className="form-field">
+                      <label htmlFor={`source-unit-${s.id}`}>Unspecified distances</label>
+                      <select id={`source-unit-${s.id}`} aria-label={`Unspecified distances for ${s.name}`} value={s.distance_unit || "auto"} disabled={busy} onChange={(e) => {
+                        const unit = e.currentTarget.value;
+                        perform(async () => { await api(`sources/${s.id}/distance-unit`, {unit}); await load(); });
+                      }}>
+                        <option value="auto">Use feed units</option>
+                        <option value="km">Kilometers</option>
+                        <option value="mi">Miles</option>
+                      </select>
+                    </div>
                   </div>
                   <span className="badge">
                     <ShieldCheck size={13} />
@@ -847,6 +858,15 @@ export function App({ brand = "WorkoutBridge", multiuser = false, suggestedEmail
                 defaultValue={Intl.DateTimeFormat().resolvedOptions().timeZone}
                 required
               />
+            </div>
+            <div className="form-field">
+              <label htmlFor="calendar-source-distance-unit">Unspecified distances</label>
+              <select id="calendar-source-distance-unit" name="distance_unit" defaultValue={defaultDistanceUnit} aria-describedby="source-unit-help">
+                <option value="auto">Use feed units</option>
+                <option value="km">Kilometers</option>
+                <option value="mi">Miles</option>
+              </select>
+              <p id="source-unit-help" className="field-help">For shorthand like “12 easy.” Written workout units and feed units take priority. “Use feed units” requires review if the feed has no units.</p>
             </div>
             {alert}
             <button className="primary" disabled={busy}>
