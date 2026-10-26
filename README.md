@@ -488,6 +488,19 @@ The default also retains the final Lap recovery after strides and between
 consecutive interval blocks. Timed rep rests keep their existing final-rest
 semantics; strict mode retains the former implied-Lap behavior. Explicit canonical
 intervals can request `including final recovery` for a Lap-ended recovery.
+Under `athlete_preferences`, a standalone `strides` clause with no count defaults
+to four strides. Each effort and recovery ends at Lap, including the final
+recovery. The effort note identifies the default count as an application choice
+because the coach did not specify one. Explicit counts are preserved; strict mode
+and `--interval-recovery review` leave missing counts in review. No duration or
+pace is invented. Qualified clauses such as `easy strides` use the same default;
+additional unsupported instructions still require review.
+
+Explicit elapsed-time reps such as `3 x 600m in 2:10-2:15 1:15 JOGS` preserve the
+distance, use the elapsed time range to calculate the native pace band, and add
+75-second jog recoveries between reps. `in` does not become a per-mile pace even
+when the source uses miles. The narrowly matched distance suffix `easys` is
+accepted as `easy`; the original prescription remains in destination notes.
 Total-distance interval runs also support `w/`, `mixed in`, and an explicit
 opening distance (`... after 8 miles`); the finish remains Lap-ended with the
 overall total in notes, without adding the total again.

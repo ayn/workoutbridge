@@ -500,6 +500,24 @@ def minimum_distance(step):
 
 def normalize_clause(part, *, pace_unit=None, coaching_policy="strict", allow_total=False):
     part = re.sub(r"^(\d+\s*x\s*\d+(?:\.\d+)?)k(?=\s|$)", r"\1km", part, flags=re.I)
+    easy_typo = re.fullmatch(
+        r"((?:Run\s+)?\d+(?:\.\d+)?\s*(?:miles|mile|mi|km|m))\s+easys", part, re.I
+    )
+    if easy_typo:
+        return Conversion("Run " + re.sub(r"^Run\s+", "", easy_typo[1], flags=re.I) + " easy")
+    elapsed_jogs = re.fullmatch(
+        r"(\d+)\s*x\s*(\d+(?:\.\d+)?)\s*(miles|mile|mi|km|m)\s+in\s+"
+        r"(\d+:[0-5]\d)\s*[-–]\s*(\d+:[0-5]\d)\s+(\d+:[0-5]\d)\s+jogs?",
+        part,
+        re.I,
+    )
+    if elapsed_jogs:
+        count, amount, unit, fast, slow, recovery = elapsed_jogs.groups()
+        canonical = (
+            f"{count} x {amount} {unit.lower()} in {fast}-{slow} "
+            f"with {clock_seconds(recovery)} sec jog recovery"
+        )
+        return Conversion(canonical) if not parse(canonical).unresolved else None
     if coaching_policy == "athlete_preferences":
         if buffer := unclear_recovery_clause(part):
             return Conversion(buffer, True)
@@ -720,14 +738,25 @@ def normalize_clause(part, *, pace_unit=None, coaching_policy="strict", allow_to
         )
 
     stride = re.fullmatch(
-        r"(\d+)\s*(?:x\s*)?(?:(easy|smooth|hard|fast)\s+)?(?:(uphill|downhill|hill)\s+)?strides",
+        r"(?:(\d+)\s*(?:x\s*)?)?(?:(easy|smooth|hard|fast)\s+)?(?:(uphill|downhill|hill)\s+)?strides",
         part,
         re.I,
     )
     if stride:
+        if stride[1] is None and coaching_policy != "athlete_preferences":
+            return None
         label = " ".join(filter(None, ((stride[2] or "").lower(), (stride[3] or "").lower())))
+        note = (
+            " [coaching note: Default 4 strides - count unspecified by coach. Effort and recovery end at Lap.]"
+            if stride[1] is None
+            else ""
+        )
         return Conversion(
-            f"{stride[1]} " + (label + " " if label else "") + "strides with lap recovery", True
+            f"{stride[1] or 4} "
+            + (label + " " if label else "")
+            + "strides with lap recovery"
+            + note,
+            True,
         )
 
     timed = re.fullmatch(

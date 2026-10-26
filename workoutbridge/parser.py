@@ -89,7 +89,7 @@ PATTERN = re.compile(
 INTERVAL = re.compile(
     rf"(\d+)\s*x\s*(\d+(?:\.\d+)?)\s*(miles|mile|mi|km|m)(?:\s+({EFFORT}))?\s+in\s+"
     r"(\d+(?::[0-5]\d)?)-(\d+(?::[0-5]\d)?)(?:\s+sec)?\s+with\s+"
-    rf"(\d+(?:\.\d+)?)\s*({TIME_UNITS})\s+(walk/jog|easy|rest)\s+recovery",
+    rf"(\d+(?:\.\d+)?)\s*({TIME_UNITS})\s+(walk/jog|jog|easy|rest)\s+recovery",
     re.IGNORECASE,
 )
 
