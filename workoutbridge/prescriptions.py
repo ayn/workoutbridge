@@ -132,15 +132,41 @@ def normalize_workout(
     return _normalize(event, text, recovery_choice, coaching_policy, distance_unit)
 
 
+def cycling_step(text):
+    """Normalize only a complete, explicitly supported cycling step."""
+    text = normalize_bookend(text.strip())
+    for candidate in (text, "Ride " + text):
+        draft = parse(candidate, sport="cycling")
+        if not draft.unresolved and len(draft.steps) == 1 and isinstance(draft.steps[0], Step):
+            return candidate
+    return None
+
+
+def cycling_clause(text):
+    if step := cycling_step(text):
+        return step
+    if not parse(text, sport="cycling").unresolved:
+        return text
+    group = re.fullmatch(r"(\d+)\s*x\s*\(([^()]*)\)", text, re.I | re.S)
+    if not group:
+        return None
+    phases = split_clauses(group[2])
+    if not 2 <= len(phases) <= 8:
+        return None
+    steps = [cycling_step(phase) for phase in phases]
+    if any(step is None for step in steps):
+        return None
+    candidate = f"{group[1]} x [" + " | ".join(steps) + "]"
+    return candidate if not parse(candidate, sport="cycling").unresolved else None
+
+
 def _normalize(
     event: Event, text: str, recovery_choice: str, coaching_policy: str, distance_unit: str
 ) -> Event:
     if event.sport == "cycling":
-        # Only add the cycling verb to an otherwise fully supported duration or
-        # distance, never strip target instructions or borrow running shorthand.
-        candidate = "Ride " + text
-        if not parse(candidate, sport="cycling").unresolved:
-            text = candidate
+        clauses = [cycling_clause(part) for part in split_clauses(text)]
+        if clauses and all(clause is not None for clause in clauses):
+            text = "; ".join(clauses)
         return replace(event, structured_text=text)
     if not parse(text, sport=event.sport).unresolved:
         return replace(event, structured_text=text)
