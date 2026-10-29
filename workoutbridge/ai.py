@@ -394,7 +394,7 @@ class Interpreter:
         # Bound the added latency per queued operation; later refreshes handle the rest.
         count = 0
         for item in plan.get("items", []):
-            if "error" in item and count < 3:
+            if "error" in item and not item.get("skipped") and count < 3:
                 event = Event(**item["event"])
                 with private_db(self.database()) as db:
                     if db.execute(

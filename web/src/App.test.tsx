@@ -75,6 +75,21 @@ const initial = {
   history: [],
 };
 
+test("race entries explain why they are not published and do not need attention", async () => {
+  const race = {
+    event: {title: "Run: Coastal Half Marathon", description: "Race day", date: "2030-01-04"},
+    draft: {steps: [], unresolved: []}, skipped: "race", error: "Not published — race",
+  };
+  const request = vi.fn().mockResolvedValue({...initial, plans: [{...initial.plans[0], items: [race]}]});
+  render(<App request={request} />);
+  expect(await screen.findByText("Not published — race")).toBeInTheDocument();
+  expect(screen.getByRole("checkbox", {name: "Select Run: Coastal Half Marathon"})).toBeDisabled();
+  await userEvent.click(screen.getByRole("button", {name: /Coastal Half Marathon/}));
+  expect(screen.getByText("Race events stay on your source calendar and are not sent as structured workouts.")).toBeInTheDocument();
+  expect(screen.queryByText("Needs review")).not.toBeInTheDocument();
+  expect(screen.getByText("Needs attention").previousElementSibling).toHaveTextContent("0");
+});
+
 test("hosted setup checklist guides an empty workspace to sources, connections and syncs", async () => {
   const empty = {...initial, sources: [], connections: [], syncs: [], plans: []};
   vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify(empty)));

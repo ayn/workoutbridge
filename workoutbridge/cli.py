@@ -13,6 +13,7 @@ from .feed import read_calendar
 from .garmin import GarminProvider
 from .parser import parse
 from .publishing import Publisher, ReviewRequired, approval_token, digest, event_payload
+from .races import is_race
 
 
 def emit(value):
@@ -25,6 +26,8 @@ def review_item(account: str, event: Event) -> dict:
         "event": asdict(event),
         "draft": parse(event.prescription, sport=event.sport).to_dict(),
     }
+    if is_race(event):
+        return {**result, "skipped": "race", "error": "Not published — race"}
     try:
         if account.startswith("coros:"):
             from .coros_publishing import approval_token as coros_approval

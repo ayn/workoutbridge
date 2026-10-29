@@ -178,7 +178,7 @@ def create_app(
             if reviewed["original_hash"] == digest(asdict(event)):
                 return review_item(account, Event(**reviewed["event"]))
         item = review_item(account, event)
-        if "error" in item:
+        if "error" in item and not item.get("skipped"):
             try:
                 suggested = review_item(
                     account,

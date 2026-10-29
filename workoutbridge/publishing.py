@@ -13,6 +13,7 @@ from pathlib import Path
 from .calendar import Event
 from .garmin import workout_payload
 from .parser import parse
+from .races import is_race
 
 
 class ReviewRequired(ValueError):
@@ -30,6 +31,8 @@ def event_key(account: str, event: Event) -> str:
 
 
 def event_payload(event: Event) -> dict:
+    if is_race(event):
+        raise ReviewRequired("Not published — race")
     if event.cancelled:
         raise ReviewRequired("Cancelled event requires manual reconciliation")
     return workout_payload(

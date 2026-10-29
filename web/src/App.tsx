@@ -42,6 +42,7 @@ type Item = {
   event: { title: string; date: string; description: string; sport?: string };
   draft: { steps: Step[]; unresolved: string[] };
   error?: string;
+  skipped?: "race";
   suggestion?: {policy: string; draft: {steps: Step[]; unresolved: string[]}};
 };
 type Plan = {
@@ -272,6 +273,7 @@ export function App({ brand = "WorkoutBridge", multiuser = false, suggestedEmail
   const destinationName = connection?.provider === "COROS" ? "COROS" : "Garmin";
   const item = plan?.items[expanded ?? -1];
   const ready = plan?.items.filter((i) => !i.error).length || 0;
+  const attention = plan?.items.filter((i) => i.error && !i.skipped).length || 0;
   function changeSync(value: string) {
     setActive(value);
     setSelected([]);
@@ -487,7 +489,7 @@ export function App({ brand = "WorkoutBridge", multiuser = false, suggestedEmail
                   <span>Ready to review</span>
                 </div>
                 <div>
-                  <strong>{(plan?.items.length || 0) - ready}</strong>
+                  <strong>{attention}</strong>
                   <span>Needs attention</span>
                 </div>
                 <span className="period">Today + 14 days</span>
@@ -549,9 +551,9 @@ export function App({ brand = "WorkoutBridge", multiuser = false, suggestedEmail
                           <strong>{entry.event.title}</strong>
                         </button>
                         <span
-                          className={`status ${entry.error ? "attention" : "ready"}`}
+                          className={`status ${entry.skipped ? "skipped" : entry.error ? "attention" : "ready"}`}
                         >
-                          {entry.error ? "Review needed" : "Ready"}
+                          {entry.skipped === "race" ? "Not published — race" : entry.error ? "Review needed" : "Ready"}
                         </span>
                         <ChevronRight size={16} />
                       </div>
@@ -582,7 +584,9 @@ export function App({ brand = "WorkoutBridge", multiuser = false, suggestedEmail
                         {item.event.sport === "cycling" && <span className="badge">Cycling</span>}
                         <h2>{item.event.title}</h2>
                         <p className="muted">{dateLabel(item.event.date)}</p>
-                        {item.error ? (
+                        {item.skipped === "race" ? (
+                          <p className="muted">Race events stay on your source calendar and are not sent as structured workouts.</p>
+                        ) : item.error ? (
                           <div className="warning">
                             <strong>Needs review</strong>
                             <p>{item.draft.unresolved.join("; ")}</p>
