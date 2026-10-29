@@ -415,6 +415,13 @@ is required. A source can choose its policy through authenticated
 saved strict choice is retained. Both library prescription normalizers use the
 same defaults; callers can pass `coaching_policy="strict"` to opt out. The defaults:
 
+- For explicit slash-separated effort sets such as `3 x 90 sec @ 10k effort/45 sec easy`,
+  retain every work/easy pair, including the final easy phase. `HMP race pace` means
+  half marathon pace, kept as an effort label without inventing numerical pace alerts.
+  Under `athlete_preferences`, an explicit `45 sec walk recovery after the set` suffix
+  remains an instruction in the repeated work-step notes, rather than adding a timed
+  walk step. Strict mode requires review for that note-only conversion. Ordinary
+  timed jog recoveries remain executable steps in both policies.
 - Treats unitless track reps from 100–10,000 as meters, unitless hill-sprint
   durations as seconds, and unitless effort phases inside repeated fartleks as minutes.
 - Treats mile-rep clock targets as per-mile paces.
