@@ -72,7 +72,7 @@ FACTORS = {
     "miles": 1609.344,
 }
 BASIC_EFFORT = r"(?:easy/moderate|easy/mod|super hard|very hard|very easy|easy jog|jog|easy|moderate|hard|smooth|fast|steady|tempo|progression|recovery)"
-EFFORT_QUALIFIER = r"(?:tempo effort|long run pace|regular run pace|(?:5k|10k) (?:effort|pace)|(?:half|1/2) marathon (?:race pace )?effort|marathon (?:effort|pace)|MP)"
+EFFORT_QUALIFIER = r"(?:tempo effort|long run pace|regular run pace|(?:5k|10k) (?:effort|pace)|(?:half|1/2) marathon (?:race pace )?effort|half marathon pace|marathon (?:effort|pace)|MP)"
 RELATIVE_EFFORT = rf"(?:(?:slightly |a little |a bit )?(?:faster|slower) than {EFFORT_QUALIFIER})"
 EFFORT_CORE = rf"(?:{BASIC_EFFORT}(?: progression)?(?:(?: at | around | a little faster than | a bit faster than ){EFFORT_QUALIFIER}(?: or faster)?)?|{EFFORT_QUALIFIER})"
 TERRAIN = r"(?:on (?:trails|trail|hilly trails|rolling trails|rolling terrain|flat terrain|flat ground|a hilly route|hilly route|a flat route)|over (?:hills|rolling hills))"

@@ -498,7 +498,49 @@ def minimum_distance(step):
     return 0
 
 
+def slash_effort_clause(part, pace_unit, coaching_policy):
+    """Explicit work/recovery pairs, with opted-in note-only set recovery."""
+    part = re.sub(r"\bHMP(?: race pace)?\b", "half marathon pace", part, flags=re.I)
+    note = re.fullmatch(
+        r"(.+?)\s+[-–]\s+(\d+(?:\.\d+)?\s*(?:min|mins|minutes|sec|seconds) walk recovery after the set)",
+        part,
+        re.I,
+    )
+    if note:
+        if coaching_policy != "athlete_preferences":
+            return None
+        part = note[1]
+    if "/" not in part:
+        phase = phase_clause(part, pace_unit, coaching_policy)
+        return Conversion(phase) if phase and not note else None
+    pair = part.split("/")
+    if len(pair) != 2:
+        return None
+    repeated = re.fullmatch(r"(\d+)\s*x\s*(.+)", pair[0].strip(), re.I)
+    work = phase_clause(repeated[2] if repeated else pair[0], pace_unit, coaching_policy)
+    recovery = pair[1].strip()
+    # Accept both '3 min easy' and 'easy 3 min jog recovery'.
+    recovery = re.sub(r"^easy\s+(.+?)\s+jog recovery$", r"\1 jog", recovery, flags=re.I)
+    recovery = re.sub(r"\s+recovery$", "", recovery, flags=re.I)
+    rest = phase_clause(recovery, pace_unit, coaching_policy, recovery_phase=True)
+    if not work or not rest:
+        return None
+    if repeated:
+        if not 1 <= int(repeated[1]) <= 100:
+            return None
+        text = f"{int(repeated[1])} x [{work} | {rest}]"
+        if note:
+            text += f" [coaching note: {note[2]} (instruction only, not a timed step)]"
+    elif note:
+        return None
+    else:
+        text = work + "; " + rest.replace("Run ", "Rest ", 1)
+    return Conversion(text) if not parse(text).unresolved else None
+
+
 def normalize_clause(part, *, pace_unit=None, coaching_policy="strict", allow_total=False):
+    if converted := slash_effort_clause(part, pace_unit, coaching_policy):
+        return converted
     part = re.sub(r"^(\d+\s*x\s*\d+(?:\.\d+)?)k(?=\s|$)", r"\1km", part, flags=re.I)
     easy_typo = re.fullmatch(
         r"((?:Run\s+)?\d+(?:\.\d+)?\s*(?:miles|mile|mi|km|m))\s+easys", part, re.I
