@@ -377,6 +377,12 @@ header > span {
   background: #fff1d7;
   color: #986018;
 }
+.status.skipped {
+  background: #edf0ee;
+  color: var(--muted);
+  white-space: normal;
+  text-align: center;
+}
 .selection {
   display: flex;
   align-items: center;

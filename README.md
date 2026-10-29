@@ -407,6 +407,14 @@ policy is enabled. Timed hills with `jog down`,
 standalone clock rests and tempo-effort phases followed by easy running are
 also supported without adding extra Lap transitions.
 
+Race-day entries remain visible as **Not published — race** and are excluded from
+manual publishing, automatic publishing and AI interpretation. Detection uses
+an explicit `Run - Race:` / `Race:` title or Final Surge `Workout: Run - Race`
+metadata, and named events whose title ends in `Half Marathon`, `Marathon`, or
+an explicit distance race such as `8K race`. Ordinary race-pace training is not
+excluded. Race rows do not count as workouts needing review. This does not remove
+anything already published or change the source calendar.
+
 All new sources and existing sources without an explicit policy use the shared
 `athlete_preferences` conversion defaults. No coach identity or account allowlist
 is required. A source can choose its policy through authenticated
