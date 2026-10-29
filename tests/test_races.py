@@ -40,6 +40,24 @@ class RaceTests(unittest.TestCase):
         ):
             self.assertNotIn("error", review_item("123", self.event(title)))
 
+    def test_official_calendar_requires_both_name_and_date(self):
+        from dataclasses import replace
+
+        for title, day in (
+            ("Run: CIM", "2026-12-06"),
+            ("Run: Big Sur", "2027-04-25"),
+            ("Run: Grandma's", "2027-06-19"),
+            ("Run: NYC", "2026-11-01"),
+            ("Run: Christmas Relays", "2026-12-20"),
+        ):
+            event = replace(self.event(title), date=day)
+            self.assertEqual(review_item("123", event).get("skipped"), "race")
+            self.assertNotIn("skipped", review_item("123", replace(event, date="2030-01-01")))
+        for title in ("Run: CIM pace intervals", "Run: Big Sur training", "Run: 8 miles"):
+            self.assertNotIn(
+                "skipped", review_item("123", replace(self.event(title), date="2026-12-06"))
+            )
+
     def test_skipped_races_do_not_request_ai_interpretation(self):
         engine = Mock(spec=Interpreter)
         Interpreter.observe_plan(

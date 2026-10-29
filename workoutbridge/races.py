@@ -2,6 +2,8 @@
 
 import re
 
+from .race_calendar import race_date_matches
+
 
 def is_race(event):
     if re.search(r"(?im)^Workout:\s*(?:(?:Run|Bike|Cycling)\s*-\s*)?Race\s*$", event.description):
@@ -12,6 +14,8 @@ def is_race(event):
     title = re.sub(r"(?i)^(?:Run|Bike|Cycling)(?:\s*-\s*Easy)?\s*:\s*", "", title)
     if re.match(r"(?i)^Race(?: day)?\s*:", title):
         return True
+    if (matched := race_date_matches(title, event.date)) is not None:
+        return matched
     # Require a named race ending, not generic mentions of race-pace training.
     return bool(
         re.fullmatch(r".+\s+(?:half marathon|marathon|\d+(?:\.\d+)?\s*[kK] race)", title, re.I)

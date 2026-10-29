@@ -414,6 +414,13 @@ metadata, and named events whose title ends in `Half Marathon`, `Marathon`, or
 an explicit distance race such as `8K race`. Ordinary race-pace training is not
 excluded. Race rows do not count as workouts needing review. This does not remove
 anything already published or change the source calendar.
+The reviewed local catalog in `workoutbridge/race_calendar.py` also correlates
+exact race-name aliases with local race dates from PA/USATF, the 2026 Majors
+schedule, CIM, Big Sur and Grandma's organizer pages. Both the name and date
+must match; a date alone or a phrase such as `CIM pace intervals` is insufficient.
+It is a bounded seed catalog, not a live or exhaustive directory. Each entry
+links its primary source; update dates through review rather than assuming the
+same date every year. No athlete data is sent to those sites during parsing.
 
 All new sources and existing sources without an explicit policy use the shared
 `athlete_preferences` conversion defaults. No coach identity or account allowlist
