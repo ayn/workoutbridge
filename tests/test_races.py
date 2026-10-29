@@ -51,6 +51,8 @@ class RaceTests(unittest.TestCase):
             ("Run: Christmas Relays", "2026-12-20"),
             ("Run: Tamalpa Marin Memorial 5-Mile", "2026-05-25"),
             ("Run: Stow Lake Stampede 5K", "2026-04-19"),
+            ("Run: PA XC Championships", "2026-11-15"),
+            ("Run: Skyline 50K", "2026-08-02"),
         ):
             event = replace(self.event(title), date=day)
             self.assertEqual(review_item("123", event).get("skipped"), "race")

@@ -415,7 +415,8 @@ an explicit distance race such as `8K race`. Ordinary race-pace training is not
 excluded. Race rows do not count as workouts needing review. This does not remove
 anything already published or change the source calendar.
 The reviewed local catalog in `workoutbridge/race_calendar.py` also correlates
-exact race-name aliases with local race dates from PA/USATF, the 2026 Majors
+exact race-name aliases with local race dates from PA/USATF road, XC and MUT
+public calendars, the 2026 Majors
 schedule, CIM, Big Sur and Grandma's organizer pages. Both the name and date
 must match; a date alone or a phrase such as `CIM pace intervals` is insufficient.
 It is a bounded seed catalog, not a live or exhaustive directory. Each entry
