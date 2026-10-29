@@ -6,7 +6,9 @@ recurrence. This is a bounded seed catalog, not a complete or live race director
 
 import re
 
-PA = "https://www.pausatf.org/data/2026/RRPurse2026.html"
+PA = "https://calendar.google.com/calendar/ical/uh2llv64k5hd7l4ob3gvk8qvgc%40group.calendar.google.com/public/basic.ics"
+# Alternate sponsor/name aliases checked against the PA road Grand Prix listing:
+# https://www.pausatf.org/data/2026/RRPurse2026.html
 MAJORS = "https://www.baa.org/wp-content/uploads/2026/04/April14-BM26-Media-Guide-Pages_UPDATE-ForOnlineL.pdf"
 CIM = "https://runcim.org/"
 BIG_SUR = "https://www.bigsurmarathon.org/future-events/"
@@ -18,12 +20,19 @@ VERIFIED_ON = "2026-10-29"
 RACES = (
     ("2026-03-07", ("NorCal John Frank Memorial 10-Mile", "NorCal 10 Mile"), PA),
     ("2026-03-22", ("Oakland Half Marathon",), PA),
-    ("2026-04-12", ("Sactown Mile",), PA),
-    ("2026-04-19", ("Jambar Impala Stampede 5k", "Impala Stampede 5k"), PA),
-    ("2026-05-03", ("Devil Mountain Mile of Truth", "Mile of Truth"), PA),
+    ("2026-04-12", ("Sactown Mile", "Sactown One-Mile"), PA),
+    (
+        "2026-04-19",
+        ("Stow Lake Stampede 5K", "Jambar Impala Stampede 5k", "Impala Stampede 5k"),
+        PA,
+    ),
+    ("2026-05-03", ("The Mile of Truth", "Devil Mountain Mile of Truth", "Mile of Truth"), PA),
+    ("2026-05-25", ("Tamalpa Marin Memorial 5-Mile",), PA),
+    ("2026-04-04", ("Bartley Bunny Run 5K",), PA),
+    ("2026-04-26", ("Alameda Hosptial Foundation 10K", "Alameda Hospital Foundation 10K"), PA),
     ("2026-05-31", ("San Jose Half Marathon",), PA),
-    ("2026-07-04", ("Blue Heron 5k",), PA),
-    ("2026-08-08", ("Cooper Teare Classic 8K",), PA),
+    ("2026-07-04", ("Heron 5K", "Blue Heron 5k"), PA),
+    ("2026-08-08", ("Cooper Teare Classic Alameda 8K", "Cooper Teare Classic 8K"), PA),
     ("2026-09-27", ("Urban Cow Half Marathon", "Urban Cow"), PA),
     ("2026-11-01", ("Clarksburg Country Run Half Marathon", "Clarksburg Half Marathon"), PA),
     ("2026-12-06", ("California International Marathon", "CIM"), CIM),
