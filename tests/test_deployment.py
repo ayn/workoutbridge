@@ -1,3 +1,4 @@
+import re
 import unittest
 from pathlib import Path
 
@@ -5,6 +6,12 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class DeploymentTests(unittest.TestCase):
+    def test_tailscale_image_includes_ssh_security_fixes(self):
+        compose = (ROOT / "compose.yaml").read_text()
+        version = re.search(r"image: tailscale/tailscale:v(\d+)\.(\d+)\.(\d+)", compose)
+        self.assertIsNotNone(version, "Pin a reviewed Tailscale security release")
+        self.assertGreaterEqual(tuple(map(int, version.groups())), (1, 104, 4))
+
     def test_coros_dependencies_available_in_ci_and_container(self):
         for path in ("Dockerfile", ".github/workflows/tests.yml"):
             self.assertIn("--extra coros", (ROOT / path).read_text())
