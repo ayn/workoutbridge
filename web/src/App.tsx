@@ -42,7 +42,7 @@ type Item = {
   event: { title: string; date: string; description: string; sport?: string };
   draft: { steps: Step[]; unresolved: string[] };
   error?: string;
-  skipped?: "race";
+  skipped?: "race" | "rest_day";
   suggestion?: {policy: string; draft: {steps: Step[]; unresolved: string[]}};
 };
 type Plan = {
@@ -553,7 +553,7 @@ export function App({ brand = "WorkoutBridge", multiuser = false, suggestedEmail
                         <span
                           className={`status ${entry.skipped ? "skipped" : entry.error ? "attention" : "ready"}`}
                         >
-                          {entry.skipped === "race" ? "Not published — race" : entry.error ? "Review needed" : "Ready"}
+                          {entry.skipped === "race" ? "Not published — race" : entry.skipped === "rest_day" ? "Not published — rest day" : entry.error ? "Review needed" : "Ready"}
                         </span>
                         <ChevronRight size={16} />
                       </div>
@@ -584,8 +584,8 @@ export function App({ brand = "WorkoutBridge", multiuser = false, suggestedEmail
                         {item.event.sport === "cycling" && <span className="badge">Cycling</span>}
                         <h2>{item.event.title}</h2>
                         <p className="muted">{dateLabel(item.event.date)}</p>
-                        {item.skipped === "race" ? (
-                          <p className="muted">Race events stay on your source calendar and are not sent as structured workouts.</p>
+                        {item.skipped ? (
+                          <p className="muted">{item.skipped === "race" ? "Race events stay on your source calendar and are not sent as structured workouts." : "Rest days stay on your source calendar and are not sent as structured workouts."}</p>
                         ) : item.error ? (
                           <div className="warning">
                             <strong>Needs review</strong>

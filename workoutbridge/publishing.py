@@ -14,6 +14,7 @@ from .calendar import Event
 from .garmin import workout_payload
 from .parser import parse
 from .races import is_race
+from .rest_days import is_rest_day
 
 
 class ReviewRequired(ValueError):
@@ -33,6 +34,8 @@ def event_key(account: str, event: Event) -> str:
 def event_payload(event: Event) -> dict:
     if is_race(event):
         raise ReviewRequired("Not published — race")
+    if is_rest_day(event):
+        raise ReviewRequired("Not published — rest day")
     if event.cancelled:
         raise ReviewRequired("Cancelled event requires manual reconciliation")
     return workout_payload(

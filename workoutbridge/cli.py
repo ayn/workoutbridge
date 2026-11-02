@@ -14,6 +14,7 @@ from .garmin import GarminProvider
 from .parser import parse
 from .publishing import Publisher, ReviewRequired, approval_token, digest, event_payload
 from .races import is_race
+from .rest_days import is_rest_day
 
 
 def emit(value):
@@ -28,6 +29,9 @@ def review_item(account: str, event: Event) -> dict:
     }
     if is_race(event):
         return {**result, "skipped": "race", "error": "Not published — race"}
+    if is_rest_day(event):
+        result["draft"].update(steps=[], unresolved=[], requires_review=False)
+        return {**result, "skipped": "rest_day", "error": "Not published — rest day"}
     try:
         if account.startswith("coros:"):
             from .coros_publishing import approval_token as coros_approval

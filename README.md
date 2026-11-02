@@ -345,7 +345,10 @@ the final stride. This uses the same `--interval-recovery review` opt-out.
 When title and description rep counts differ, the substantive description wins;
 the original text remains in the notes. Missing or unsupported instructions
 still require review.
-Non-running/race titles and unsupported formats require separate review.
+Unsupported non-running titles and formats require separate review. Explicit
+`Rest Day` entries with only rest-day metadata remain visible as
+**Not published — rest day**, without requesting review or AI interpretation.
+Substantive or conflicting instructions are never discarded as rest days.
 
 Timed uphill sprints such as `Run: 8 miles + 5x 12s uphill sprints`
 become the initial run, a Run-until-Lap transition, then five native repeats
