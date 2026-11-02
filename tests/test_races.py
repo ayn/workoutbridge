@@ -62,6 +62,16 @@ class RaceTests(unittest.TestCase):
                 "skipped", review_item("123", replace(self.event(title), date="2026-12-06"))
             )
 
+    def test_public_race_name_aliases_are_date_scoped(self):
+        from dataclasses import replace
+
+        for name in ("Clarksburg Country Run", "Clarksburg Run", "Clarksburg Half"):
+            event = replace(self.event(f"Run: {name}"), date="2026-11-01")
+            self.assertEqual(review_item("123", event).get("skipped"), "race")
+            self.assertNotIn("skipped", review_item("123", replace(event, date="2030-01-01")))
+        event = replace(self.event("Run: Clarksburg Run training"), date="2026-11-01")
+        self.assertNotIn("skipped", review_item("123", event))
+
     def test_skipped_races_do_not_request_ai_interpretation(self):
         engine = Mock(spec=Interpreter)
         Interpreter.observe_plan(

@@ -36,7 +36,17 @@ RACES = (
     ("2026-07-04", ("Heron 5K", "Blue Heron 5k"), PA),
     ("2026-08-08", ("Cooper Teare Classic Alameda 8K", "Cooper Teare Classic 8K"), PA),
     ("2026-09-27", ("Urban Cow Half Marathon", "Urban Cow"), PA),
-    ("2026-11-01", ("Clarksburg Country Run Half Marathon", "Clarksburg Half Marathon"), PA),
+    (
+        "2026-11-01",
+        (
+            "Clarksburg Country Run Half Marathon",
+            "Clarksburg Half Marathon",
+            "Clarksburg Country Run",
+            "Clarksburg Run",
+            "Clarksburg Half",
+        ),
+        "https://www.clarksburgcountryrun.com/event-details/",
+    ),
     ("2026-12-06", ("California International Marathon", "CIM"), CIM),
     ("2026-12-20", ("Christmas Relays",), PA),
     ("2026-03-01", ("Tokyo Marathon", "Tokyo"), MAJORS),
