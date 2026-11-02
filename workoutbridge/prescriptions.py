@@ -5,10 +5,10 @@ from dataclasses import replace
 
 from .calendar import Event
 from .parser import EFFORT, Repeat, Step, parse
+from .rest_days import is_rest_day
 from .shorthand import clauses as split_clauses
 from .shorthand import infer_shorthand_units, normalize_bookend, normalize_clause
 from .sports import event_sport
-from .rest_days import is_rest_day
 
 DEFAULT_COACHING_POLICY = "athlete_preferences"
 
