@@ -5,6 +5,7 @@ from dataclasses import replace
 
 from .calendar import Event
 from .parser import EFFORT, Repeat, Step, parse
+from .rest_days import is_rest_day
 from .shorthand import clauses as split_clauses
 from .shorthand import infer_shorthand_units, normalize_bookend, normalize_clause
 from .sports import event_sport
@@ -55,6 +56,8 @@ def normalize_finalsurge(
     coaching_policy = canonical_coaching_policy(coaching_policy)
     if distance_unit not in ("auto", "mi", "km"):
         raise ValueError("Unknown distance unit")
+    if is_rest_day(event):
+        return event
     event = replace(
         event,
         sport=event_sport(
@@ -91,6 +94,8 @@ def normalize_workout(
     coaching_policy = canonical_coaching_policy(coaching_policy)
     if distance_unit not in ("auto", "mi", "km"):
         raise ValueError("Unknown distance unit")
+    if is_rest_day(event):
+        return event
     event = replace(
         event,
         sport=event_sport(

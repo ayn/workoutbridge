@@ -8,11 +8,14 @@ from .coros import workout_payload
 from .parser import parse
 from .publishing import Publisher, ReviewRequired, digest, matches
 from .races import is_race
+from .rest_days import is_rest_day
 
 
 def event_values(event):
     if is_race(event):
         raise ReviewRequired("Not published — race")
+    if is_rest_day(event):
+        raise ReviewRequired("Not published — rest day")
     if event.cancelled:
         raise ReviewRequired("Cancelled COROS event requires manual reconciliation")
     return dict(
