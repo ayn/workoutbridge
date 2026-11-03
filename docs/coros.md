@@ -1,8 +1,10 @@
 # COROS Pilot
 
 WorkoutBridge uses the [official COROS MCP gateway](https://github.com/coroslab/COROS-MCP)
-and its browser OAuth flow. No language model or AI API is involved in parsing or
-publishing. The separately approved partner REST API is not used. The implementation
+and its browser OAuth flow. Provider requests use this gateway directly; no language
+model mediates COROS authentication or publishing. Optional AI interpretation can
+resolve workout text before the normal publishing flow. The separately approved
+partner REST API is not used. The implementation
 does not depend on, or redistribute, COROS's example login helper.
 
 ## Connect
