@@ -31,6 +31,15 @@ class ParserTests(unittest.TestCase):
         step = parse("Run 2 min easy").steps[0]
         self.assertEqual(step.kind, "run")
 
+    def test_easy_recovery_run_remains_running_and_preserves_effort(self):
+        for text in ("Run 7 km easy recovery", "Run 25 min easy recovery"):
+            draft = parse(text)
+            self.assertFalse(draft.unresolved)
+            self.assertEqual(len(draft.steps), 1)
+            self.assertEqual(draft.steps[0].kind, "run")
+            self.assertEqual(draft.steps[0].label, "easy recovery")
+        self.assertTrue(parse("Run 7 km easy recovery or bike instead").unresolved)
+
     def test_invalid_duration(self):
         for text in ("Run 0 min", "Run -2 min", "Run nan min"):
             with self.subTest(text=text):

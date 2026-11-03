@@ -74,6 +74,23 @@ class FinalSurgeTests(unittest.TestCase):
         self.assertEqual(event.title, original.title)
         self.assertFalse(any(s["stepType"]["stepTypeKey"] == "cooldown" for s in steps))
 
+    def test_easy_recovery_title_exports_as_one_run_to_both_destinations(self):
+        from workoutbridge.cli import review_item
+
+        for normalize in (normalize_finalsurge, normalize_workout):
+            event = normalize(self.event("Run: 7 miles easy recovery"))
+            draft = parse(event.prescription)
+            self.assertFalse(draft.unresolved)
+            self.assertEqual(len(draft.steps), 1)
+            self.assertEqual(draft.steps[0].kind, "run")
+            self.assertEqual(draft.steps[0].duration, 7 * 1609.344)
+            self.assertEqual(draft.steps[0].label, "easy recovery")
+            for account in ("123", "coros:us:synthetic"):
+                item = review_item(account, event)
+                self.assertNotIn("error", item)
+                self.assertIn("payload", item)
+            self.assertIn("easy recovery", event.description)
+
     def test_missing_recovery_can_require_review(self):
         event = normalize_finalsurge(self.event(), recovery_choice="review")
         self.assertTrue(parse(event.prescription).unresolved)
