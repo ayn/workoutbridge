@@ -86,9 +86,16 @@ class CorosPublisher:
                     raise ReviewRequired(
                         "COROS event changed or moved; reconcile the existing entry"
                     )
-                if record["phase"] != "done":
+                if record["phase"] not in {"done", "verify_pending"} or not record.get("id"):
                     raise ReviewRequired("COROS write is pending; do not retry creation")
                 self.verify(compact_day, record["id"], course)
+                if record["phase"] == "verify_pending":
+                    record["phase"] = "done"
+                    db.execute(
+                        "UPDATE coros_publications SET record=? WHERE identity=?",
+                        (json.dumps(record), key),
+                    )
+                    db.commit()
                 return record["id"]
             for (stored,) in db.execute("SELECT record FROM coros_publications"):
                 other = json.loads(stored)

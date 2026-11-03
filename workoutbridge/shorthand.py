@@ -748,6 +748,22 @@ def normalize_clause(part, *, pace_unit=None, coaching_policy="strict", allow_to
                 f"{count} x {int(duration)} sec{label} with {recovery:g} sec rest recovery", span
             )
         )
+    alternating = re.fullmatch(
+        r"(\d+)\s*x\s*(\d+(?:\.\d+)?)\s*(m|km|mi|miles)\s+alternating\s+"
+        r"(uphill|downhill)\s+and\s+(uphill|downhill)(?:\s+is possible)?"
+        r"\s*\(~?\s*(\d+:[0-5]\d)\s+rest\)",
+        part,
+        re.I,
+    )
+    if alternating and coaching_policy == "athlete_preferences":
+        count, amount, unit, first, second, recovery = alternating.groups()
+        if first.lower() != second.lower() and 2 <= int(count) <= 100 and int(count) % 2 == 0:
+            rest = clock_seconds(recovery)
+            return Conversion(
+                f"{int(count) // 2} x [Run {amount} {unit} [coaching note: {first.lower()}]"
+                f" | Rest {rest} sec | Run {amount} {unit} [coaching note: {second.lower()}]"
+                f" | Rest {rest} sec]"
+            )
     hill = re.fullmatch(
         rf"(\d+)\s*x\s*(~?\s*\d+(?:\.\d+)?\s*{DURATION_UNITS})\s+"
         rf"(uphill|downhill|hills|hill strides|strides uphill|strides downhill)(?:\s+({EFFORT}))?"
