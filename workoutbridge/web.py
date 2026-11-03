@@ -11,6 +11,7 @@ import sqlite3
 import threading
 import time
 from contextlib import asynccontextmanager, contextmanager
+from copy import deepcopy
 from dataclasses import asdict
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -54,6 +55,8 @@ def create_app(
     on_publication=None,
     vault=None,
     operation=None,
+    resolve_plan=None,
+    authorize_interpretation=None,
 ) -> FastAPI:
     if len(password) < 32 or urlsplit(origin).scheme not in ("https", "http"):
         raise ValueError("Set an origin and a random password of at least 32 characters")
@@ -229,6 +232,11 @@ def create_app(
             for event in events
         ]
         plan = {"id": rule_id, "account": profile["account_id"], "items": items, "created": stamp()}
+        if resolve_plan is not None:
+            try:
+                plan = resolve_plan(deepcopy(plan))
+            except Exception:  # noqa: BLE001 - AI failure preserves normal parsing and publishing.
+                pass
         plan["hash"] = digest(plan)
         put("plan", rule_id, plan)
         rule.update(last_preview=stamp(), error=None)
@@ -841,6 +849,14 @@ def create_app(
             items = [plan["items"][i] for i in selected]
             if any("error" in item for item in items):
                 raise HTTPException(409, "Unresolved workouts cannot be published")
+            if (
+                any(item.get("interpretation") for item in items)
+                and authorize_interpretation is not None
+                and not authorize_interpretation()
+            ):
+                raise HTTPException(
+                    403, "AI access changed. Refresh this preview before publishing"
+                )
             results = []
             if rule.get("automatic"):
                 rule["auto_blocked"] = True

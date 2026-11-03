@@ -67,6 +67,38 @@ class AITests(unittest.TestCase):
         self.assertEqual(set(request), {"sport", "title", "prescription"})
         self.assertNotIn("private-", json.dumps(request))
 
+    def test_resolve_plan_uses_only_valid_candidates_and_preserves_identity(self):
+        from workoutbridge.cli import review_item
+
+        item = review_item("123", self.event)
+        plan = {"id": "sync", "account": "123", "items": [item]}
+        before = json.dumps(plan, sort_keys=True)
+        resolved = self.engine.resolve_plan(plan)
+        self.assertEqual(json.dumps(plan, sort_keys=True), before)
+        converted = resolved["items"][0]
+        self.assertNotIn("error", converted)
+        self.assertIn("approval", converted)
+        self.assertEqual(converted["event"]["uid"], self.event.uid)
+        self.assertEqual(converted["event"]["date"], self.event.date)
+        self.assertIn(self.event.description, converted["event"]["description"])
+        self.assertIn("AI interpretation", converted["event"]["description"])
+        self.assertEqual(converted["interpretation"]["model"], self.engine.model)
+        self.assertEqual(converted["draft"]["steps"][0]["duration"], 2100)
+        self.engine.resolve_plan(plan)
+        self.client.assert_called_once()
+
+    def test_resolve_plan_leaves_ambiguous_skipped_and_successful_items_unchanged(self):
+        from workoutbridge.cli import review_item
+
+        self.client.return_value = (proposal(assumptions=["Guessed duration"]), {})
+        blocked = review_item("123", self.event)
+        good = review_item("123", replace(self.event, structured_text="Run 10 min"))
+        race = {"skipped": "race", "error": "Not published — race"}
+        rest = {"skipped": "rest_day", "error": "Not published — rest day"}
+        plan = {"account": "123", "items": [blocked, good, race, rest]}
+        self.assertEqual(self.engine.resolve_plan(plan), plan)
+        self.client.assert_called_once()
+
     def test_tenant_model_and_prescription_isolation(self):
         self.engine.interpret(self.event)
         self.other(self.engine).interpret(self.event)
