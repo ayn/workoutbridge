@@ -42,6 +42,23 @@ def publication_failure(exc, previous, now, stage):
         transient = transient or isinstance(exc, (requests.Timeout, requests.ConnectionError))
     except ImportError:
         pass
+    try:
+        from garminconnect import GarminConnectConnectionError, GarminConnectTooManyRequestsError
+
+        if isinstance(exc, GarminConnectTooManyRequestsError):
+            transient = True
+        elif isinstance(exc, GarminConnectConnectionError):
+            response = getattr(exc, "response", None)
+            transient = response is None or getattr(response, "status_code", None) in {
+                408,
+                429,
+                500,
+                502,
+                503,
+                504,
+            }
+    except ImportError:
+        pass
     reason = str(exc) if isinstance(exc, ReviewRequired) else ""
     code = SAFE_REASONS.get(reason, "publication_requires_review")
     transient = transient or code == "publisher_busy"
