@@ -1,4 +1,4 @@
-"""Optional, bounded AI interpretation experiments. Proposals never authorize publishing."""
+"""Bounded AI proposals and opt-in fallback under application publishing controls."""
 
 import hashlib
 import json
@@ -8,6 +8,7 @@ import sqlite3
 import stat
 import time
 from contextlib import contextmanager
+from dataclasses import replace
 from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
@@ -389,6 +390,60 @@ class Interpreter:
         garmin_payload("Interpretation", "", draft)
         coros_payload("Interpretation", "", draft)
         return {**result, "status": "candidate", "draft": draft.to_dict()}
+
+    def resolve_plan(self, plan):
+        """Apply validated candidates only when an application explicitly opts in.
+
+        Normal account-bound approvals and publication receipts still govern writes.
+        Ambiguity, failures and budget limits retain the deterministic review item.
+        """
+        from .cli import review_item
+
+        items = list(plan.get("items", []))
+        attempted = 0
+        for index, item in enumerate(items):
+            if "error" not in item or item.get("skipped"):
+                continue
+            event = Event(**item["event"])
+            if event.cancelled or event.sport not in {"running", "cycling"}:
+                continue
+            with private_db(self.database()) as db:
+                cached = db.execute(
+                    "SELECT 1 FROM interpretations WHERE key=?",
+                    (self.cache_key(self.request_value(event)),),
+                ).fetchone()
+            if not cached:
+                if attempted >= 3:
+                    continue
+                attempted += 1
+            result = self.interpret(event)
+            if result["status"] == "budget_exhausted":
+                break
+            if result["status"] != "candidate":
+                continue
+            # Revalidate cached results against the current grammar and both adapters.
+            validated = self.validate(
+                {key: result[key] for key in SCHEMA["required"]}, self.request_value(event)
+            )
+            if validated["status"] != "candidate":
+                continue
+            description = "\n".join(
+                filter(
+                    None,
+                    [event.description, f"AI interpretation ({self.model})", *validated["notes"]],
+                )
+            )
+            candidate = replace(
+                event, structured_text=validated["structured_text"], description=description
+            )
+            converted = review_item(plan["account"], candidate)
+            if "error" not in converted:
+                converted["interpretation"] = {
+                    "model": self.model,
+                    "evidence": validated["evidence"],
+                }
+                items[index] = converted
+        return {**plan, "items": items}
 
     def observe_plan(self, plan):
         # Bound the added latency per queued operation; later refreshes handle the rest.

@@ -1,8 +1,9 @@
 # WorkoutBridge
 
 Optional experimental [AI interpretation tooling](docs/ai-interpretation.md)
-supports your own OpenAI API key. It proposes structured conversions without
-authorizing publication; the deterministic parser remains available without AI.
+supports your own OpenAI API key. Applications can opt into validated AI fallback
+for unresolved text; normal account approvals and publishing controls still apply.
+The deterministic parser remains available without AI.
 
 The private web pilot provides calendar sources, saved Garmin and COROS connections,
 web sign-in, structured-workout previews, and manual or opt-in hourly publishing. See the

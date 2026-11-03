@@ -3,8 +3,10 @@
 The optional AI library converts coach text into the existing workout grammar,
 then checks that both Garmin and COROS adapters can represent it. Candidates
 always retain `requires_review: true`: schema/adapter checks do not prove that
-the interpretation preserves every instruction. This tool never publishes,
-clears parser review flags or creates publication approvals.
+the interpretation preserves every instruction. `interpret()` never publishes,
+clears parser review flags or creates publication approvals. Applications may explicitly
+opt into the fallback integration described below, while retaining their normal
+publishing controls.
 
 Install the `ai` extra and use your own API key in a mode-600 private regular
 file, outside your checkout. No hosted account or subscription is needed.
@@ -93,3 +95,26 @@ unsupported assumption and must not by itself force `unresolved`. Missing work,
 contradictory counts, primary alternatives and unsupported targets still require
 review. AI candidates remain separate and always require review before publishing.
 The shadow-v6 prompt/cache version distinguishes results produced under this policy.
+
+## Opt-in application fallback
+
+`Interpreter.interpret(event)` and `observe_plan(plan)` still produce separate,
+inert proposals. An application can explicitly opt into `resolve_plan(plan)` for
+its account-bound preview, or pass that callable to `web.create_app(resolve_plan=...)`.
+It runs after deterministic parsing, before the preview hash and approvals are
+persisted, so both manual publishing and an already enabled automatic sync use the
+same resolved plan. Existing publishing settings are never enabled by AI.
+
+Only candidates with verbatim evidence and no unresolved instructions or assumptions
+are eligible. Candidates are revalidated against the current parser and both provider
+adapters. Original identities and prescriptions remain intact; notes identify the AI
+model. Races, rest days, cancellations, unsupported sports and successful deterministic
+results are untouched. Failures and budget limits leave the original review item.
+A preview attempts at most three uncached interpretations; cached results do not block
+later unresolved items. A supported candidate is not proof of semantic correctness.
+
+Managed services supply their own entitlement check before cache/API access and an
+`authorize_interpretation` callback to recheck eligibility before any provider write.
+Self-hosters may supply their own key and policy. The interpreter cannot initiate
+publishing: account binding, exact approvals, preview expiry and durable duplicate
+prevention remain the application's publishing authority.
