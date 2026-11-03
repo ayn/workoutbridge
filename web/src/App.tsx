@@ -370,7 +370,7 @@ export function App({ brand = "WorkoutBridge", multiuser = false, suggestedEmail
         </nav>
         <div className="sidebar-bottom">
           <span className="dot" />{" "}
-          {state?.syncs.some((s) => s.automatic && !s.paused && !s.auto_blocked)
+          {state?.syncs.some((s) => s.automatic && !s.paused && (!s.auto_blocked || s.publish_failure?.next_retry))
             ? (multiuser ? "Scheduled publishing" : "Hourly publishing")
             : "Manual publishing"}
           <button
@@ -738,7 +738,7 @@ export function App({ brand = "WorkoutBridge", multiuser = false, suggestedEmail
                       <input
                         type="checkbox"
                         aria-label={`Automatic publishing for ${s.profile}`}
-                        checked={!!s.automatic && !s.auto_blocked}
+                        checked={!!s.automatic && (!s.auto_blocked || !!s.publish_failure?.next_retry)}
                         disabled={busy}
                         onChange={(e) => {
                           if (e.target.checked) {

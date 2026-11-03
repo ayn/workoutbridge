@@ -753,6 +753,7 @@ test("syncs and history show saved failure reason and scheduled retry", async ()
   await userEvent.click(await screen.findByRole("button", {name: "Syncs"}));
   expect(await screen.findByText(/Automatic retry scheduled/)).toBeInTheDocument();
   expect(screen.getByText(/Retry attempt 1/)).toBeInTheDocument();
+  expect(screen.getByRole("checkbox", {name: "Automatic publishing for test"})).toBeChecked();
   await userEvent.click(screen.getByRole("button", {name: "History"}));
   expect(await screen.findByText(/Destination temporarily unavailable/)).toBeInTheDocument();
 });
