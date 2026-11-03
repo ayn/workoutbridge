@@ -7,7 +7,7 @@ from datetime import date
 from .calendar_blocks import is_calendar_block
 from .coros import workout_payload
 from .parser import parse
-from .publishing import Publisher, ReviewRequired, digest, matches
+from .publishing import Publisher, ReviewRequired, confirm_publication, digest, matches
 from .races import is_race
 from .rest_days import is_rest_day
 
@@ -89,13 +89,13 @@ class CorosPublisher:
                 if record["phase"] not in {"done", "verify_pending"} or not record.get("id"):
                     raise ReviewRequired("COROS write is pending; do not retry creation")
                 self.verify(compact_day, record["id"], course)
-                if record["phase"] == "verify_pending":
-                    record["phase"] = "done"
-                    db.execute(
-                        "UPDATE coros_publications SET record=? WHERE identity=?",
-                        (json.dumps(record), key),
-                    )
-                    db.commit()
+                confirm_publication(record)
+                record["phase"] = "done"
+                db.execute(
+                    "UPDATE coros_publications SET record=? WHERE identity=?",
+                    (json.dumps(record), key),
+                )
+                db.commit()
                 return record["id"]
             for (stored,) in db.execute("SELECT record FROM coros_publications"):
                 other = json.loads(stored)
@@ -156,6 +156,7 @@ class CorosPublisher:
             record.update(id=remote_id, phase="verify_pending")
             save()
             self.verify(compact_day, remote_id, course)
+            confirm_publication(record)
             record["phase"] = "done"
             save()
             return remote_id
@@ -210,6 +211,7 @@ class CorosPublisher:
             if record["id"] is not None and record["id"] != remote_id:
                 raise ReviewRequired("Cannot replace the recorded COROS identity")
             self.verify(date.fromisoformat(day).strftime("%Y%m%d"), remote_id, course)
+            confirm_publication(record)
             record.update(id=remote_id, phase="done")
             db.execute(
                 "UPDATE coros_publications SET record=? WHERE identity=?", (json.dumps(record), key)

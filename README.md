@@ -956,3 +956,11 @@ finish verification of a pending receipt with a known workout ID through readbac
 without creating another workout. Unknown creation outcomes, changed prescriptions,
 identity mismatches, and destination conflicts require reconciliation and are not
 blindly repeated. Manual-only syncs do not enable background publishing or retries.
+
+Verified destination receipts retain a durable `publication_count`: a new workout
+counts once, a successfully published edit counts again, and unchanged readback
+checks do not increment it. Pending writes are counted only after verification;
+retrying a lost response does not count the same write twice. Reverting to an older
+prescription is another publication when it causes a verified update. Legacy done
+receipts establish a conservative baseline of one each; historical edits were not
+recorded and cannot be reconstructed from repeated sync-check history.

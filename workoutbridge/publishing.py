@@ -91,6 +91,17 @@ def matches(expected, actual) -> bool:
     return expected == actual
 
 
+def confirm_publication(record):
+    """Count a verified creation/edit once, including recovery after a lost response.
+
+    Legacy done receipts prove at least one publication, but not old edit counts.
+    A pending intent is counted only once it passes destination verification.
+    """
+    previous = record.get("publication_count", 1 if record["phase"] == "done" else 0)
+    pending = record.get("publication_pending", record["phase"] != "done")
+    record.update(publication_count=previous + int(pending), publication_pending=False)
+
+
 class Publisher:
     def __init__(self, database: Path, provider):
         self.database = Path(database)
@@ -225,7 +236,8 @@ class Publisher:
             if not matches(payload, saved):
                 if record["hash"] == content_hash or record["phase"].endswith("_pending"):
                     raise ReviewRequired("Destination read-back differs; reconcile before retry")
-                record.update(hash=content_hash, phase="update_pending")
+                record.setdefault("publication_count", 1 if record["phase"] == "done" else 0)
+                record.update(hash=content_hash, phase="update_pending", publication_pending=True)
                 save(record)
                 self.provider.update(wid, payload)
                 saved = self.provider.get_workout(wid)
@@ -252,6 +264,7 @@ class Publisher:
                 ]
                 if len(scheduled) != 1:
                     raise ReviewRequired("Scheduled entry did not verify uniquely")
+            confirm_publication(record)
             record.update(hash=content_hash, phase="done", scheduled_once=True)
             save(record)
             return wid

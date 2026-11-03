@@ -71,6 +71,47 @@ class PublishingTests(unittest.TestCase):
             token or approval_token(provider.account_id, event),
         )
 
+    def publication_count(self):
+        with sqlite3.connect(self.db) as db:
+            record = json.loads(db.execute("SELECT record FROM publications").fetchone()[0])
+        return record.get("publication_count", 0)
+
+    def test_publication_count_tracks_writes_and_reversions_not_verification_runs(self):
+        self.publish()
+        self.publish()
+        self.assertEqual(self.publication_count(), 1)
+        edited = replace(self.event, description="Run 25 min")
+        self.publish(edited)
+        self.publish(edited)
+        self.assertEqual(self.publication_count(), 2)
+        self.publish()
+        self.assertEqual(self.publication_count(), 3)
+
+    def test_recovered_update_is_counted_once_after_verification(self):
+        self.publish()
+        self.provider.fail_update = True
+        edited = replace(self.event, description="Run 25 min")
+        with self.assertRaises(TimeoutError):
+            self.publish(edited)
+        self.assertEqual(self.publication_count(), 1)
+        self.provider.fail_update = False
+        self.publish(edited)
+        self.publish(edited)
+        self.assertEqual(self.publication_count(), 2)
+
+    def test_legacy_done_receipt_backfills_once_before_an_edit(self):
+        self.publish()
+        with sqlite3.connect(self.db) as db:
+            key, encoded = db.execute("SELECT identity,record FROM publications").fetchone()
+            record = json.loads(encoded)
+            record.pop("publication_count", None)
+            record.pop("publication_pending", None)
+            db.execute(
+                "UPDATE publications SET record=? WHERE identity=?", (json.dumps(record), key)
+            )
+        self.publish(replace(self.event, description="Run 25 min"))
+        self.assertEqual(self.publication_count(), 2)
+
     def test_repeat_and_restart_are_noops(self):
         self.publish()
         self.publish()

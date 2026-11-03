@@ -100,6 +100,15 @@ class CorosPublishingTests(unittest.TestCase):
         self.assertEqual(self.publish(), "9223372036854775806")
         self.assertEqual(self.client.writes, 1)
 
+    def test_verified_coros_creation_counts_once_across_repeated_checks(self):
+        import sqlite3
+
+        self.publish()
+        self.publish()
+        with sqlite3.connect(self.publisher.ledger.database) as db:
+            record = json.loads(db.execute("SELECT record FROM coros_publications").fetchone()[0])
+        self.assertEqual(record.get("publication_count", 0), 1)
+
     def test_create_verify_and_repeat_does_not_duplicate(self):
         self.assertEqual(self.publish(), "9223372036854775806")
         self.assertEqual(self.publish(), "9223372036854775806")
