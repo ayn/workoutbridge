@@ -105,6 +105,15 @@ test("rest days explain their exclusion without requesting review", async () => 
   expect(screen.getByText("Needs attention").previousElementSibling).toHaveTextContent("0");
 });
 
+test("athlete references appear separately from the prescribed workout", async () => {
+  const reference = "Marathon goal reference: 3:00:00 (6:52/mi, 4:16/km).";
+  const workout = {...initial.plans[0].items[0], reference_notes: [reference]};
+  const request = vi.fn().mockResolvedValue({...initial, plans: [{...initial.plans[0], items: [workout]}]});
+  render(<App request={request} />);
+  await userEvent.click(await screen.findByRole("button", {name: new RegExp(workout.event.title)}));
+  expect(screen.getByRole("note", {name: "Athlete reference"})).toHaveTextContent(reference);
+});
+
 test("busy blocks explain their exclusion without requesting review", async () => {
   const block = {
     event: {title: "Busy", description: "", date: "2030-01-04"},

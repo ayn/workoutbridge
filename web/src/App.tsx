@@ -43,6 +43,7 @@ type Item = {
   draft: { steps: Step[]; unresolved: string[] };
   error?: string;
   skipped?: "race" | "rest_day" | "calendar_block";
+  reference_notes?: string[];
   suggestion?: {policy: string; draft: {steps: Step[]; unresolved: string[]}};
 };
 type Plan = {
@@ -607,6 +608,7 @@ export function App({ brand = "WorkoutBridge", multiuser = false, suggestedEmail
                             })}>Approve progression conversion <Check size={16} /></button>
                           </section>
                         )}
+                        {item.reference_notes?.length ? <div className="muted" role="note" aria-label="Athlete reference"><h3>Athlete reference</h3>{item.reference_notes.map((note, index) => <p key={index}>{note}</p>)}</div> : null}
                         <details className="original">
                           <summary>
                             Original prescription <ChevronDown size={14} />
