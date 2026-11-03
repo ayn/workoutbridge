@@ -19,6 +19,7 @@ class RestDayTests(unittest.TestCase):
                 ("Rest Day", "Workout: Rest Day"),
                 (" rest day ", ""),
                 ("REST DAY", "Workout: Rest Day\n\nPlanned: 0 mi"),
+                ("rest and recovery", ""),
             ):
                 event = normalize(self.event(title, description))
                 for account in ("123", "coros:us:synthetic"):

@@ -4,6 +4,7 @@ import re
 from dataclasses import replace
 
 from .calendar import Event
+from .calendar_blocks import is_calendar_block
 from .parser import EFFORT, Repeat, Step, parse
 from .rest_days import is_rest_day
 from .shorthand import clauses as split_clauses
@@ -56,7 +57,7 @@ def normalize_finalsurge(
     coaching_policy = canonical_coaching_policy(coaching_policy)
     if distance_unit not in ("auto", "mi", "km"):
         raise ValueError("Unknown distance unit")
-    if is_rest_day(event):
+    if is_rest_day(event) or is_calendar_block(event):
         return event
     event = replace(
         event,
@@ -94,7 +95,7 @@ def normalize_workout(
     coaching_policy = canonical_coaching_policy(coaching_policy)
     if distance_unit not in ("auto", "mi", "km"):
         raise ValueError("Unknown distance unit")
-    if is_rest_day(event):
+    if is_rest_day(event) or is_calendar_block(event):
         return event
     event = replace(
         event,

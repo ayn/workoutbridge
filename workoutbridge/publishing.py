@@ -5,12 +5,14 @@ import hashlib
 import json
 import math
 import os
+import re
 import sqlite3
 from contextlib import contextmanager
 from dataclasses import asdict
 from pathlib import Path
 
 from .calendar import Event
+from .calendar_blocks import is_calendar_block
 from .garmin import workout_payload
 from .parser import parse
 from .races import is_race
@@ -31,16 +33,34 @@ def event_key(account: str, event: Event) -> str:
     return digest([account, event.source, event.uid, event.recurrence_id])
 
 
+def garmin_description(description):
+    # Reserve the complete identity marker within Garmin's observed 1,024-character
+    # description limit. UTF-8 bytes are conservative for non-ASCII characters too.
+    budget = 1024 - len(("\n\n[WorkoutBridge:" + "0" * 64 + "]").encode())
+    if len(description.encode()) <= budget:
+        return description
+    # Explicit source blocks duplicate the executable workout payload. Preserve
+    # all human coaching notes; never silently truncate them to fit the provider.
+    compact = re.sub(r"(?is)\n*\[WorkoutBridge\].*?\[/WorkoutBridge\]\s*", "", description).strip()
+    if len(compact.encode()) > budget:
+        raise ReviewRequired("Garmin description is too long; shorten notes before publishing")
+    return compact
+
+
 def event_payload(event: Event) -> dict:
     if is_race(event):
         raise ReviewRequired("Not published — race")
+    if is_calendar_block(event):
+        raise ReviewRequired("Not published — calendar block")
     if is_rest_day(event):
         raise ReviewRequired("Not published — rest day")
     if event.cancelled:
         raise ReviewRequired("Cancelled event requires manual reconciliation")
-    return workout_payload(
+    payload = workout_payload(
         event.title, event.description, parse(event.prescription, sport=event.sport)
     )
+    payload["description"] = garmin_description(payload["description"])
+    return payload
 
 
 def approval_token(account: str, event: Event) -> str:

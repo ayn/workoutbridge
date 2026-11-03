@@ -4,6 +4,7 @@ import json
 import re
 from datetime import date
 
+from .calendar_blocks import is_calendar_block
 from .coros import workout_payload
 from .parser import parse
 from .publishing import Publisher, ReviewRequired, digest, matches
@@ -14,6 +15,8 @@ from .rest_days import is_rest_day
 def event_values(event):
     if is_race(event):
         raise ReviewRequired("Not published — race")
+    if is_calendar_block(event):
+        raise ReviewRequired("Not published — calendar block")
     if is_rest_day(event):
         raise ReviewRequired("Not published — rest day")
     if event.cancelled:

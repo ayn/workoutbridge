@@ -105,6 +105,20 @@ test("rest days explain their exclusion without requesting review", async () => 
   expect(screen.getByText("Needs attention").previousElementSibling).toHaveTextContent("0");
 });
 
+test("busy blocks explain their exclusion without requesting review", async () => {
+  const block = {
+    event: {title: "Busy", description: "", date: "2030-01-04"},
+    draft: {steps: [], unresolved: []}, skipped: "calendar_block", error: "Not published — calendar block",
+  };
+  const request = vi.fn().mockResolvedValue({...initial, plans: [{...initial.plans[0], items: [block]}]});
+  render(<App request={request} />);
+  expect(await screen.findByText("Not published — calendar block")).toBeInTheDocument();
+  expect(screen.getByRole("checkbox", {name: "Select Busy"})).toBeDisabled();
+  await userEvent.click(screen.getByRole("button", {name: /Busy/}));
+  expect(screen.getByText("Calendar blocks stay on your source calendar and are not sent as structured workouts.")).toBeInTheDocument();
+  expect(screen.getByText("Needs attention").previousElementSibling).toHaveTextContent("0");
+});
+
 test("hosted setup checklist guides an empty workspace to sources, connections and syncs", async () => {
   const empty = {...initial, sources: [], connections: [], syncs: [], plans: []};
   vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify(empty)));
