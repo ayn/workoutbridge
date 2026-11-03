@@ -27,6 +27,30 @@ class WebTests(unittest.TestCase):
         self.assertIn("HttpOnly", r.headers["set-cookie"])
         self.assertIn("Secure", r.headers["set-cookie"])
 
+    def test_state_reads_profile_metadata_without_restoring_provider_sessions(self):
+        from unittest.mock import Mock
+
+        config = self.root / "config"
+        (config / "profiles").mkdir(parents=True)
+        (config / "profiles/test.json").write_text("{}")
+        vault = Mock()
+        app = create_app(
+            self.root / "metadata",
+            "https://bridge.example",
+            "a" * 40,
+            poll=False,
+            config_root=config,
+            vault=vault,
+        )
+        client = TestClient(app, base_url="https://bridge.example")
+        client.post("/api/v1/login", json={"password": "a" * 40}, headers=self.headers)
+        with patch(
+            "workoutbridge.web.load_profile",
+            return_value={"account_id": "123", "session_dir": str(self.root / "session")},
+        ):
+            self.assertEqual(client.get("/api/v1/state").status_code, 200)
+        vault.restore.assert_not_called()
+
     def test_api_routes_are_versioned_and_health_is_not(self):
         paths = {route.path for route in self.app.routes}
         self.assertIn("/api/v1/login", paths)
@@ -269,6 +293,60 @@ class WebTests(unittest.TestCase):
             connect.assert_not_called()
             rules = self.client.get("/api/v1/state").json()["syncs"]
             self.assertTrue(next(s for s in rules if s["id"] == rule)["auto_blocked"])
+
+    def test_transient_publish_failure_retries_after_cooldown_without_losing_reason(self):
+        import json
+        import sqlite3
+
+        from workoutbridge.calendar import Event
+
+        rule, source, _ = self.automatic_rule()
+        self.client.post(
+            f"/api/v1/syncs/{rule}/automatic",
+            json={"enabled": True, "account": "123"},
+            headers=self.headers,
+        )
+        with (
+            patch("workoutbridge.web.read_calendar", return_value=b"synthetic"),
+            patch(
+                "workoutbridge.web.import_calendar",
+                return_value=[Event(source, "run", "", "2030-01-01", "Run: 25 min", "")],
+            ),
+            patch(
+                "workoutbridge.web.GarminProvider.connect", side_effect=TimeoutError("SECRET")
+            ) as connect,
+        ):
+            self.app.state.poll_once()
+            state = self.client.get("/api/v1/state").json()
+            failure = state["syncs"][0]["publish_failure"]
+            self.assertEqual(failure["code"], "provider_unavailable")
+            self.assertEqual(failure["attempt"], 1)
+            self.assertTrue(failure["next_retry"])
+            self.assertEqual(state["history"][-1]["failure"], failure)
+            self.app.state.poll_once()
+            connect.assert_called_once()
+            self.assertEqual(
+                self.client.get("/api/v1/state").json()["syncs"][0]["publish_failure"], failure
+            )
+            for attempt in (2, 3, 4):
+                with sqlite3.connect(self.root / "web.sqlite") as db:
+                    saved = json.loads(
+                        db.execute(
+                            "SELECT body FROM objects WHERE kind='sync' AND id=?", (rule,)
+                        ).fetchone()[0]
+                    )
+                    saved["publish_failure"]["next_retry"] = "2000-01-01T00:00:00+00:00"
+                    db.execute(
+                        "UPDATE objects SET body=? WHERE kind='sync' AND id=?",
+                        (json.dumps(saved), rule),
+                    )
+                self.app.state.poll_once()
+                current = self.client.get("/api/v1/state").json()["syncs"][0]
+                self.assertEqual(current["publish_failure"]["attempt"], attempt)
+            self.assertIsNone(current["publish_failure"]["next_retry"])
+            self.app.state.poll_once()
+            self.assertEqual(connect.call_count, 4)
+            self.assertNotIn("SECRET", self.client.get("/api/v1/state").text)
 
     def test_automatic_failure_latches_across_restart_and_requires_acknowledgment(self):
         from workoutbridge.calendar import Event

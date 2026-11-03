@@ -6,6 +6,7 @@ from pathlib import Path
 import httpx
 
 from workoutbridge.coros_client import CorosClient
+from workoutbridge.recovery import ProviderUnavailable
 
 
 class CorosClientTests(unittest.TestCase):
@@ -86,7 +87,7 @@ class CorosClientTests(unittest.TestCase):
             client = CorosClient(
                 session, "us", http=httpx.Client(transport=httpx.MockTransport(respond))
             )
-            with self.assertRaises(ValueError):
+            with self.assertRaises(ProviderUnavailable):
                 client.call_tool("createScheduledWorkout", {})
             self.assertEqual(len(writes), 1)
 

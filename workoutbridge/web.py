@@ -35,6 +35,7 @@ from .prescriptions import (
 )
 from .profiles import load_profile, profile_path
 from .publishing import Publisher, digest
+from .recovery import publication_failure
 from .reviewed import review_progression
 from .web_auth import GarminLogin
 
@@ -239,7 +240,9 @@ def create_app(
                 pass
         plan["hash"] = digest(plan)
         put("plan", rule_id, plan)
-        rule.update(last_preview=stamp(), error=None)
+        rule["last_preview"] = stamp()
+        if not rule.get("auto_blocked"):
+            rule["error"] = None
         put("sync", rule_id, rule)
         return plan
 
@@ -255,8 +258,12 @@ def create_app(
                 try:
                     plan = preview(rule["id"])
                     rule = get("sync", rule["id"])
-                    if not rule.get("automatic") or rule.get("auto_blocked"):
+                    if not rule.get("automatic"):
                         continue
+                    if rule.get("auto_blocked"):
+                        retry = rule.get("publish_failure", {}).get("next_retry")
+                        if not retry or retry > stamp():
+                            continue
                     if rule.get("auto_account") != plan["account"]:
                         rule.update(
                             auto_blocked=True,
@@ -272,11 +279,10 @@ def create_app(
                     put("sync", rule["id"], rule)
                     try:
                         publish(rule["id"], {"hash": plan["hash"], "selected": selected})
-                    except Exception:  # noqa: BLE001 - preserve the stop latch and redact remote errors.
-                        rule["error"] = (
-                            "Automatic publishing stopped. Reconcile history before re-enabling."
-                        )
+                    except Exception:  # noqa: BLE001 - publish persists sanitized diagnostics.
+                        rule = get("sync", rule["id"])
                     else:
+                        rule = get("sync", rule["id"])
                         rule.update(auto_blocked=False, last_publish=stamp(), error=None)
                     put("sync", rule["id"], rule)
                 except Exception:  # noqa: BLE001 - private feed/session details must not leak.
@@ -432,7 +438,11 @@ def create_app(
         connections = []
         for path in sorted(path_for("placeholder").parent.glob("*.json")):
             try:
-                profile = load(path.stem)
+                profile = (
+                    load_profile(path.stem, config_root=config_root)
+                    if config_root is not None
+                    else load_profile(path.stem)
+                )
                 connections.append(
                     {
                         "id": path.stem,
@@ -760,6 +770,7 @@ def create_app(
                         409, "Reconcile history and acknowledge review before resuming"
                     )
                 rule.update(auto_account=profile["account_id"], auto_blocked=False, error=None)
+                rule.pop("publish_failure", None)
             rule["automatic"] = body["enabled"]
             put("sync", key, rule)
             if body["enabled"]:
@@ -864,6 +875,7 @@ def create_app(
             previous = logging.root.manager.disable
             logging.disable(logging.CRITICAL)
             coros_client = None
+            stage = "connect"
             try:
                 if profile.get("destination") == "coros":
                     from .coros_client import CorosClient
@@ -880,6 +892,7 @@ def create_app(
                         Path(profile["session_dir"]), expected_account=profile["account_id"]
                     )
                     publisher = Publisher(Path(profile["state_db"]), provider)
+                stage = "publish_and_verify"
                 for item in items:
                     wid = publisher.publish(Event(**item["event"]), item["approval"])
                     results.append(
@@ -889,18 +902,29 @@ def create_app(
                             "workout_id": wid,
                         }
                     )
-            except Exception:  # noqa: BLE001 - remote outcome may be uncertain; retain receipts.
+            except Exception as exc:  # noqa: BLE001 - retain receipts, redact provider text.
+                failure = publication_failure(exc, rule.get("publish_failure"), stamp(), stage)
+                if not rule.get("automatic"):
+                    failure["next_retry"] = None
+                rule.update(publish_failure=failure, error=failure["message"])
+                put("sync", key, rule)
                 record = {
                     "id": uuid4().hex,
                     "sync": key,
                     "at": stamp(),
-                    "status": "Review required",
+                    "status": "Retry scheduled" if failure["next_retry"] else "Review required",
+                    "failure": failure,
                     "results": results,
                 }
                 put("history", record["id"], record)
                 raise HTTPException(
                     409,
-                    "Publish stopped. Some writes may have succeeded. Receipts preserved; reconcile before retrying",
+                    {
+                        "code": "publication_retry_scheduled",
+                        "message": "Destination unavailable; automatic retry scheduled. See History.",
+                    }
+                    if failure["next_retry"]
+                    else "Publish stopped. Some writes may have succeeded. Receipts preserved; reconcile before retrying",
                 ) from None
             finally:
                 if coros_client is not None:
@@ -918,6 +942,9 @@ def create_app(
             put("history", record["id"], record)
             if on_publication is not None and results:
                 on_publication()
+            rule.pop("publish_failure", None)
+            rule["error"] = None
+            put("sync", key, rule)
             if rule.get("automatic"):
                 rule.update(auto_blocked=False, last_publish=stamp())
                 put("sync", key, rule)

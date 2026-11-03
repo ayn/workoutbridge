@@ -13,6 +13,8 @@ from pathlib import Path
 import httpx
 from httpx_sse import EventSource
 
+from .recovery import ProviderUnavailable
+
 REGIONS = {region: f"https://mcp{region}.coros.com" for region in ("us", "eu", "cn")}
 _HTTP_LOG_LOCK = threading.RLock()
 
@@ -94,8 +96,12 @@ class CorosClient:
             response = self.http.request(method, self.issuer + path, **kwargs)
             response.raise_for_status()
             return response
-        except httpx.HTTPError:
+        except httpx.HTTPStatusError as exc:
+            if exc.response.status_code in {408, 429, 500, 502, 503, 504}:
+                raise ProviderUnavailable("COROS temporarily unavailable") from None
             raise ValueError("COROS request failed; outcome requires review") from None
+        except httpx.TransportError:
+            raise ProviderUnavailable("COROS temporarily unavailable") from None
 
     def headers(self):
         return {"Authorization": "Bearer " + self.token["access_token"]}

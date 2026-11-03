@@ -741,3 +741,19 @@ test("workout details preserve mile, kilometer and track-meter display units", a
   }
   expect(screen.queryByText("2011.68 m")).not.toBeInTheDocument();
 });
+
+test("syncs and history show saved failure reason and scheduled retry", async () => {
+  const failure = {code: "provider_unavailable", message: "Destination temporarily unavailable",
+    at: "2030-01-01T00:00:00Z", stage: "connect", attempt: 1, next_retry: "2030-01-01T00:05:00Z"};
+  vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({...initial,
+    syncs: [{...initial.syncs[0], automatic: true, auto_blocked: true, publish_failure: failure}],
+    history: [{id: "failure", sync: "r", at: failure.at, status: "Retry scheduled", failure, results: []}]
+  })));
+  render(<App />);
+  await userEvent.click(await screen.findByRole("button", {name: "Syncs"}));
+  expect(await screen.findByText(/Automatic retry scheduled/)).toBeInTheDocument();
+  expect(screen.getByText(/Retry attempt 1/)).toBeInTheDocument();
+  expect(screen.getByRole("checkbox", {name: "Automatic publishing for test"})).toBeChecked();
+  await userEvent.click(screen.getByRole("button", {name: "History"}));
+  expect(await screen.findByText(/Destination temporarily unavailable/)).toBeInTheDocument();
+});

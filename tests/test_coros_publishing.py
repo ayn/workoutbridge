@@ -85,6 +85,21 @@ class CorosPublishingTests(unittest.TestCase):
         token = approval_token(self.client.account_id, **values)
         return self.publisher.publish(**values, approved=token)
 
+    def test_retry_verifies_known_pending_id_without_creating_again(self):
+        original = self.client.call_tool
+
+        def timeout(name, arguments):
+            if name == "queryScheduledWorkoutDetails":
+                raise TimeoutError("private upstream detail")
+            return original(name, arguments)
+
+        self.client.call_tool = timeout
+        with self.assertRaises(TimeoutError):
+            self.publish()
+        self.client.call_tool = original
+        self.assertEqual(self.publish(), "9223372036854775806")
+        self.assertEqual(self.client.writes, 1)
+
     def test_create_verify_and_repeat_does_not_duplicate(self):
         self.assertEqual(self.publish(), "9223372036854775806")
         self.assertEqual(self.publish(), "9223372036854775806")

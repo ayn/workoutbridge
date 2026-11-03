@@ -358,6 +358,13 @@ strides, this named policy retains the final recovery and uses the same
 `--interval-recovery review` opt-out. The added Lap steps are identified in
 the notes; no numeric sprint pace or recovery time is invented.
 
+With the explicit `athlete_preferences` conversion policy, even-count alternating
+hill repetitions such as `6 x 150m alternating uphill and downhill (~1:20 rest)`
+become three cycles of uphill, 80-second rest, downhill, 80-second rest. The final
+recovery is retained. Direction stays in step notes; the original wording,
+including terrain conditions, remains in the workout description. Odd counts or
+unsupported qualifiers still require review, and strict mode opts out.
+
 Fast-finish long runs such as `Run - Long Run: 18 miles w/ last 6 miles fast`
 become 12 miles followed by 6 miles with the note `last 6 miles fast`.
 The finishing distance is part of the total, not additional mileage. There is
@@ -932,3 +939,20 @@ the provider description while the executable steps and human coaching notes are
 retained. The complete source prescription remains in the application. Coaching
 notes that still cannot fit require review before any upload; they are not silently
 truncated.
+
+### Automatic publishing recovery
+
+Publishing failures retain a sanitized reason code, timestamp, operation stage,
+attempt count, and next retry in sync state and History. Provider response bodies,
+calendar URLs, credentials, and arbitrary exception text are never included.
+Automatic syncs retry recognized transport failures, rate limits, and temporary
+server failures at the next scheduled poll after cooldowns of 5 minutes,
+30 minutes, and 2 hours. Three retries are allowed; exhaustion remains visible
+for operator review. A successful publication clears the current failure while
+retaining its history. Refreshing a feed does not erase a publishing stop.
+
+Every retry goes through the account-bound durable receipt checks. COROS can
+finish verification of a pending receipt with a known workout ID through readback,
+without creating another workout. Unknown creation outcomes, changed prescriptions,
+identity mismatches, and destination conflicts require reconciliation and are not
+blindly repeated. Manual-only syncs do not enable background publishing or retries.

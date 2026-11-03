@@ -63,8 +63,10 @@ type Sync = {
   paused?: boolean;
   automatic?: boolean;
   auto_blocked?: boolean;
+  publish_failure?: PublicationFailure;
   last_publish?: string;
 };
+type PublicationFailure = {code: string; message: string; at: string; stage: string; attempt: number; next_retry: string | null};
 type Connection = { id: string; provider: string; account: string };
 type State = {
   sources: Source[];
@@ -77,6 +79,7 @@ type State = {
     at: string;
     status: string;
     upcoming_count?: number;
+    failure?: PublicationFailure;
     results: { title: string; date: string; workout_id: string }[];
   }[];
 };
@@ -367,7 +370,7 @@ export function App({ brand = "WorkoutBridge", multiuser = false, suggestedEmail
         </nav>
         <div className="sidebar-bottom">
           <span className="dot" />{" "}
-          {state?.syncs.some((s) => s.automatic && !s.paused && !s.auto_blocked)
+          {state?.syncs.some((s) => s.automatic && !s.paused && (!s.auto_blocked || s.publish_failure?.next_retry))
             ? (multiuser ? "Scheduled publishing" : "Hourly publishing")
             : "Manual publishing"}
           <button
@@ -476,8 +479,9 @@ export function App({ brand = "WorkoutBridge", multiuser = false, suggestedEmail
               {rule?.paused && <p className="warning">Sync paused</p>}
               {rule?.auto_blocked && (
                 <p className="warning">
-                  Automatic publishing stopped. Reconcile History before
-                  resuming in Syncs.
+                  {rule.publish_failure?.next_retry
+                    ? `Automatic retry scheduled for ${timestamp(rule.publish_failure.next_retry)}. Receipts will be checked first.`
+                    : "Automatic publishing stopped. Reconcile History before resuming in Syncs."}
                 </p>
               )}
               <div className="metrics">
@@ -716,7 +720,7 @@ export function App({ brand = "WorkoutBridge", multiuser = false, suggestedEmail
                     <p>
                       {s.paused ? "Paused" : multiuser ? "Scheduled refresh" : "Hourly refresh"} ·{" "}
                       {s.auto_blocked
-                        ? "Publishing stopped: review required"
+                        ? s.publish_failure?.next_retry ? "Automatic retry scheduled" : "Publishing stopped: review required"
                         : s.automatic
                           ? "Automatic publishing"
                           : "Manual publishing"}
@@ -725,11 +729,16 @@ export function App({ brand = "WorkoutBridge", multiuser = false, suggestedEmail
                       <p>Last published {timestamp(s.last_publish)}</p>
                     )}
                     {s.error && <p className="error-text">{s.error}</p>}
+                    {s.publish_failure && <p>
+                      Retry attempt {s.publish_failure.attempt} · {s.publish_failure.next_retry
+                        ? `Next check ${timestamp(s.publish_failure.next_retry)}`
+                        : "Review History to resume publishing"}
+                    </p>}
                     <label className="inline-check">
                       <input
                         type="checkbox"
                         aria-label={`Automatic publishing for ${s.profile}`}
-                        checked={!!s.automatic && !s.auto_blocked}
+                        checked={!!s.automatic && (!s.auto_blocked || !!s.publish_failure?.next_retry)}
                         disabled={busy}
                         onChange={(e) => {
                           if (e.target.checked) {
@@ -792,6 +801,10 @@ export function App({ brand = "WorkoutBridge", multiuser = false, suggestedEmail
                           ? ` · ${h.results.length} verified workouts`
                           : ""}
                     </p>
+                    {h.failure && <p className="error-text">
+                      {h.failure.message} · {h.failure.code} · Attempt {h.failure.attempt}
+                      {h.failure.next_retry ? ` · Next check ${timestamp(h.failure.next_retry)}` : ""}
+                    </p>}
                     {h.results.map((r, i) => (
                       <p key={i}>
                         {r.date} · {r.title} · #{r.workout_id}

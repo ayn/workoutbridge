@@ -10,6 +10,37 @@ class CoachingSetTests(unittest.TestCase):
     def event(self, text):
         return Event("synthetic", "sets", "", "2030-02-01", "Run: Intervals", text)
 
+    def test_alternating_hill_pairs_preserve_direction_and_final_recovery(self):
+        event = normalize_workout(
+            self.event("6 miles + 6x150m alternating uphill and downhill is possible (~1:20 rest)"),
+            coaching_policy="athlete_preferences",
+        )
+        draft = parse(event.prescription)
+        self.assertFalse(draft.unresolved)
+        self.assertEqual(len(draft.steps), 3)
+        self.assertEqual(draft.steps[1].unit, "lap_button")
+        group = draft.steps[-1]
+        self.assertEqual(group.count, 3)
+        self.assertFalse(group.skip_last_recovery)
+        up, rest, down, final = group.steps
+        self.assertEqual((up.duration, down.duration), (150, 150))
+        self.assertIn("uphill", up.note)
+        self.assertIn("downhill", down.note)
+        self.assertEqual((rest.duration, final.duration), (80, 80))
+        self.assertIn("is possible", event.description)
+        for profile in ("123", "coros:us:synthetic"):
+            self.assertNotIn("error", review_item(profile, event))
+        for policy, clause in (
+            ("strict", "6x150m alternating uphill and downhill (~1:20 rest)"),
+            ("athlete_preferences", "5x150m alternating uphill and downhill (~1:20 rest)"),
+            ("athlete_preferences", "6x150m alternating uphill and downhill if injured stop"),
+        ):
+            self.assertTrue(
+                parse(
+                    normalize_workout(self.event(clause), coaching_policy=policy).prescription
+                ).unresolved
+            )
+
     def test_repeated_track_sets_keep_reps_and_between_set_rest(self):
         for text in (
             "2x (3x500m at 1:45-1:48 w/ 60s rest) 3:00 rest between sets",
