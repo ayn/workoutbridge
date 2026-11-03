@@ -77,6 +77,42 @@ class PublishingTests(unittest.TestCase):
         self.assertEqual((self.provider.uploads, self.provider.schedules), (1, 1))
         self.assertEqual(self.db.stat().st_mode & 0o777, 0o600)
 
+    def test_long_duplicate_structured_text_does_not_truncate_the_identity_marker(self):
+        text = "Run 15 min" + " " * 1200
+        event = replace(
+            self.event,
+            description="Keep these coach instructions.\n[WorkoutBridge]\n"
+            + text
+            + "\n[/WorkoutBridge]",
+            structured_text=text,
+        )
+        provider = self.provider
+        upload = provider.upload
+
+        def truncate_like_garmin(payload):
+            payload = deepcopy(payload)
+            if len(payload["description"]) > 1024:
+                payload["description"] = payload["description"][:1021] + "..."
+            return upload(payload)
+
+        provider.upload = truncate_like_garmin
+        wid = self.publish(event)
+        self.publish(event)
+        saved = provider.get_workout(wid)
+        self.assertIn("Keep these coach instructions.", saved["description"])
+        self.assertRegex(saved["description"], r"\[WorkoutBridge:[a-f0-9]{64}\]$")
+        self.assertLessEqual(len(saved["description"].encode()), 1024)
+        self.assertEqual((provider.uploads, provider.schedules), (1, 1))
+
+    def test_overlong_coach_notes_require_review_before_a_remote_write(self):
+        event = replace(
+            self.event, description="Important coaching notes. " * 100, structured_text="Run 15 min"
+        )
+        with self.assertRaisesRegex(ValueError, "description"):
+            self.publish(event)
+        self.assertEqual(self.provider.uploads, 0)
+        self.assertEqual(self.provider.schedules, 0)
+
     def test_explicit_approval_required_and_bound_to_content(self):
         token = approval_token(self.provider.account_id, self.event)
         for event, approval in (

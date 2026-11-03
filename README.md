@@ -912,3 +912,23 @@ unsupported pace formats and reversed progressions remain blocked for review.
 Workout details retain prescribed distance units: mile-based steps display `mi`,
 kilometer-based steps `km`, and track intervals prescribed in meters display `m`.
 Garmin and COROS continue to receive the same normalized distances.
+
+### Calendar blocks and effort-only instructions
+
+Bare `Busy` entries are treated as calendar blocks and shown as **Not published —
+calendar block**. They do not need workout review or AI interpretation. A `Busy`
+title with substantive workout details is still parsed. Explicit `rest and recovery`
+days follow the same exclusion as Rest Day, without hiding actual prescriptions.
+
+Effort cues such as `think 1-hour effort`, `think mile`, and `looking for 88-93% of
+M effort` are preserved in the matching work-step notes. Complete work/recovery
+cycles keep their durations, repetition counts and final recovery. Qualitative
+references do not invent numeric pace targets; explicit pace instructions remain
+explicit. Optional easy doubles stay notes on the nominal workout.
+
+Garmin descriptions reserve space for the complete duplicate-prevention identity
+marker. If necessary, a duplicated `[WorkoutBridge]` source block is removed from
+the provider description while the executable steps and human coaching notes are
+retained. The complete source prescription remains in the application. Coaching
+notes that still cannot fit require review before any upload; they are not silently
+truncated.

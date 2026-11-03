@@ -1,7 +1,7 @@
 """Complete-clause coaching syntax. Unknown instructions are never consumed."""
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from .parser import (
     DISTANCE_EFFORT,
@@ -538,7 +538,43 @@ def slash_effort_clause(part, pace_unit, coaching_policy):
     return Conversion(text) if not parse(text).unresolved else None
 
 
+def qualitative_note_clause(part, pace_unit, coaching_policy, allow_total):
+    """Keep effort references as notes without deriving unsupported numeric alerts."""
+    cue = re.fullmatch(
+        r"(.+?)\s+\((think (?:(?:\d+(?:\.\d+)?[- ]hour|mile|5k|10k|half marathon|marathon)(?: effort| pace)?))\)",
+        part,
+        re.I,
+    )
+    if cue is None:
+        cue = re.fullmatch(
+            r"(.+?),\s*(looking for \d+(?:\.\d+)?(?:\s*[-–]\s*\d+(?:\.\d+)?)?% of (?:M|MP|marathon) effort)",
+            part,
+            re.I,
+        )
+    if cue is None:
+        return None
+    base = normalize_clause(
+        cue[1], pace_unit=pace_unit, coaching_policy=coaching_policy, allow_total=allow_total
+    )
+    if base is None:
+        phase = phase_clause(cue[1], pace_unit, coaching_policy)
+        base = Conversion(phase) if phase else None
+    if base is None:
+        return None
+    draft = parse(base.text)
+    if draft.unresolved or len(draft.steps) != 1:
+        return None
+    work = draft.steps[0].steps[0] if isinstance(draft.steps[0], Repeat) else draft.steps[0]
+    note = ", ".join(
+        filter(None, [work.label if work.label and work.label not in work.note else None, cue[2]])
+    )
+    text = base.text + f" [coaching note: {note}]"
+    return replace(base, text=text) if not parse(text).unresolved else None
+
+
 def normalize_clause(part, *, pace_unit=None, coaching_policy="strict", allow_total=False):
+    if converted := qualitative_note_clause(part, pace_unit, coaching_policy, allow_total):
+        return converted
     if converted := slash_effort_clause(part, pace_unit, coaching_policy):
         return converted
     part = re.sub(r"^(\d+\s*x\s*\d+(?:\.\d+)?)k(?=\s|$)", r"\1km", part, flags=re.I)

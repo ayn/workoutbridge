@@ -9,6 +9,7 @@ from datetime import date
 from pathlib import Path
 
 from .calendar import Event, import_calendar
+from .calendar_blocks import is_calendar_block
 from .feed import read_calendar
 from .garmin import GarminProvider
 from .parser import parse
@@ -29,6 +30,9 @@ def review_item(account: str, event: Event) -> dict:
     }
     if is_race(event):
         return {**result, "skipped": "race", "error": "Not published — race"}
+    if is_calendar_block(event):
+        result["draft"].update(steps=[], unresolved=[], requires_review=False)
+        return {**result, "skipped": "calendar_block", "error": "Not published — calendar block"}
     if is_rest_day(event):
         result["draft"].update(steps=[], unresolved=[], requires_review=False)
         return {**result, "skipped": "rest_day", "error": "Not published — rest day"}
