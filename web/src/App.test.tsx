@@ -744,7 +744,8 @@ test("workout details preserve mile, kilometer and track-meter display units", a
 
 test("syncs and history show saved failure reason and scheduled retry", async () => {
   const failure = {code: "provider_unavailable", message: "Destination temporarily unavailable",
-    at: "2030-01-01T00:00:00Z", stage: "connect", attempt: 1, next_retry: "2030-01-01T00:05:00Z"};
+    at: "2030-01-01T00:00:00Z", stage: "publish_and_verify", attempt: 1, next_retry: "2030-01-01T00:05:00Z",
+    exception_type: "HTTPError", http_status: 503, workout_date: "2030-01-01", workout_title: "Synthetic tempo"};
   vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({...initial,
     syncs: [{...initial.syncs[0], automatic: true, auto_blocked: true, publish_failure: failure}],
     history: [{id: "failure", sync: "r", at: failure.at, status: "Retry scheduled", failure, results: []}]
@@ -756,4 +757,6 @@ test("syncs and history show saved failure reason and scheduled retry", async ()
   expect(screen.getByRole("checkbox", {name: "Automatic publishing for test"})).toBeChecked();
   await userEvent.click(screen.getByRole("button", {name: "History"}));
   expect(await screen.findByText(/Destination temporarily unavailable/)).toBeInTheDocument();
+  expect(screen.getByText(/HTTP 503/)).toBeInTheDocument();
+  expect(screen.getByText(/Synthetic tempo/)).toBeInTheDocument();
 });

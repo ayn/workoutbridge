@@ -66,7 +66,7 @@ type Sync = {
   publish_failure?: PublicationFailure;
   last_publish?: string;
 };
-type PublicationFailure = {code: string; message: string; at: string; stage: string; attempt: number; next_retry: string | null};
+type PublicationFailure = {code: string; message: string; at: string; stage: string; attempt: number; next_retry: string | null; exception_type?: string; http_status?: number | null; workout_date?: string; workout_title?: string};
 type Connection = { id: string; provider: string; account: string };
 type State = {
   sources: Source[];
@@ -803,8 +803,11 @@ export function App({ brand = "WorkoutBridge", multiuser = false, suggestedEmail
                     </p>
                     {h.failure && <p className="error-text">
                       {h.failure.message} · {h.failure.code} · Attempt {h.failure.attempt}
+                      {h.failure.exception_type ? ` · ${h.failure.exception_type}` : ""}
+                      {h.failure.http_status ? ` · HTTP ${h.failure.http_status}` : ""}
                       {h.failure.next_retry ? ` · Next check ${timestamp(h.failure.next_retry)}` : ""}
                     </p>}
+                    {h.failure?.workout_title && <p>{h.failure.workout_date} · {h.failure.workout_title}</p>}
                     {h.results.map((r, i) => (
                       <p key={i}>
                         {r.date} · {r.title} · #{r.workout_id}

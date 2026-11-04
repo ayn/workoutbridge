@@ -294,6 +294,32 @@ class WebTests(unittest.TestCase):
             rules = self.client.get("/api/v1/state").json()["syncs"]
             self.assertTrue(next(s for s in rules if s["id"] == rule)["auto_blocked"])
 
+    def test_publish_failure_retains_the_failed_workout_without_provider_error_text(self):
+        from workoutbridge.calendar import Event
+
+        rule, source, _ = self.automatic_rule()
+        self.client.post(
+            f"/api/v1/syncs/{rule}/automatic",
+            json={"enabled": True, "account": "123"},
+            headers=self.headers,
+        )
+        with (
+            patch("workoutbridge.web.read_calendar", return_value=b"synthetic"),
+            patch(
+                "workoutbridge.web.import_calendar",
+                return_value=[Event(source, "run", "", "2030-01-01", "Run: 30 min", "")],
+            ),
+            patch("workoutbridge.web.GarminProvider.connect", return_value=object()),
+            patch("workoutbridge.web.Publisher.publish", side_effect=RuntimeError("PRIVATE token")),
+        ):
+            self.app.state.poll_once()
+        response = self.client.get("/api/v1/state")
+        failure = response.json()["syncs"][0]["publish_failure"]
+        self.assertEqual(failure["workout_date"], "2030-01-01")
+        self.assertEqual(failure["workout_title"], "Run: 30 min")
+        self.assertEqual(failure["exception_type"], "RuntimeError")
+        self.assertNotIn("PRIVATE", response.text)
+
     def test_transient_publish_failure_retries_after_cooldown_without_losing_reason(self):
         import json
         import sqlite3
@@ -321,6 +347,7 @@ class WebTests(unittest.TestCase):
             failure = state["syncs"][0]["publish_failure"]
             self.assertEqual(failure["code"], "provider_unavailable")
             self.assertEqual(failure["attempt"], 1)
+            self.assertEqual(failure["exception_type"], "TimeoutError")
             self.assertTrue(failure["next_retry"])
             self.assertEqual(state["history"][-1]["failure"], failure)
             self.app.state.poll_once()

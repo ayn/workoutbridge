@@ -876,6 +876,7 @@ def create_app(
             logging.disable(logging.CRITICAL)
             coros_client = None
             stage = "connect"
+            active_event = None
             try:
                 if profile.get("destination") == "coros":
                     from .coros_client import CorosClient
@@ -894,6 +895,7 @@ def create_app(
                     publisher = Publisher(Path(profile["state_db"]), provider)
                 stage = "publish_and_verify"
                 for item in items:
+                    active_event = item["event"]
                     wid = publisher.publish(Event(**item["event"]), item["approval"])
                     results.append(
                         {
@@ -904,6 +906,10 @@ def create_app(
                     )
             except Exception as exc:  # noqa: BLE001 - retain receipts, redact provider text.
                 failure = publication_failure(exc, rule.get("publish_failure"), stamp(), stage)
+                if active_event is not None:
+                    failure.update(
+                        workout_date=active_event["date"], workout_title=active_event["title"]
+                    )
                 if not rule.get("automatic"):
                     failure["next_retry"] = None
                 rule.update(publish_failure=failure, error=failure["message"])

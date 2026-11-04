@@ -964,3 +964,10 @@ retrying a lost response does not count the same write twice. Reverting to an ol
 prescription is another publication when it causes a verified update. Legacy done
 receipts establish a conservative baseline of one each; historical edits were not
 recorded and cannot be reconstructed from repeated sync-check history.
+
+Publication failures also retain the exception type, HTTP status when available,
+and failed workout title/date in private sync state and History. Known safety
+guards keep their specific reason; arbitrary provider messages, response bodies,
+request URLs and credentials remain redacted. HTTP authentication/access failures
+and missing resources are distinguished from retryable timeouts, rate limits and
+temporary server failures. Existing failures without these fields remain readable.
