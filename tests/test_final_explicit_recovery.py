@@ -33,8 +33,21 @@ class FinalExplicitRecoveryTests(unittest.TestCase):
         garmin = garmin_payload("Synthetic intervals", "", draft)["workoutSegments"][0][
             "workoutSteps"
         ]
-        self.assertEqual([step["skipLastRestStep"] for step in garmin[1:3]], [False, False])
+        self.assertEqual([step["skipLastRestStep"] for step in garmin[1:3]], [False, True])
         self.assertIn("final", event.description.lower())
+
+    def test_garmin_cooldown_omission_is_optional_and_does_not_change_coros(self):
+        event = self.normalize("4x600m at 2:10-2:12 (75 sec rest)\nCool down 1 mile")
+        draft = parse(event.prescription)
+        garmin = garmin_payload("Synthetic", "", draft)["workoutSegments"][0]["workoutSteps"]
+        self.assertTrue(garmin[0]["skipLastRestStep"])
+        self.assertFalse(draft.steps[0].skip_last_recovery)
+        explicit = garmin_payload("Synthetic", "", draft, skip_recovery_before_cooldown=False)
+        self.assertFalse(explicit["workoutSegments"][0]["workoutSteps"][0]["skipLastRestStep"])
+        coros = coros_payload("Synthetic", "", draft)["sections"]
+        self.assertEqual(coros[0]["repeats"], 4)
+        self.assertEqual(coros[0]["sets"][-1]["targetValue"], 75)
+        self.assertEqual(coros[1]["sectionType"], 4)
 
     def test_canonical_marker_can_retain_timed_and_distance_rest(self):
         for clause in (
