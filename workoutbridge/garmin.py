@@ -1,5 +1,6 @@
 """Garmin payload translation, independent of authentication and publishing."""
 
+from dataclasses import replace
 from datetime import date
 from pathlib import Path
 
@@ -69,12 +70,27 @@ class GarminProvider:
         return self.client.schedule_workout(wid, day)
 
 
-def workout_payload(title: str, description: str, draft: Draft) -> dict:
+def workout_payload(
+    title: str, description: str, draft: Draft, *, skip_recovery_before_cooldown: bool = True
+) -> dict:
     if draft.sport not in {"running", "cycling"}:
         raise ValueError("Unsupported Garmin workout sport")
     sport = SPORT if draft.sport == "running" else {"sportTypeId": 2, "sportTypeKey": "cycling"}
     if draft.unresolved or not draft.steps:
         raise ValueError("Resolve the full prescription before exporting")
+    steps = list(draft.steps)
+    if skip_recovery_before_cooldown and draft.sport == "running":
+        for index, step in enumerate(steps[:-1]):
+            following = steps[index + 1]
+            if (
+                isinstance(step, Repeat)
+                and step.steps
+                and isinstance(step.steps[-1], Step)
+                and step.steps[-1].kind == "rest"
+                and isinstance(following, Step)
+                and following.kind == "cool_down"
+            ):
+                steps[index] = replace(step, skip_last_recovery=True)
     order = 0
 
     def convert(step: Step | Repeat) -> dict:
@@ -133,7 +149,7 @@ def workout_payload(title: str, description: str, draft: Draft) -> dict:
             {
                 "segmentOrder": 1,
                 "sportType": sport,
-                "workoutSteps": [convert(step) for step in draft.steps],
+                "workoutSteps": [convert(step) for step in steps],
             }
         ],
     }

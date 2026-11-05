@@ -444,7 +444,11 @@ saved strict choice is retained. Both library prescription normalizers use the
 same defaults; callers can pass `coaching_policy="strict"` to opt out. The defaults:
 
 - Retains explicit timed or distance recovery after every repetition, including
-  the final repetition before cooldown. The athlete can skip it manually. An
+  the final repetition in the shared draft. COROS keeps the complete final group
+  before cooldown so the athlete can skip its last recovery manually. Garmin
+  skips the last rest when the next step is cooldown, while retaining recovery
+  between consecutive sets. Library callers can preserve even that Garmin rest
+  with `workout_payload(..., skip_recovery_before_cooldown=False)`. An
   explicit separate rest after a set replaces that set's last short recovery.
   Garmin uses its skip-last-rest flag and the full set rest; COROS retains the
   full repeat count and adds only the remaining set-rest time when compatible
