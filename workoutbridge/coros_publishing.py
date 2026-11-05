@@ -82,11 +82,16 @@ class CorosPublisher:
             ).fetchone()
             if row:
                 record = json.loads(row[0])
-                if record["day"] != day or record["hash"] != content_hash:
-                    raise ReviewRequired(
-                        "COROS event changed or moved; reconcile the existing entry"
-                    )
-                if record["phase"] not in {"done", "verify_pending"} or not record.get("id"):
+                if record["day"] != day:
+                    raise ReviewRequired("COROS event moved; reconcile the existing entry")
+                if record["hash"] != content_hash:
+                    self.update(db, key, record, compact_day, course)
+                if record["phase"] not in {
+                    "done",
+                    "verify_pending",
+                    "update_pending",
+                    "update_verify_pending",
+                } or not record.get("id"):
                     raise ReviewRequired("COROS write is pending; do not retry creation")
                 self.verify(compact_day, record["id"], course)
                 confirm_publication(record)
@@ -125,6 +130,7 @@ class CorosPublisher:
                 "sections": digest(course["sections"]),
                 "phase": "create_pending",
                 "id": None,
+                "course": course,
             }
 
             def save():
@@ -161,7 +167,7 @@ class CorosPublisher:
             save()
             return remote_id
 
-    def verify(self, day, remote_id, course):
+    def details(self, day, remote_id):
         details = result_data(
             self.client.call_tool(
                 "queryScheduledWorkoutDetails", {"date": day, "idInPlan": remote_id}
@@ -177,15 +183,93 @@ class CorosPublisher:
                 actual, _ = json.JSONDecoder().raw_decode(encoded)
             except ValueError:
                 raise ReviewRequired("Invalid COROS inline course JSON") from None
-            details = {"course": actual}
-        actual = details.get("course") if isinstance(details, dict) else None
-        expected = course
+            details = {
+                "course": actual,
+                "editable": bool(re.search(r"(?m)^Editable via MCP: yes\s*$", details)),
+            }
+        return details
+
+    @staticmethod
+    def course_matches(expected, actual):
         if isinstance(actual, dict) and isinstance(actual.get("courseName"), str):
-            # COROS trims title whitespace when reconstructing the stored course.
             actual = {**actual, "courseName": actual["courseName"].strip()}
-            expected = {**course, "courseName": course["courseName"].strip()}
-        if not matches(expected, actual):
+            expected = {**expected, "courseName": expected["courseName"].strip()}
+        return matches(expected, actual)
+
+    def verify(self, day, remote_id, course):
+        details = self.details(day, remote_id)
+        actual = details.get("course") if isinstance(details, dict) else None
+        if not self.course_matches(course, actual):
             raise ReviewRequired("COROS read-back differs; reconcile before continuing")
+
+    def update(self, db, key, record, day, course):
+        if record["phase"] != "done" or not record.get("id"):
+            raise ReviewRequired("COROS write is pending; reconcile before editing")
+        details = self.details(day, record["id"])
+        actual = details.get("course") if isinstance(details, dict) else None
+        if not isinstance(actual, dict) or details.get("editable") is not True:
+            raise ReviewRequired("COROS scheduled workout is not confirmed editable")
+        if record.get("course"):
+            old_title = record["course"]["courseName"]
+            unchanged = (
+                actual.get("courseName", "").strip() == old_title.strip()
+                and digest({**actual, "courseName": old_title}) == record["hash"]
+            )
+        else:
+            # Legacy receipts have a full content hash but no payload snapshot.
+            # Restore only author-title whitespace from the new prescription;
+            # the old complete hash must still prove every prior field matches.
+            candidates = [actual]
+            if actual.get("courseName", "").strip() == course["courseName"].strip():
+                candidates.append({**actual, "courseName": course["courseName"]})
+            unchanged = any(digest(value) == record["hash"] for value in candidates)
+        if not unchanged:
+            raise ReviewRequired(
+                "COROS destination changed outside the publisher; review before editing"
+            )
+        for identity, raw in db.execute("SELECT identity,record FROM coros_publications"):
+            other = json.loads(raw)
+            if (
+                identity != key
+                and other["account"] == record["account"]
+                and other["day"] == record["day"]
+                and (
+                    other["title"] == course["courseName"].strip().casefold()
+                    or other["sections"] == digest(course["sections"])
+                )
+            ):
+                raise ReviewRequired("Overlapping COROS publication already exists")
+
+        def save():
+            db.execute(
+                "UPDATE coros_publications SET record=? WHERE identity=?", (json.dumps(record), key)
+            )
+            db.commit()
+
+        record.setdefault("publication_count", 1)
+        record.update(
+            hash=digest(course),
+            title=course["courseName"].strip().casefold(),
+            sections=digest(course["sections"]),
+            course=course,
+            phase="update_pending",
+            publication_pending=True,
+        )
+        save()
+        result = result_data(
+            self.client.call_tool(
+                "updateScheduledWorkout",
+                {"date": day, "idInPlan": record["id"], "course": {**actual, **course}},
+            )
+        )
+        remote_id = result.get("idInPlan") if isinstance(result, dict) else None
+        if isinstance(result, str):
+            found = re.search(r"(?m)^idInPlan: ([0-9]+)\s*$", result)
+            remote_id = found[1] if found else None
+        if not isinstance(remote_id, str) or not remote_id.isdecimal():
+            raise ReviewRequired("COROS update outcome uncertain; do not repeat")
+        record.update(id=remote_id, phase="update_verify_pending")
+        save()
 
     def reconcile(self, *, source, uid, day, course, remote_id, approved):
         account = self.client.account_id

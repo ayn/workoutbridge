@@ -48,6 +48,12 @@ Use the normal `plan` and `publish` commands with `--profile coros-test` and
 - Native repeat groups, 1-20 repetitions. Nested groups and warm-up/cooldown inside
   groups require review. Final stationary recovery can be omitted by expanding
   the final repetition; timed easy running remains a run step.
+- Shared conversion preferences retain explicitly prescribed final recovery.
+  For a separate set rest replacing the last timed recovery, retain the complete
+  repeat group and subtract its final recovery from the following rest. Equal
+  durations need no extra rest section; shorter set rest uses the split-final-rep
+  representation to avoid extending the prescribed recovery. Differing recovery
+  movement/targets are not combined.
 - Explicit pace ranges become whole seconds/km, COROS's native unit. Distances
   become whole meters and durations whole seconds, rounded to nearest integer
   (halves upward). Unsupported pace ranges require review; no pace targets are
@@ -73,12 +79,20 @@ approved values and the observed `idInPlan`; it only reads COROS, verifies the
 whole course, and repairs the matching pending local receipt. It never creates.
 No automatic matching by title or guessing of remote IDs is performed.
 
-This first version deliberately requires review for changed/moved events and for
-new events on a day that already has an untracked schedule. It does not update,
-move, or delete existing calendar entries. Resolve changes in COROS and reconcile
-receipts before re-enabling an automatic sync. Unknown human-readable response
-formats also stop for review instead of guessing. Support for tracked updates and
-broader calendar enumeration is follow-up work.
+Approved edits use `updateScheduledWorkout` on the recorded calendar identity.
+Before writing, read its current details, require editable status, and prove the
+entire previous payload matches its stored content hash. An update intent is
+committed before calling COROS; replacement IDs returned by COROS are saved and
+read back. A lost response can finish through verification of the known ID, but
+never blindly repeats the update or creates another entry. Each verified edit
+increments the publication count once. Legacy receipts without a payload snapshot
+still need their full hash to match; title-padding normalization cannot hide an
+external title edit.
+
+Moved, completed/uneditable, externally changed, and overlapping events still
+require review, as do new events on a day with an untracked schedule. The adapter
+does not move or delete calendar entries. Unknown human-readable responses stop
+for review instead of guessing.
 
 Session files are 0600 in 0700 directories, outside the checkout. OAuth refresh
 tokens persist privately; token renewal is serialized and account identity is

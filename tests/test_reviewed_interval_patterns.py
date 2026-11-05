@@ -24,7 +24,7 @@ class ReviewedIntervalPatternsTests(unittest.TestCase):
             group = draft.steps[0]
             self.assertIsInstance(group, Repeat)
             self.assertEqual(group.count, 4)
-            self.assertTrue(group.skip_last_recovery)
+            self.assertFalse(group.skip_last_recovery)
             recovery = group.steps[-1]
             self.assertEqual(
                 (recovery.kind, recovery.duration, recovery.unit), ("rest", 200, "meters")
@@ -71,7 +71,7 @@ class ReviewedIntervalPatternsTests(unittest.TestCase):
         event = self.event("4x300m fast w/ 100m jog in 30-35s")
         draft = parse(event.prescription)
         self.assertFalse(draft.unresolved)
-        self.assertTrue(draft.steps[0].skip_last_recovery)
+        self.assertFalse(draft.steps[0].skip_last_recovery)
         self.assertIsNone(draft.steps[0].steps[0].speed_min)
 
     def test_larger_rep_count_preserves_range_and_respects_strict(self):

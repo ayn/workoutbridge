@@ -28,8 +28,9 @@ Not affiliated with Garmin, Final Surge, Google, Apple, or any coach.
 **COROS pilot:** browser OAuth, native running repeats, lap steps, pace targets,
 direct calendar creation, verified read-back, and repeat-publish reuse are supported.
 See [COROS setup and limitations](docs/coros.md). A synthetic workout was verified
-in a dedicated test account; watch delivery has not been verified. Edits, moved
-events, and untracked workouts on the same day require manual reconciliation.
+in a dedicated test account; watch delivery has not been verified. Verified,
+editable scheduled workouts can be updated in place. Moved events and untracked
+workouts on the same day require manual reconciliation.
 
 ## Supported Destinations
 
@@ -442,6 +443,16 @@ is required. A source can choose its policy through authenticated
 saved strict choice is retained. Both library prescription normalizers use the
 same defaults; callers can pass `coaching_policy="strict"` to opt out. The defaults:
 
+- Retains explicit timed or distance recovery after every repetition, including
+  the final repetition before cooldown. The athlete can skip it manually. An
+  explicit separate rest after a set replaces that set's last short recovery.
+  Garmin uses its skip-last-rest flag and the full set rest; COROS retains the
+  full repeat count and adds only the remaining set-rest time when compatible
+  timed rests permit subtraction. If set rest is shorter, COROS keeps exact
+  timing by splitting out the final repetition. Strict mode retains the earlier
+  between-repetitions-only interpretation. Implied Lap buffers keep their
+  existing rules. The canonical `including final recovery` marker supports both
+  measured and Lap recoveries.
 - For explicit slash-separated effort sets such as `3 x 90 sec @ 10k effort/45 sec easy`,
   retain every work/easy pair, including the final easy phase. `HMP race pace` means
   half marathon pace, kept as an effort label without inventing numerical pace alerts.
@@ -521,7 +532,7 @@ This rule does not supply missing work amounts or select a primary workout alter
 The default also retains the final Lap recovery after strides and between
 consecutive interval blocks. Timed rep rests keep their existing final-rest
 semantics; strict mode retains the former implied-Lap behavior. Explicit canonical
-intervals can request `including final recovery` for a Lap-ended recovery.
+intervals can request `including final recovery` for a measured or Lap-ended recovery.
 Under `athlete_preferences`, a standalone `strides` clause with no count defaults
 to four strides. Each effort and recovery ends at Lap, including the final
 recovery. The effort note identifies the default count as an application choice
@@ -953,8 +964,9 @@ retaining its history. Refreshing a feed does not erase a publishing stop.
 
 Every retry goes through the account-bound durable receipt checks. COROS can
 finish verification of a pending receipt with a known workout ID through readback,
-without creating another workout. Unknown creation outcomes, changed prescriptions,
-identity mismatches, and destination conflicts require reconciliation and are not
+without creating another workout. Approved edits use a separate durable update
+intent after proving the saved course is unchanged and editable. Unknown creation
+outcomes, uncertain edits that cannot verify, identity mismatches, and destination conflicts require reconciliation and are not
 blindly repeated. Manual-only syncs do not enable background publishing or retries.
 
 Verified destination receipts retain a durable `publication_count`: a new workout

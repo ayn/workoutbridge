@@ -364,6 +364,7 @@ def _normalize(
             transition_added = True
         clauses.append(canonical)
     lap_buffers_retained = False
+    explicit_recoveries_retained = False
     if coaching_policy == "athlete_preferences":
         for index, clause in enumerate(clauses):
             current = parse(clause)
@@ -372,30 +373,44 @@ def _normalize(
             following_group = bool(
                 next_draft and not next_draft.unresolved and isinstance(next_draft.steps[0], Repeat)
             )
+            set_rest_follows = bool(
+                next_draft
+                and not next_draft.unresolved
+                and next_draft.steps
+                and isinstance(next_draft.steps[0], Step)
+                and next_draft.steps[0].kind == "rest"
+            )
             if (
                 isinstance(group, Repeat)
                 and group.skip_last_recovery
                 and group.steps[-1].kind == "rest"
-                and group.steps[-1].unit == "lap_button"
                 and (
-                    following_group
-                    or re.search(
-                        r"\bstrides?\b",
-                        (group.steps[0].label or "") + " " + group.steps[0].note,
-                        re.I,
+                    (group.steps[-1].unit != "lap_button" and not set_rest_follows)
+                    or (
+                        group.steps[-1].unit == "lap_button"
+                        and (
+                            following_group
+                            or re.search(
+                                r"\bstrides?\b",
+                                (group.steps[0].label or "") + " " + group.steps[0].note,
+                                re.I,
+                            )
+                        )
                     )
                 )
-                and "with lap recovery" in clause.lower()
             ):
                 boundary = clause.find(" [")
                 boundary = boundary if boundary >= 0 else len(clause)
                 clauses[index] = clause[:boundary] + " including final recovery" + clause[boundary:]
-                lap_buffers_retained = True
+                lap_buffers_retained |= group.steps[-1].unit == "lap_button"
+                explicit_recoveries_retained |= group.steps[-1].unit != "lap_button"
     if optional_note and clauses:
         clauses[-1] += f" [coaching note: {optional_note}]"
     notes = f"Original title: {event.title}\n{event.description}"
     if lap_buffers_retained:
         notes += "\nRetained the final Lap recovery after strides and between consecutive interval blocks."
+    if explicit_recoveries_retained:
+        notes += "\nRetained the prescribed recovery after every repetition, including the final repetition; the athlete can skip it manually."
     if repetition_ranges:
         notes += (
             "\nRepetition range policy: "

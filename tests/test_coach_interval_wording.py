@@ -34,7 +34,7 @@ class CoachIntervalWordingTests(unittest.TestCase):
                 self.assertAlmostEqual(reps.steps[0].speed_max, 600 / 130)
                 self.assertEqual(reps.steps[1].duration, 75)
                 self.assertEqual(reps.steps[1].label, "jog")
-                self.assertTrue(reps.skip_last_recovery)
+                self.assertFalse(reps.skip_last_recovery)
                 self.assertEqual(draft.steps[-1].duration, 1609.344)
                 self.assertEqual(draft.steps[-1].label, "easy")
                 self.assertIn(text, event.description)
