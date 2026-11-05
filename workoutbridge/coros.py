@@ -1,6 +1,7 @@
 """Translate reviewed running and cycling prescriptions into COROS scheduled courses."""
 
 import math
+from dataclasses import replace
 
 from .parser import Draft, Repeat, Step
 
@@ -62,7 +63,11 @@ def workout_payload(title: str, description: str, draft: Draft) -> dict:
         return result
 
     sections = []
-    for step in draft.steps:
+    steps = list(draft.steps)
+    consumed = set()
+    for index, step in enumerate(steps):
+        if index in consumed:
+            continue
         if isinstance(step, Repeat):
             if type(step.count) is not int or not 1 <= step.count <= 20 or not step.steps:
                 raise ValueError("COROS repeats require 1-20 repetitions and steps")
@@ -73,6 +78,26 @@ def workout_payload(title: str, description: str, draft: Draft) -> dict:
                 raise ValueError("COROS repeat members must be run or recovery steps")
             members = [plain(child) for child in step.steps]
             skip = step.skip_last_recovery and step.steps[-1].kind == "rest"
+            following = steps[index + 1] if index + 1 < len(steps) else None
+            if (
+                skip
+                and step.steps[-1].unit == "seconds"
+                and isinstance(following, Step)
+                and following.kind == "rest"
+                and following.unit == "seconds"
+                and {step.steps[-1].label, following.label} <= {None, "rest"}
+            ):
+                # COROS lacks Garmin's skip-last-rest switch. Keep a complete
+                # native group and count its final recovery toward set rest.
+                after = plain(following)
+                intensity = ("intensityType", "intensityValueStart", "intensityValueEnd")
+                remainder = after["targetValue"] - members[-1]["targetValue"]
+                if remainder >= 0 and all(after.get(k) == members[-1].get(k) for k in intensity):
+                    skip = False
+                    if remainder:
+                        steps[index + 1] = replace(following, duration=remainder)
+                    else:
+                        consumed.add(index + 1)
             count = step.count - int(skip)
             if count:
                 sections.append({"intervalGroup": True, "repeats": count, "sets": members})

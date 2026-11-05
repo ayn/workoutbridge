@@ -56,6 +56,32 @@ class CorosPayloadTests(unittest.TestCase):
             [{"sectionType": 2, "targetType": 2, "targetValue": 60}],
         )
 
+    def test_longer_set_rest_keeps_full_repeats_and_adds_only_remainder(self):
+        group = Repeat(4, (Step("run", 600, "meters"), Step("rest", 75, "seconds")))
+        draft = Draft("Synthetic set rest", (group, Step("rest", 180, "seconds")), ())
+        sections = workout_payload("Test", "", draft)["sections"]
+        self.assertEqual(len(sections), 2)
+        self.assertEqual(sections[0]["repeats"], 4)
+        self.assertEqual(sections[0]["sets"][-1]["targetValue"], 75)
+        self.assertEqual(sections[1]["targetValue"], 105)
+
+    def test_equal_set_rest_needs_no_extra_rest_section(self):
+        group = Repeat(4, (Step("run", 600, "meters"), Step("rest", 75, "seconds")))
+        sections = workout_payload(
+            "Test", "", Draft("Synthetic", (group, Step("rest", 75, "seconds")), ())
+        )["sections"]
+        self.assertEqual(len(sections), 1)
+        self.assertEqual(sections[0]["repeats"], 4)
+
+    def test_shorter_set_rest_preserves_exact_timing_without_negative_rest(self):
+        group = Repeat(4, (Step("run", 600, "meters"), Step("rest", 75, "seconds")))
+        sections = workout_payload(
+            "Test", "", Draft("Synthetic", (group, Step("rest", 30, "seconds")), ())
+        )["sections"]
+        self.assertEqual(sections[0]["repeats"], 3)
+        self.assertEqual(sections[1]["targetValue"], 600)
+        self.assertEqual(sections[2]["targetValue"], 30)
+
     def test_unresolved_and_empty_are_rejected(self):
         for draft in [parse("unknown exercise"), Draft("", (), ())]:
             with self.assertRaises(ValueError):

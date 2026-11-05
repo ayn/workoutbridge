@@ -98,7 +98,7 @@ class CoachingSetTests(unittest.TestCase):
             for profile in ("123", "coros:us:synthetic"):
                 self.assertNotIn("error", review_item(profile, event))
 
-    def test_timed_reps_preserve_explicit_rest_and_omit_final_rest_before_cooldown(self):
+    def test_timed_reps_preserve_explicit_rest_including_before_cooldown(self):
         event = normalize_workout(self.event("4x45s fast (1:20 rest)\nCool down 1 mile"))
         draft = parse(event.prescription)
         self.assertFalse(draft.unresolved)
@@ -107,7 +107,7 @@ class CoachingSetTests(unittest.TestCase):
         self.assertEqual(group.steps[0].duration, 45)
         self.assertEqual(group.steps[0].label, "fast")
         self.assertEqual(group.steps[1].duration, 80)
-        self.assertTrue(group.skip_last_recovery)
+        self.assertFalse(group.skip_last_recovery)
 
     def test_clock_recovery_suffix_and_standalone_rest_are_preserved(self):
         event = normalize_workout(

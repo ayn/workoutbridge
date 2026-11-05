@@ -190,7 +190,7 @@ def interval(clause: str, sport: str = "running") -> Repeat | None:
         if suffix in body.lower():
             return None
         base = interval(body, sport)
-        if base and base.steps[-1].kind == "rest" and base.steps[-1].unit == "lap_button":
+        if base and base.steps[-1].kind == "rest":
             return replace(base, skip_last_recovery=False)
         return None
     targeted_lap = re.fullmatch(r"(.+? (?:at|in) .+?) with lap recovery", clause, re.I)
