@@ -655,6 +655,17 @@ def qualitative_note_clause(part, pace_unit, coaching_policy, allow_total):
 def normalize_clause(part, *, pace_unit=None, coaching_policy="strict", allow_total=False):
     if not parse(part).unresolved:
         return Conversion(part)
+    effort_first = re.fullmatch(
+        rf"(?:(Run|Warm up|Cool down)\s+)?(\d+(?:\.\d+)?)\s+({EFFORT})\s+(miles|mile|mi|km|m)",
+        part,
+        re.I,
+    )
+    if effort_first:
+        candidate = (
+            f"{effort_first[1] or 'Run'} {effort_first[2]} {effort_first[4]} {effort_first[3]}"
+        )
+        if not parse(candidate).unresolved:
+            return Conversion(candidate)
     if converted := qualitative_note_clause(part, pace_unit, coaching_policy, allow_total):
         return converted
     if converted := slash_effort_clause(part, pace_unit, coaching_policy):

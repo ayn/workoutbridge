@@ -352,6 +352,9 @@ Unsupported non-running titles and formats require separate review. Explicit
 **Not published — rest day**, without requesting review or AI interpretation.
 Substantive or conflicting instructions are never discarded as rest days.
 
+Final Surge `Run - Recovery Run` entries and distance phrases such as
+`5 easy miles` are normalized as ordinary runs, preserving their effort notes.
+
 Additional coaching shorthand supports singular-mile repetitions with slow
 recovery, marathon-effort blocks with distance float recoveries, and a
 parenthesized interval block within an easy run's stated total. Total-distance

@@ -91,6 +91,48 @@ class FinalSurgeTests(unittest.TestCase):
                 self.assertIn("payload", item)
             self.assertIn("easy recovery", event.description)
 
+    def test_recovery_run_subtype_and_effort_before_distance_unit(self):
+        from workoutbridge.cli import review_item
+
+        original = Event(
+            "synthetic-fs",
+            "recovery-example",
+            "",
+            "2032-04-08",
+            "Run - Recovery Run: 5 easy miles",
+            "Workout: Run - Recovery Run\n\nPlanned: 5 mi",
+        )
+        for normalize in (normalize_finalsurge, normalize_workout):
+            event = normalize(original, coaching_policy="strict")
+            draft = parse(event.prescription)
+            self.assertFalse(draft.unresolved, draft.unresolved)
+            self.assertEqual(len(draft.steps), 1)
+            self.assertEqual(draft.steps[0].kind, "run")
+            self.assertEqual(draft.steps[0].duration, 5 * 1609.344)
+            self.assertEqual(draft.steps[0].label, "easy")
+            self.assertIn(original.title, event.description)
+            self.assertIn(original.description, event.description)
+            for account in ("123", "coros:us:synthetic"):
+                item = review_item(account, event)
+                self.assertNotIn("error", item)
+                self.assertIn("payload", item)
+
+    def test_effort_before_unit_keeps_unknown_instructions_for_review(self):
+        for text in ("8 very easy km", "4.5 moderate miles"):
+            draft = parse(
+                normalize_workout(
+                    Event("synthetic", "effort-first", "", "2032-04-08", "Run: " + text, "")
+                ).prescription
+            )
+            self.assertFalse(draft.unresolved, draft.unresolved)
+        for suffix in (" then add a sprint", " or cross train", " facing east"):
+            original = self.event("Run - Recovery Run: 5 easy miles" + suffix)
+            self.assertTrue(parse(normalize_finalsurge(original).prescription).unresolved)
+        original = self.event("Run - Recovery Run: 5 easy miles", extra="\nCoach will clarify")
+        self.assertTrue(parse(normalize_finalsurge(original).prescription).unresolved)
+        original = self.event("Run - Unrecognized Kind: 5 easy miles")
+        self.assertTrue(parse(normalize_finalsurge(original).prescription).unresolved)
+
     def test_missing_recovery_can_require_review(self):
         event = normalize_finalsurge(self.event(), recovery_choice="review")
         self.assertTrue(parse(event.prescription).unresolved)
