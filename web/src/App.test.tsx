@@ -114,6 +114,20 @@ test("athlete references appear separately from the prescribed workout", async (
   expect(screen.getByRole("note", {name: "Athlete reference"})).toHaveTextContent(reference);
 });
 
+test("walk entries explain their exclusion without requesting review", async () => {
+  const walk = {
+    event: {title: "Walk", description: "Workout: Walk", date: "2030-01-04"},
+    draft: {steps: [], unresolved: []}, skipped: "walk", error: "Not published — walk",
+  };
+  const request = vi.fn().mockResolvedValue({...initial, plans: [{...initial.plans[0], items: [walk]}]});
+  render(<App request={request} />);
+  expect(await screen.findByText("Not published — walk")).toBeInTheDocument();
+  expect(screen.getByRole("checkbox", {name: "Select Walk"})).toBeDisabled();
+  await userEvent.click(screen.getByRole("button", {name: /Walk$/}));
+  expect(screen.getByText("Walks stay on your source calendar and are not sent as structured workouts.")).toBeInTheDocument();
+  expect(screen.getByText("Needs attention").previousElementSibling).toHaveTextContent("0");
+});
+
 test("busy blocks explain their exclusion without requesting review", async () => {
   const block = {
     event: {title: "Busy", description: "", date: "2030-01-04"},

@@ -352,6 +352,22 @@ Unsupported non-running titles and formats require separate review. Explicit
 **Not published — rest day**, without requesting review or AI interpretation.
 Substantive or conflicting instructions are never discarded as rest days.
 
+Additional coaching shorthand supports singular-mile repetitions with slow
+recovery, marathon-effort blocks with distance float recoveries, and a
+parenthesized interval block within an easy run's stated total. Total-distance
+bookends follow the existing opt-in conversion policy. Explicit acceleration
+stride instructions can split a repetition into equal meter segments with the
+stated effort labels in notes; the segment lengths must add up to the full
+stride. Parenthesized pace ranges and named mile effort retain their explicit
+recoveries. Recognized concluding commentary stays in step notes; arbitrary
+extra instructions still require review.
+
+Bare `Walk`/`Walking` entries and explicit walk-only calendar metadata are shown
+as **Not published — walk**, without review or AI interpretation. This also
+covers completed walks imported into a training calendar by another service.
+An explicit structured workout, conflicting sport metadata or substantive
+running instructions under a bare walk title still require normal parsing/review.
+
 Timed uphill sprints such as `Run: 8 miles + 5x 12s uphill sprints`
 become the initial run, a Run-until-Lap transition, then five native repeats
 of 12 seconds (note: `uphill sprint`) and recovery until Lap. Like unspecified
