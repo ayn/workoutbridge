@@ -16,6 +16,7 @@ from .parser import parse
 from .publishing import Publisher, ReviewRequired, approval_token, digest, event_payload
 from .races import is_race
 from .rest_days import is_rest_day
+from .walks import is_walk
 
 
 def emit(value):
@@ -30,6 +31,9 @@ def review_item(account: str, event: Event) -> dict:
     }
     if is_race(event):
         return {**result, "skipped": "race", "error": "Not published — race"}
+    if is_walk(event):
+        result["draft"].update(steps=[], unresolved=[], requires_review=False)
+        return {**result, "skipped": "walk", "error": "Not published — walk"}
     if is_calendar_block(event):
         result["draft"].update(steps=[], unresolved=[], requires_review=False)
         return {**result, "skipped": "calendar_block", "error": "Not published — calendar block"}

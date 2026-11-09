@@ -17,6 +17,7 @@ from .garmin import workout_payload
 from .parser import parse
 from .races import is_race
 from .rest_days import is_rest_day
+from .walks import is_walk
 
 
 class ReviewRequired(ValueError):
@@ -50,6 +51,8 @@ def garmin_description(description):
 def event_payload(event: Event) -> dict:
     if is_race(event):
         raise ReviewRequired("Not published — race")
+    if is_walk(event):
+        raise ReviewRequired("Not published — walk")
     if is_calendar_block(event):
         raise ReviewRequired("Not published — calendar block")
     if is_rest_day(event):

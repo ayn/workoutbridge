@@ -71,8 +71,8 @@ FACTORS = {
     "mile": 1609.344,
     "miles": 1609.344,
 }
-BASIC_EFFORT = r"(?:easy/moderate|easy/mod|super hard|very hard|very easy|easy recovery|easy jog|jog|easy|moderate|hard|smooth|fast|steady|tempo|progression|recovery)"
-EFFORT_QUALIFIER = r"(?:tempo effort|long run pace|regular run pace|(?:5k|10k) (?:effort|pace)|(?:half|1/2) marathon (?:race pace )?effort|half marathon pace|marathon (?:effort|pace)|MP)"
+BASIC_EFFORT = r"(?:easy/moderate|easy/mod|super hard|very hard|very easy|easy recovery|easy jog|jog|slow|float|easy|moderate|hard|smooth|fast|steady|tempo|progression|recovery)"
+EFFORT_QUALIFIER = r"(?:tempo effort|long run pace|regular run pace|(?:5k|10k) (?:effort|pace)|(?:half|1/2) marathon (?:race pace )?effort|half marathon pace|marathon (?:effort|pace)|mile (?:effort|pace)|M effort|MP)"
 RELATIVE_EFFORT = rf"(?:(?:slightly |a little |a bit )?(?:faster|slower) than {EFFORT_QUALIFIER})"
 EFFORT_CORE = rf"(?:{BASIC_EFFORT}(?: progression)?(?:(?: at | around | a little faster than | a bit faster than ){EFFORT_QUALIFIER}(?: or faster)?)?|{EFFORT_QUALIFIER})"
 TERRAIN = r"(?:on (?:trails|trail|hilly trails|rolling trails|rolling terrain|flat terrain|flat ground|a hilly route|hilly route|a flat route)|over (?:hills|rolling hills))"
@@ -344,8 +344,8 @@ def interval(clause: str, sport: str = "running") -> Repeat | None:
             ),
         )
     distance_rest = re.fullmatch(
-        rf"(\d+) x (\d+(?:\.\d+)?) (m|km|mi|miles)(?: ({DISTANCE_EFFORT}))? with "
-        rf"(\d+(?:\.\d+)?) ({TIME_UNITS}) (rest|easy|walk/jog) recovery",
+        rf"(\d+) x (\d+(?:\.\d+)?) (m|km|mi|mile|miles)(?: ({DISTANCE_EFFORT}))? with "
+        rf"(\d+(?:\.\d+)?) ({TIME_UNITS}) (rest|easy|slow|float|jog|walk/jog) recovery",
         clause,
         re.I,
     )
@@ -382,7 +382,7 @@ def interval(clause: str, sport: str = "running") -> Repeat | None:
     paced = re.fullmatch(
         rf"(\d+) x (\d+(?:\.\d+)?) (miles|mile|mi|km|m)(?: ({EFFORT}))? at "
         r"(\d{1,2}:[0-5]\d)-(\d{1,2}:[0-5]\d)/(mi|km) with "
-        rf"(\d+(?:\.\d+)?) ({TIME_UNITS}) (rest|easy|walk/jog) recovery",
+        rf"(\d+(?:\.\d+)?) ({TIME_UNITS}) (rest|easy|slow|float|jog|walk/jog) recovery",
         clause,
         re.I,
     )

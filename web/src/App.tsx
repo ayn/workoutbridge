@@ -42,7 +42,7 @@ type Item = {
   event: { title: string; date: string; description: string; sport?: string };
   draft: { steps: Step[]; unresolved: string[] };
   error?: string;
-  skipped?: "race" | "rest_day" | "calendar_block";
+  skipped?: "race" | "rest_day" | "calendar_block" | "walk";
   reference_notes?: string[];
   suggestion?: {policy: string; draft: {steps: Step[]; unresolved: string[]}};
 };
@@ -558,7 +558,7 @@ export function App({ brand = "WorkoutBridge", multiuser = false, suggestedEmail
                         <span
                           className={`status ${entry.skipped ? "skipped" : entry.error ? "attention" : "ready"}`}
                         >
-                          {entry.skipped === "race" ? "Not published — race" : entry.skipped === "rest_day" ? "Not published — rest day" : entry.skipped === "calendar_block" ? "Not published — calendar block" : entry.error ? "Review needed" : "Ready"}
+                          {entry.skipped === "race" ? "Not published — race" : entry.skipped === "rest_day" ? "Not published — rest day" : entry.skipped === "calendar_block" ? "Not published — calendar block" : entry.skipped === "walk" ? "Not published — walk" : entry.error ? "Review needed" : "Ready"}
                         </span>
                         <ChevronRight size={16} />
                       </div>
@@ -590,7 +590,7 @@ export function App({ brand = "WorkoutBridge", multiuser = false, suggestedEmail
                         <h2>{item.event.title}</h2>
                         <p className="muted">{dateLabel(item.event.date)}</p>
                         {item.skipped ? (
-                          <p className="muted">{item.skipped === "race" ? "Race events stay on your source calendar and are not sent as structured workouts." : item.skipped === "rest_day" ? "Rest days stay on your source calendar and are not sent as structured workouts." : "Calendar blocks stay on your source calendar and are not sent as structured workouts."}</p>
+                          <p className="muted">{item.skipped === "race" ? "Race events stay on your source calendar and are not sent as structured workouts." : item.skipped === "rest_day" ? "Rest days stay on your source calendar and are not sent as structured workouts." : item.skipped === "walk" ? "Walks stay on your source calendar and are not sent as structured workouts." : "Calendar blocks stay on your source calendar and are not sent as structured workouts."}</p>
                         ) : item.error ? (
                           <div className="warning">
                             <strong>Needs review</strong>

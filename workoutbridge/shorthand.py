@@ -31,6 +31,84 @@ class Conversion:
     total_bookends: bool = False
 
 
+def normalize_coaching_text(text, *, coaching_policy="strict"):
+    """Resolve bounded whole-workout context, never consume arbitrary prose."""
+    if coaching_policy != "athlete_preferences":
+        return text
+    footer = re.fullmatch(
+        r"(?P<body>.+?)\s+For the strides run the pickup is every "
+        r"(?P<segment>\d+(?:\.\d+)?)\s*m\s*[-–]\s*start (?P<efforts>[^\n;]+?)\.?\s*",
+        text,
+        re.I | re.S,
+    )
+    if footer:
+        cues = [cue.strip() for cue in footer["efforts"].split("/")]
+        effort = r"(?:\d+(?:\.\d+)?\s*(?:km|k|m|miles|mile)|mile)(?: effort)?"
+        if not 2 <= len(cues) <= 6 or any(not re.fullmatch(effort, cue, re.I) for cue in cues):
+            return text
+        segment = float(footer["segment"])
+        if not 0 < segment <= 1000:
+            return text
+        parts = clauses(footer["body"])
+        converted = []
+        count = 0
+        for part in parts:
+            stride = re.fullmatch(
+                r"(\d+)\s*[x×]\s*(\d+(?:\.\d+)?)\s*(?:m)? acceleration strides"
+                r"\s*/\s*jog\s+(\d+(?:\.\d+)?)\s*(?:m)? as recovery",
+                part,
+                re.I,
+            )
+            if not stride:
+                typo = re.fullmatch(
+                    r"(?:Run\s+)?(\d+(?:\.\d+)?\s*(?:miles|mile|mi|km|m))\s+east", part, re.I
+                )
+                converted.append(
+                    f"Run {typo[1]} easy [coaching note: Original east interpreted as easy typo in acceleration session]"
+                    if typo
+                    else part
+                )
+                continue
+            if (
+                not 1 <= int(stride[1]) <= 100
+                or not 0 < float(stride[3]) <= 10000
+                or abs(float(stride[2]) - segment * len(cues)) > 0.000001
+            ):
+                return text
+            phases = [
+                f"Run {segment:g} m [coaching note: acceleration stride - "
+                + (cue if cue.lower().endswith(" effort") else cue + " effort")
+                + "]"
+                for cue in cues
+            ]
+            phases.append(f"Rest {float(stride[3]):g} m jog")
+            converted.append(f"{stride[1]} x [" + " | ".join(phases) + "]")
+            count += 1
+        if count != 1:
+            return text
+        return "; ".join(converted)
+    note_footer = re.fullmatch(r"(.+?)\n+([^\n]+)\s*", text, re.S)
+    if note_footer:
+        note = note_footer[2].strip()
+        sentences = [s.strip() for s in re.split(r"\.\s*", note) if s.strip()]
+        commentary = (
+            r"(?:The paces (?:will )?get faster as the distance(?:s get| gets) shorter"
+            r"|This is a (?:fun|relaxed) workout to get the legs going"
+            r"|My (?:XC|track|cross country) (?:kids|runners|athletes) really enjoyed this one)"
+        )
+        body = note_footer[1].rstrip()
+        tail = clauses(body)[-1] if clauses(body) else ""
+        cooldown = normalize_bookend(tail)
+        if (
+            1 <= len(sentences) <= 4
+            and len(note) <= 450
+            and all(re.fullmatch(commentary, s, re.I) for s in sentences)
+            and re.fullmatch(r"Cool down \d+(?:\.\d+)?\s*(?:mile|miles|mi|km|m)", cooldown, re.I)
+        ):
+            return body + f" [coaching note: {note}]"
+    return text
+
+
 def normalize_bookend(text):
     suffix = re.fullmatch(
         rf"(\d+(?:\.\d+)?\s*(?:{TIME_UNITS}|miles|mile|mi|km|m))\s+(wup|wu|cd)", text, re.I
@@ -556,6 +634,8 @@ def qualitative_note_clause(part, pace_unit, coaching_policy, allow_total):
     base = normalize_clause(
         cue[1], pace_unit=pace_unit, coaching_policy=coaching_policy, allow_total=allow_total
     )
+    if base is None and not parse(cue[1]).unresolved:
+        base = Conversion(cue[1])
     if base is None:
         phase = phase_clause(cue[1], pace_unit, coaching_policy)
         base = Conversion(phase) if phase else None
@@ -573,6 +653,8 @@ def qualitative_note_clause(part, pace_unit, coaching_policy, allow_total):
 
 
 def normalize_clause(part, *, pace_unit=None, coaching_policy="strict", allow_total=False):
+    if not parse(part).unresolved:
+        return Conversion(part)
     if converted := qualitative_note_clause(part, pace_unit, coaching_policy, allow_total):
         return converted
     if converted := slash_effort_clause(part, pace_unit, coaching_policy):
@@ -610,6 +692,30 @@ def normalize_clause(part, *, pace_unit=None, coaching_policy="strict", allow_to
             phase = phase_clause(bracket[1], pace_unit, coaching_policy)
             if phase:
                 return Conversion(phase + "; " + buffer, True)
+    parenthesized_pace = re.fullmatch(
+        r"((?:Run\s+)?\d+(?:\.\d+)?\s*(?:mile|miles|mi|km))\s*@\s*"
+        r"\((\d{1,2}:[0-5]\d\s*[-–]\s*(?:\d{1,2}:)?[0-5]?\d) min pace\)\s+(.+?) rest",
+        part,
+        re.I,
+    )
+    if parenthesized_pace:
+        return targeted_clause(
+            f"{parenthesized_pace[1]} at {parenthesized_pace[2]} pace ({parenthesized_pace[3]} rest)",
+            pace_unit,
+            coaching_policy,
+        )
+    distance_float = re.fullmatch(
+        r"(\d+)\s*x\s*(.+?)\s+with\s+(\d+(?:\.\d+)?\s*(?:miles|mile|mi|km|m))"
+        r"\s+(float|slow|jog|easy) recovery",
+        part,
+        re.I,
+    )
+    if distance_float:
+        work = phase_clause(distance_float[2], pace_unit, coaching_policy)
+        recovery = f"Rest {distance_float[3]} {distance_float[4].lower()}"
+        candidate = f"{distance_float[1]} x [{work} | {recovery}]" if work else ""
+        if candidate and not parse(candidate).unresolved:
+            return Conversion(candidate)
     if recovery := distance_recovery_clause(part):
         return Conversion(recovery)
     if limited := one_sided_pace(part, pace_unit, coaching_policy):
@@ -655,6 +761,13 @@ def normalize_clause(part, *, pace_unit=None, coaching_policy="strict", allow_to
                         return None
                     text += "; " + recovery_annotation(f"Rest {duration:g} sec", span)
                 return Conversion(text)
+    parenthesized_total = re.fullmatch(
+        r"(\d+(?:\.\d+)?\s*(?:miles|mile|mi|km)\s+(?:easy(?:/mod(?:erate)?)?|moderate))\s+\((.+)\)",
+        part,
+        re.I,
+    )
+    if parenthesized_total and allow_total and coaching_policy == "athlete_preferences":
+        part = parenthesized_total[1] + " including " + parenthesized_total[2]
     total = (
         re.fullmatch(
             rf"(?P<range>(?P<low>\d+(?:\.\d+)?)(?:\s*[-–]\s*(?P<high>\d+(?:\.\d+)?))?)\s*(?P<unit>miles|mile|mi|km)\s+(?P<effort>(?:easy(?:/mod(?:erate)?)?|moderate)(?: {TERRAIN})?)?\s*(?:with|including|w/)\s+(?P<block>.+)",

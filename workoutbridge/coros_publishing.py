@@ -10,11 +10,14 @@ from .parser import parse
 from .publishing import Publisher, ReviewRequired, confirm_publication, digest, matches
 from .races import is_race
 from .rest_days import is_rest_day
+from .walks import is_walk
 
 
 def event_values(event):
     if is_race(event):
         raise ReviewRequired("Not published — race")
+    if is_walk(event):
+        raise ReviewRequired("Not published — walk")
     if is_calendar_block(event):
         raise ReviewRequired("Not published — calendar block")
     if is_rest_day(event):

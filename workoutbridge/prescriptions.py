@@ -8,8 +8,14 @@ from .calendar_blocks import is_calendar_block
 from .parser import EFFORT, Repeat, Step, parse
 from .rest_days import is_rest_day
 from .shorthand import clauses as split_clauses
-from .shorthand import infer_shorthand_units, normalize_bookend, normalize_clause
+from .shorthand import (
+    infer_shorthand_units,
+    normalize_bookend,
+    normalize_clause,
+    normalize_coaching_text,
+)
 from .sports import event_sport
+from .walks import is_walk
 
 DEFAULT_COACHING_POLICY = "athlete_preferences"
 
@@ -57,7 +63,7 @@ def normalize_finalsurge(
     coaching_policy = canonical_coaching_policy(coaching_policy)
     if distance_unit not in ("auto", "mi", "km"):
         raise ValueError("Unknown distance unit")
-    if is_rest_day(event) or is_calendar_block(event):
+    if is_rest_day(event) or is_calendar_block(event) or is_walk(event):
         return event
     event = replace(
         event,
@@ -95,7 +101,7 @@ def normalize_workout(
     coaching_policy = canonical_coaching_policy(coaching_policy)
     if distance_unit not in ("auto", "mi", "km"):
         raise ValueError("Unknown distance unit")
-    if is_rest_day(event) or is_calendar_block(event):
+    if is_rest_day(event) or is_calendar_block(event) or is_walk(event):
         return event
     event = replace(
         event,
@@ -204,6 +210,7 @@ def _normalize(
     pace_unit = bare_unit
     unspecified_distance_used = False
     repetition_ranges = []
+    text = normalize_coaching_text(text, coaching_policy=coaching_policy)
     parts = split_clauses(text.replace("×", "x"))
     for index, part in enumerate(parts):
         part = normalize_bookend(part.strip().removesuffix("."))
