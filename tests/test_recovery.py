@@ -11,6 +11,7 @@ class RecoveryTests(unittest.TestCase):
                 error, {"attempt": 20}, "2030-01-01T00:00:00+00:00", "connect"
             )
             self.assertEqual(failure["next_retry"], "2030-01-01T02:00:00+00:00")
+            self.assertTrue(failure["retryable"])
             self.assertNotIn("PRIVATE", str(failure))
 
     @unittest.skipUnless(importlib.util.find_spec("garminconnect"), "optional Garmin SDK")
