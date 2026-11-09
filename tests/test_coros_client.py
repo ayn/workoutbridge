@@ -10,6 +10,56 @@ from workoutbridge.recovery import ProviderUnavailable
 
 
 class CorosClientTests(unittest.TestCase):
+    def test_authentication_and_revoked_refresh_are_actionable_without_leaking_bodies(self):
+        from workoutbridge.recovery import publication_failure
+
+        for status, expired, body, expected in (
+            (401, False, {"error": "PRIVATE"}, "provider_authentication"),
+            (403, False, {"error": "PRIVATE"}, "provider_authentication"),
+            (
+                400,
+                True,
+                {"error": "invalid_grant", "error_description": "PRIVATE"},
+                "provider_authentication",
+            ),
+            (
+                400,
+                True,
+                {"error": "invalid_request", "error_description": "PRIVATE"},
+                "publication_requires_review",
+            ),
+            (503, False, {"error": "PRIVATE"}, "provider_unavailable"),
+        ):
+            with (
+                self.subTest(status=status, expired=expired, expected=expected),
+                tempfile.TemporaryDirectory() as directory,
+            ):
+                session = Path(directory) / "session"
+                CorosClient.save_session(
+                    session,
+                    {
+                        "access_token": "synthetic",
+                        "expires_at_epoch": 0 if expired else 9999999999,
+                        "refresh_token": "synthetic-refresh",
+                        "client_id": "synthetic-client",
+                    },
+                )
+                calls = []
+
+                def respond(request):
+                    calls.append(request.url.path)
+                    return httpx.Response(status, json=body)
+
+                http = httpx.Client(transport=httpx.MockTransport(respond))
+                with http, self.assertRaises(ValueError) as error:
+                    CorosClient(session, "us", http=http)
+                result = publication_failure(
+                    error.exception, None, "2030-01-01T00:00:00+00:00", "connect"
+                )
+                self.assertEqual(result["code"], expected)
+                self.assertNotIn("PRIVATE", str(error.exception) + str(result))
+                self.assertEqual(calls, ["/oauth2/token" if expired else "/userinfo"])
+
     def test_validates_identity_and_calls_tool_without_retrying(self):
         calls = []
 
