@@ -320,6 +320,150 @@ class WebTests(unittest.TestCase):
         self.assertEqual(failure["exception_type"], "RuntimeError")
         self.assertNotIn("PRIVATE", response.text)
 
+    def test_item_failure_does_not_stop_other_workouts_and_survives_restart(self):
+        import json
+        import sqlite3
+
+        from workoutbridge.calendar import Event
+        from workoutbridge.publishing import ReviewRequired
+
+        rule, source, _ = self.automatic_rule()
+        self.client.post(
+            f"/api/v1/syncs/{rule}/automatic",
+            json={"enabled": True, "account": "123"},
+            headers=self.headers,
+        )
+        events = [
+            Event(source, uid, "", day, title, "")
+            for uid, day, title in (
+                ("blocked", "2030-01-01", "Run: 30 min"),
+                ("healthy", "2030-01-02", "Run: 40 min"),
+            )
+        ]
+
+        def perform(event, approval):
+            if event.uid == "blocked":
+                raise ReviewRequired("Schedule outcome uncertain; not scheduling again")
+            return "456"
+
+        with (
+            patch("workoutbridge.web.read_calendar", return_value=b"synthetic"),
+            patch("workoutbridge.web.import_calendar", return_value=events),
+            patch("workoutbridge.web.GarminProvider.connect", return_value=object()),
+            patch("workoutbridge.web.Publisher.publish", side_effect=perform) as publish,
+        ):
+            self.app.state.poll_once()
+            self.assertEqual(publish.call_count, 2)
+            state = self.client.get("/api/v1/state").json()
+            self.assertFalse(state["syncs"][0]["auto_blocked"])
+            self.assertTrue(state["syncs"][0]["publish_failure"]["next_retry"])
+            self.assertEqual(state["history"][-1]["results"][0]["workout_id"], "456")
+            restarted = create_app(self.root, "https://bridge.example", "a" * 40, poll=False)
+            restarted.state.poll_once()
+            self.assertEqual(publish.call_count, 3)  # only healthy; blocked still cooling down
+            with sqlite3.connect(self.root / "web.sqlite") as db:
+                for key, raw in db.execute(
+                    "SELECT id,body FROM objects WHERE kind='publication_retry'"
+                ):
+                    value = json.loads(raw)
+                    value["next_retry"] = "2000-01-01T00:00:00+00:00"
+                    db.execute(
+                        "UPDATE objects SET body=? WHERE kind='publication_retry' AND id=?",
+                        (json.dumps(value), key),
+                    )
+            restarted.state.poll_once()
+            self.assertEqual(publish.call_count, 5)
+            self.assertEqual(
+                self.client.get("/api/v1/state").json()["syncs"][0]["publish_failure"]["attempt"], 2
+            )
+
+    def test_lost_schedule_response_is_reconciled_without_duplicate_writes(self):
+        import json
+        import sqlite3
+
+        from test_publishing import FakeGarmin
+
+        from workoutbridge.calendar import Event
+
+        rule, source, _ = self.automatic_rule()
+        provider = FakeGarmin()
+        provider.account_id = "123"
+        schedule = provider.schedule
+
+        def lost_response(wid, day):
+            schedule(wid, day)
+            if day == "2030-01-01":
+                raise TimeoutError("PRIVATE")
+
+        provider.schedule = lost_response
+        events = [
+            Event(source, "first", "", "2030-01-01", "Run: 30 min", ""),
+            Event(source, "second", "", "2030-01-02", "Run: 40 min", ""),
+        ]
+        with (
+            patch("workoutbridge.web.read_calendar", return_value=b"synthetic"),
+            patch("workoutbridge.web.import_calendar", return_value=events),
+            patch("workoutbridge.web.GarminProvider.connect", return_value=provider),
+        ):
+            self.client.post(
+                f"/api/v1/syncs/{rule}/automatic",
+                json={"enabled": True, "account": "123"},
+                headers=self.headers,
+            )
+            self.assertEqual((provider.uploads, provider.schedules), (2, 2))
+            with sqlite3.connect(self.root / "web.sqlite") as db:
+                for key, raw in db.execute(
+                    "SELECT id,body FROM objects WHERE kind='publication_retry'"
+                ):
+                    value = json.loads(raw)
+                    if value:
+                        value["next_retry"] = "2000-01-01T00:00:00+00:00"
+                        db.execute(
+                            "UPDATE objects SET body=? WHERE kind='publication_retry' AND id=?",
+                            (json.dumps(value), key),
+                        )
+            self.app.state.poll_once()
+            self.assertEqual((provider.uploads, provider.schedules), (2, 2))
+            self.assertNotIn("publish_failure", self.client.get("/api/v1/state").json()["syncs"][0])
+
+    def test_authentication_failure_notifies_without_false_recovery(self):
+        from unittest.mock import Mock
+
+        from workoutbridge.calendar import Event
+
+        rule, source, _ = self.automatic_rule()
+        failure, ready = Mock(), Mock()
+        app = create_app(
+            self.root,
+            "https://bridge.example",
+            "a" * 40,
+            poll=False,
+            on_connection_failure=failure,
+            on_connection_ready=ready,
+        )
+        self.client.post(
+            f"/api/v1/syncs/{rule}/automatic",
+            json={"enabled": True, "account": "123"},
+            headers=self.headers,
+        )
+        with (
+            patch("workoutbridge.web.read_calendar", return_value=b"synthetic"),
+            patch(
+                "workoutbridge.web.import_calendar",
+                return_value=[Event(source, "run", "", "2030-01-01", "Run: 30 min", "")],
+            ),
+            patch("workoutbridge.web.GarminProvider.connect", return_value=object()),
+            patch(
+                "workoutbridge.web.Publisher.publish",
+                side_effect=ValueError("COROS authentication expired; reconnect"),
+            ),
+        ):
+            app.state.poll_once()
+            app.state.poll_once()
+        failure.assert_called_once()
+        self.assertEqual(failure.call_args.args[1]["code"], "provider_authentication")
+        ready.assert_not_called()
+
     def test_transient_publish_failure_retries_after_cooldown_without_losing_reason(self):
         import json
         import sqlite3
@@ -370,12 +514,12 @@ class WebTests(unittest.TestCase):
                 self.app.state.poll_once()
                 current = self.client.get("/api/v1/state").json()["syncs"][0]
                 self.assertEqual(current["publish_failure"]["attempt"], attempt)
-            self.assertIsNone(current["publish_failure"]["next_retry"])
+            self.assertTrue(current["publish_failure"]["next_retry"])
             self.app.state.poll_once()
             self.assertEqual(connect.call_count, 4)
             self.assertNotIn("SECRET", self.client.get("/api/v1/state").text)
 
-    def test_automatic_failure_latches_across_restart_and_requires_acknowledgment(self):
+    def test_automatic_failure_cooldown_survives_restart_without_manual_acknowledgment(self):
         from workoutbridge.calendar import Event
 
         rule, source, _ = self.automatic_rule()
@@ -402,12 +546,12 @@ class WebTests(unittest.TestCase):
             connect.assert_called_once()
         state = self.client.get("/api/v1/state")
         self.assertNotIn("PRIVATE", state.text)
-        self.assertTrue(state.json()["syncs"][0]["auto_blocked"])
+        self.assertFalse(state.json()["syncs"][0]["auto_blocked"])
         self.assertEqual(
             self.client.post(
                 endpoint, json={"enabled": True, "account": "123"}, headers=self.headers
             ).status_code,
-            409,
+            200,
         )
         self.assertEqual(
             self.client.post(
@@ -462,7 +606,7 @@ class WebTests(unittest.TestCase):
             self.assertEqual(self.client.get("/api/v1/state").json()["history"], history)
             connect.assert_not_called()
 
-    def test_manual_failure_also_stops_enabled_automatic_publishing(self):
+    def test_manual_failure_retains_receipts_without_stopping_automatic_publishing(self):
         from workoutbridge.calendar import Event
 
         rule, source, _ = self.automatic_rule()
@@ -488,7 +632,7 @@ class WebTests(unittest.TestCase):
                 ).status_code,
                 409,
             )
-        self.assertTrue(self.client.get("/api/v1/state").json()["syncs"][0]["auto_blocked"])
+        self.assertFalse(self.client.get("/api/v1/state").json()["syncs"][0]["auto_blocked"])
 
     def test_auth_and_csrf(self):
         self.assertEqual(self.client.get("/api/v1/state").status_code, 401)

@@ -141,12 +141,14 @@ uploads/schedules. Garmin applies its existing update checks; changed or moved
 COROS prescriptions stop for manual reconciliation in this first version.
 No deletions are propagated.
 
-Before any automatic write, a durable stop flag is saved. Failed/uncertain writes,
-process interruption, or changed account identity stop unattended publishing until
-you reconcile History and Garmin and explicitly acknowledge re-enabling it.
-Manual publication failures also stop enabled automatic publishing. Expired Garmin
-authentication requires sign-in again and an explicit resume; credentials are never
-retried automatically. Empty feeds do not contact Garmin. A failed feed fetch
+Publication errors retain sanitized diagnostics and durable provider receipts.
+Eligible workouts continue independently; retries use capped backoff without an
+attempt limit. A changed account identity still requires confirmation, and pauses
+remain respected. Interrupted writes must pass the same receipt/readback guards
+on the next check; unknown creation outcomes never authorize another creation.
+Manual errors do not disable an already enabled automatic sync.
+Expired authentication requires sign-in again; saved sessions are checked every
+six hours while automatic publishing remains enabled. Passwords are never retained. Empty feeds do not contact Garmin. A failed feed fetch
 never publishes a stale preview, but is retried on the next hourly poll.
 
 The worker runs every 3600 seconds while the single-worker service is running;
