@@ -97,6 +97,19 @@ class CorosClient:
             response.raise_for_status()
             return response
         except httpx.HTTPStatusError as exc:
+            authentication = exc.response.status_code in {401, 403}
+            if (
+                path == "/oauth2/token"
+                and exc.response.status_code == 400
+                and len(exc.response.content) <= 16384
+            ):
+                try:
+                    body = exc.response.json()
+                    authentication = isinstance(body, dict) and body.get("error") == "invalid_grant"
+                except ValueError:
+                    pass
+            if authentication:
+                raise ValueError("COROS authentication expired; reconnect") from None
             if exc.response.status_code in {408, 429, 500, 502, 503, 504}:
                 raise ProviderUnavailable("COROS temporarily unavailable") from None
             raise ValueError("COROS request failed; outcome requires review") from None
