@@ -10,6 +10,7 @@ class ProviderUnavailable(ValueError):
 
 
 SAFE_REASONS = {
+    "COROS authentication expired; reconnect": "provider_authentication",
     "COROS event changed or moved; reconcile the existing entry": "prescription_changed",
     "COROS write is pending; do not retry creation": "uncertain_creation",
     "COROS creation outcome uncertain; do not repeat": "uncertain_creation",
@@ -110,7 +111,7 @@ def publication_failure(exc, previous, now, stage):
             "provider_unavailable",
             "Destination temporarily unavailable; receipts will be checked before retrying.",
         )
-    elif authentication or status in {401, 403}:
+    elif authentication or status in {401, 403} or code == "provider_authentication":
         code = "provider_authentication"
         message = "Destination authentication or access check failed. Check the connection before retrying."
     elif status == 404:
@@ -127,11 +128,12 @@ def publication_failure(exc, previous, now, stage):
         )
     attempt = (previous or {}).get("attempt", 0) + 1
     delays = (300, 1800, 7200)
-    retry = (
-        (datetime.fromisoformat(now) + timedelta(seconds=delays[attempt - 1])).isoformat()
-        if transient and attempt <= len(delays)
-        else None
-    )
+    # Retry checks indefinitely at a capped cadence. Publishers consult durable
+    # intents before any write; a retry is never permission to repeat creation.
+    delay = delays[min(attempt - 1, len(delays) - 1)]
+    if code == "provider_authentication":
+        delay = 6 * 3600
+    retry = (datetime.fromisoformat(now) + timedelta(seconds=delay)).isoformat()
     return dict(
         code=code,
         message=message,

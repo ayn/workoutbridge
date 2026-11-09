@@ -5,8 +5,16 @@ from workoutbridge.recovery import publication_failure
 
 
 class RecoveryTests(unittest.TestCase):
+    def test_transient_and_unknown_errors_keep_capped_retries_after_many_attempts(self):
+        for error in (TimeoutError("PRIVATE"), RuntimeError("PRIVATE")):
+            failure = publication_failure(
+                error, {"attempt": 20}, "2030-01-01T00:00:00+00:00", "connect"
+            )
+            self.assertEqual(failure["next_retry"], "2030-01-01T02:00:00+00:00")
+            self.assertNotIn("PRIVATE", str(failure))
+
     @unittest.skipUnless(importlib.util.find_spec("garminconnect"), "optional Garmin SDK")
-    def test_sdk_connection_and_rate_limit_errors_retry_but_authentication_does_not(self):
+    def test_sdk_connection_and_rate_limit_errors_retry_including_authentication(self):
         from garminconnect import (
             GarminConnectAuthenticationError,
             GarminConnectConnectionError,
@@ -16,7 +24,7 @@ class RecoveryTests(unittest.TestCase):
         for error, retry in (
             (GarminConnectConnectionError("PRIVATE"), True),
             (GarminConnectTooManyRequestsError("PRIVATE"), True),
-            (GarminConnectAuthenticationError("PRIVATE"), False),
+            (GarminConnectAuthenticationError("PRIVATE"), True),
         ):
             result = publication_failure(error, None, "2030-01-01T00:00:00+00:00", "connect")
             self.assertEqual(bool(result["next_retry"]), retry)
@@ -29,9 +37,9 @@ class RecoveryTests(unittest.TestCase):
         for status, code, retry in (
             (429, "provider_unavailable", True),
             (503, "provider_unavailable", True),
-            (401, "provider_authentication", False),
-            (403, "provider_authentication", False),
-            (404, "destination_not_found", False),
+            (401, "provider_authentication", True),
+            (403, "provider_authentication", True),
+            (404, "destination_not_found", True),
         ):
             with self.subTest(status=status):
                 response = requests.Response()
@@ -59,7 +67,7 @@ class RecoveryTests(unittest.TestCase):
             )
             self.assertEqual(failure["message"], reason)
             self.assertEqual(failure["exception_type"], "ReviewRequired")
-            self.assertIsNone(failure["next_retry"])
+            self.assertTrue(failure["next_retry"])
 
     def test_unknown_error_and_arbitrary_review_text_are_redacted(self):
         from workoutbridge.publishing import ReviewRequired
@@ -68,5 +76,5 @@ class RecoveryTests(unittest.TestCase):
             result = publication_failure(
                 error, None, "2030-01-01T00:00:00+00:00", "publish_and_verify"
             )
-            self.assertIsNone(result["next_retry"])
+            self.assertTrue(result["next_retry"])
             self.assertNotIn("PRIVATE", str(result))

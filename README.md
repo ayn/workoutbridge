@@ -158,7 +158,7 @@ docker compose --env-file "$HOME/.config/workoutbridge-deploy.env" logs --tail 5
    an account alone does not enable writes. Check History for verified results.
 
 Keep the same data directory and publishing receipts across updates. A failed
-or uncertain write stops automatic publishing until you reconcile history;
+or uncertain write is logged and retried through durable receipt checks;
 never delete the database to force a retry. See the [full runbook](docs/private-web.md)
 for authentication renewal, updates and recovery.
 
@@ -740,7 +740,7 @@ Each successful event prints a verified destination workout ID and date.
 - Process-held locking serializes publishers using the same local database.
 - Remote-write intent is committed before upload/update/schedule.
 - Lost responses are reconciled using remote identity markers and calendar
-  read-back. Uncertain outcomes stop for review, rather than blindly retrying.
+  read-back. Uncertain outcomes retain their receipts for reconciliation; retries never blindly repeat creation.
 - Moved/cancelled events and suspected cross-feed overlap require reconciliation.
 - Overlap checks include pending local intents, not only completed uploads.
 
@@ -979,18 +979,21 @@ truncated.
 Publishing failures retain a sanitized reason code, timestamp, operation stage,
 attempt count, and next retry in sync state and History. Provider response bodies,
 calendar URLs, credentials, and arbitrary exception text are never included.
-Automatic syncs retry recognized transport failures, rate limits, and temporary
-server failures at the next scheduled poll after cooldowns of 5 minutes,
-30 minutes, and 2 hours. Three retries are allowed; exhaustion remains visible
-for operator review. A successful publication clears the current failure while
-retaining its history. Refreshing a feed does not erase a publishing stop.
-
+Automatic syncs keep retrying at the next scheduled poll after cooldowns of
+5 minutes, 30 minutes, then a capped 2 hours; there is no attempt limit.
+Authentication failures use a 6-hour cooldown. Each workout has durable retry
+state, so a failed workout does not block other eligible workouts in the sync.
+A successful check clears that workout's current failure while retaining History.
+Connection-wide failures delay that connection. An account identity change still
+requires explicit confirmation; pauses and automatic-publishing opt-in remain enforced.
+Embedding services can queue actionable reauthorization notifications through the
+connection callbacks; the DIY application does not send email.
 Every retry goes through the account-bound durable receipt checks. COROS can
 finish verification of a pending receipt with a known workout ID through readback,
 without creating another workout. Approved edits use a separate durable update
 intent after proving the saved course is unchanged and editable. Unknown creation
-outcomes, uncertain edits that cannot verify, identity mismatches, and destination conflicts require reconciliation and are not
-blindly repeated. Manual-only syncs do not enable background publishing or retries.
+outcomes, uncertain edits that cannot verify, identity mismatches, and destination conflicts remain guarded on each retry and may require operator
+reconciliation. These checks never authorize blind recreation. Manual-only syncs do not enable background publishing or retries.
 
 Verified destination receipts retain a durable `publication_count`: a new workout
 counts once, a successfully published edit counts again, and unchanged readback

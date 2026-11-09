@@ -54,6 +54,8 @@ def create_app(
     authorize_profile=None,
     authenticate_request=None,
     on_publication=None,
+    on_connection_failure=None,
+    on_connection_ready=None,
     vault=None,
     operation=None,
     resolve_plan=None,
@@ -241,7 +243,7 @@ def create_app(
         plan["hash"] = digest(plan)
         put("plan", rule_id, plan)
         rule["last_preview"] = stamp()
-        if not rule.get("auto_blocked"):
+        if not rule.get("auto_blocked") and not rule.get("publish_failure"):
             rule["error"] = None
         put("sync", rule_id, rule)
         return plan
@@ -260,10 +262,12 @@ def create_app(
                     rule = get("sync", rule["id"])
                     if not rule.get("automatic"):
                         continue
-                    if rule.get("auto_blocked"):
-                        retry = rule.get("publish_failure", {}).get("next_retry")
-                        if not retry or retry > stamp():
-                            continue
+                    failure = rule.get("publish_failure", {})
+                    if (
+                        failure.get("stage") == "connect"
+                        and (failure.get("next_retry") or "") > stamp()
+                    ):
+                        continue
                     if rule.get("auto_account") != plan["account"]:
                         rule.update(
                             auto_blocked=True,
@@ -271,10 +275,16 @@ def create_app(
                         )
                         put("sync", rule["id"], rule)
                         continue
-                    selected = [i for i, item in enumerate(plan["items"]) if "error" not in item]
+                    selected = [
+                        i
+                        for i, item in enumerate(plan["items"])
+                        if "error" not in item
+                        and get_retry(rule["id"], plan["account"], item).get("next_retry", "")
+                        <= stamp()
+                    ]
                     if not selected:
                         continue
-                    # Persist before any remote request: crashes must also stop unattended retries.
+                    # Mark in progress; durable provider intents protect retries after interruption.
                     rule["auto_blocked"] = True
                     put("sync", rule["id"], rule)
                     try:
@@ -283,7 +293,7 @@ def create_app(
                         rule = get("sync", rule["id"])
                     else:
                         rule = get("sync", rule["id"])
-                        rule.update(auto_blocked=False, last_publish=stamp(), error=None)
+                        rule.update(auto_blocked=False)
                     put("sync", rule["id"], rule)
                 except Exception:  # noqa: BLE001 - private feed/session details must not leak.
                     rule["error"] = "Feed refresh failed. Check feed access and connection profile."
@@ -830,6 +840,23 @@ def create_app(
         finally:
             operation.release()
 
+    def connection_notice(callback, *args):
+        if callback is not None:
+            try:
+                callback(*args)
+            except Exception:  # noqa: BLE001 - notifications cannot change publication outcomes.
+                pass
+
+    def retry_key(key, account, item):
+        event = item["event"]
+        return digest([key, account, event["source"], event["uid"], event.get("recurrence_id", "")])
+
+    def get_retry(key, account, item):
+        try:
+            return get("publication_retry", retry_key(key, account, item))
+        except HTTPException:
+            return {}
+
     @app.post(API_PREFIX + "/syncs/{key}/publish")
     def publish(key: str, body: dict):
         if not operation.acquire(blocking=False):
@@ -877,6 +904,7 @@ def create_app(
             coros_client = None
             stage = "connect"
             active_event = None
+            failures = []
             try:
                 if profile.get("destination") == "coros":
                     from .coros_client import CorosClient
@@ -896,23 +924,70 @@ def create_app(
                 stage = "publish_and_verify"
                 for item in items:
                     active_event = item["event"]
-                    wid = publisher.publish(Event(**item["event"]), item["approval"])
+                    identity = retry_key(key, plan["account"], item)
+                    try:
+                        wid = publisher.publish(Event(**active_event), item["approval"])
+                    except Exception as exc:  # noqa: BLE001 - isolate each durable intent.
+                        failure = publication_failure(
+                            exc, get_retry(key, plan["account"], item), stamp(), stage
+                        )
+                        failure.update(
+                            workout_date=active_event["date"], workout_title=active_event["title"]
+                        )
+                        put("publication_retry", identity, failure)
+                        failures.append(failure)
+                        # Authentication affects the connection, not just one event.
+                        if failure["code"] == "provider_authentication":
+                            failure["stage"] = "connect"
+                            break
+                        continue
+                    put("publication_retry", identity, {})
                     results.append(
                         {
-                            "title": item["event"]["title"],
-                            "date": item["event"]["date"],
+                            "title": active_event["title"],
+                            "date": active_event["date"],
                             "workout_id": wid,
                         }
                     )
+                authentication_failure = next(
+                    (value for value in failures if value["code"] == "provider_authentication"),
+                    None,
+                )
+                if authentication_failure is None:
+                    connection_notice(on_connection_ready, profile)
+                if failures:
+                    failure = authentication_failure or failures[0]
+                    connection_notice(on_connection_failure, profile, failure)
+                    rule.update(
+                        auto_blocked=False, publish_failure=failure, error=failure["message"]
+                    )
+                    put("sync", key, rule)
+                    record = {
+                        "id": uuid4().hex,
+                        "sync": key,
+                        "at": stamp(),
+                        "status": "Retry scheduled",
+                        "failure": failure,
+                        "failures": failures,
+                        "results": results,
+                    }
+                    put("history", record["id"], record)
+                    if results:
+                        rule["last_publish"] = stamp()
+                        put("sync", key, rule)
+                    if on_publication is not None and results:
+                        on_publication()
+                    return record
             except Exception as exc:  # noqa: BLE001 - retain receipts, redact provider text.
                 failure = publication_failure(exc, rule.get("publish_failure"), stamp(), stage)
                 if active_event is not None:
                     failure.update(
                         workout_date=active_event["date"], workout_title=active_event["title"]
                     )
+                connection_notice(on_connection_failure, profile, failure)
                 if not rule.get("automatic"):
                     failure["next_retry"] = None
-                rule.update(publish_failure=failure, error=failure["message"])
+                rule.update(auto_blocked=False, publish_failure=failure, error=failure["message"])
                 put("sync", key, rule)
                 record = {
                     "id": uuid4().hex,
@@ -948,8 +1023,13 @@ def create_app(
             put("history", record["id"], record)
             if on_publication is not None and results:
                 on_publication()
-            rule.pop("publish_failure", None)
-            rule["error"] = None
+            pending = [get_retry(key, plan["account"], item) for item in plan["items"]]
+            pending = [failure for failure in pending if failure]
+            if pending:
+                rule.update(publish_failure=pending[0], error=pending[0]["message"])
+            else:
+                rule.pop("publish_failure", None)
+                rule["error"] = None
             put("sync", key, rule)
             if rule.get("automatic"):
                 rule.update(auto_blocked=False, last_publish=stamp())
