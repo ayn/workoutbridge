@@ -143,5 +143,5 @@ def publication_failure(exc, previous, now, stage):
         http_status=status,
         attempt=attempt,
         next_retry=retry,
-        retryable=transient,
+        retryable=True,
     )
