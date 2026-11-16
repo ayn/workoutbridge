@@ -20,7 +20,7 @@ from .walks import is_walk
 DEFAULT_COACHING_POLICY = "athlete_preferences"
 
 METADATA = re.compile(
-    r"(?:Workout:\s*(?:Run|Bike|Cycling)(?:\s*-\s*(?:Easy|Moderate|Hard|Long Run|Recovery Run))?"
+    r"(?:Workout:\s*(?:Run|Bike|Cycling)(?:\s*-\s*(?:Easy|Moderate|Hard|Long Run|Recovery Run|Fartlek))?"
     r"|Planned:\s*(?:\d+(?:\.\d+)?\s*(?:mi|km)(?:\s*~\s*\d+:\d{2}:\d{2})?|\d+:\d{2}:\d{2}))",
     re.I,
 )
@@ -74,7 +74,7 @@ def normalize_finalsurge(
     if event.structured_text:
         return event
     title = re.fullmatch(
-        r"\s*(?:Run|Bike|Cycling)(?:\s*-\s*(?:Easy|Moderate|Hard|Long Run|Recovery Run))?:\s*(.+)",
+        r"\s*(?:Run|Bike|Cycling)(?:\s*-\s*(?:Easy|Moderate|Hard|Long Run|Recovery Run|Fartlek))?:\s*(.+)",
         event.title,
         re.I,
     )

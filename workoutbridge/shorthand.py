@@ -35,6 +35,13 @@ def normalize_coaching_text(text, *, coaching_policy="strict"):
     """Resolve bounded whole-workout context, never consume arbitrary prose."""
     if coaching_policy != "athlete_preferences":
         return text
+    # Letter-o clock zeros are a bounded transcription typo, not a new unit.
+    text = re.sub(
+        r"(?<![\w:])(\d{1,2}):oo(?=\s+(?:fast|easy|hard|smooth|moderate)\b)",
+        r"\1:00",
+        text,
+        flags=re.I,
+    )
     footer = re.fullmatch(
         r"(?P<body>.+?)\s+For the strides run the pickup is every "
         r"(?P<segment>\d+(?:\.\d+)?)\s*m\s*[-–]\s*start (?P<efforts>[^\n;]+?)\.?\s*",
@@ -210,6 +217,13 @@ def infer_shorthand_units(text):
     text = re.sub(r"^(\d+\s*x\s*)(\d+)\s+(hill sprints)\b", r"\1\2 sec \3", text, flags=re.I)
     text = re.sub(
         rf"^(\d+\s*x\s*)~?\s*(\d+)(?=\s*(?:at\b|@|\(|$|{DISTANCE_EFFORT}\b))",
+        lambda m: m[1] + m[2] + ("m" if 100 <= int(m[2]) <= 10000 else ""),
+        text,
+        flags=re.I,
+    )
+    text = re.sub(
+        rf"^(\d+\s*x\s*\d+(?:\.\d+)?\s*(?:m|km)\s+{DISTANCE_EFFORT}\s*"
+        r"(?:with\s+|/\s*))(\d+)(?=\s+(?:easy|jog|float|slow)\b)",
         lambda m: m[1] + m[2] + ("m" if 100 <= int(m[2]) <= 10000 else ""),
         text,
         flags=re.I,
@@ -619,7 +633,7 @@ def slash_effort_clause(part, pace_unit, coaching_policy):
 def qualitative_note_clause(part, pace_unit, coaching_policy, allow_total):
     """Keep effort references as notes without deriving unsupported numeric alerts."""
     cue = re.fullmatch(
-        r"(.+?)\s+\((think (?:(?:\d+(?:\.\d+)?[- ]hour|mile|5k|10k|half marathon|marathon)(?: effort| pace)?))\)",
+        r"(.+?)\s+\((think (?:(?:\d+(?:\.\d+)?[- ]hour|mile|5k|10k|half marathon|marathon)(?: effort| pace)?)(?:, pushing (?:a bit|a little) as you go)?)\)",
         part,
         re.I,
     )
@@ -1022,7 +1036,7 @@ def normalize_clause(part, *, pace_unit=None, coaching_policy="strict", allow_to
         )
         if len(phases) == 1 and adjacent:
             phases = [adjacent[1], adjacent[2]]
-        if not 2 <= len(phases) <= 8:
+        if not 2 <= len(phases) <= 16:
             return None
         steps = []
         for phase_index, phase in enumerate(phases):
