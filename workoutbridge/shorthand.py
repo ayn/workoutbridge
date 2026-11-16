@@ -35,6 +35,22 @@ def normalize_coaching_text(text, *, coaching_policy="strict"):
     """Resolve bounded whole-workout context, never consume arbitrary prose."""
     if coaching_policy != "athlete_preferences":
         return text
+    # Letter-o clock zeros are a bounded transcription typo, not a new unit.
+    text = re.sub(
+        r"(?<![\w:])(\d{1,2}):oo(?=\s+(?:fast|easy|hard|smooth|moderate)\b)",
+        r"\1:00",
+        text,
+        flags=re.I,
+    )
+    # An unfinished slash phase is completed by the explicitly following easy
+    # duration under the athlete-approved per-ladder recovery convention.
+    text = re.sub(
+        r"(\b\d+\s*x\s*\([^()\n]+/)\s*\)\s*;\s*"
+        r"(\d+:[0-5]\d\s+easy)(?=\s*(?:[;\n]|$))",
+        r"\1\2)",
+        text,
+        flags=re.I,
+    )
     footer = re.fullmatch(
         r"(?P<body>.+?)\s+For the strides run the pickup is every "
         r"(?P<segment>\d+(?:\.\d+)?)\s*m\s*[-–]\s*start (?P<efforts>[^\n;]+?)\.?\s*",
@@ -210,6 +226,13 @@ def infer_shorthand_units(text):
     text = re.sub(r"^(\d+\s*x\s*)(\d+)\s+(hill sprints)\b", r"\1\2 sec \3", text, flags=re.I)
     text = re.sub(
         rf"^(\d+\s*x\s*)~?\s*(\d+)(?=\s*(?:at\b|@|\(|$|{DISTANCE_EFFORT}\b))",
+        lambda m: m[1] + m[2] + ("m" if 100 <= int(m[2]) <= 10000 else ""),
+        text,
+        flags=re.I,
+    )
+    text = re.sub(
+        rf"^(\d+\s*x\s*\d+(?:\.\d+)?\s*(?:m|km)\s+{DISTANCE_EFFORT}\s*"
+        r"(?:with\s+|/\s*))(\d+)(?=\s+(?:easy|jog|float|slow)\b)",
         lambda m: m[1] + m[2] + ("m" if 100 <= int(m[2]) <= 10000 else ""),
         text,
         flags=re.I,
@@ -619,7 +642,7 @@ def slash_effort_clause(part, pace_unit, coaching_policy):
 def qualitative_note_clause(part, pace_unit, coaching_policy, allow_total):
     """Keep effort references as notes without deriving unsupported numeric alerts."""
     cue = re.fullmatch(
-        r"(.+?)\s+\((think (?:(?:\d+(?:\.\d+)?[- ]hour|mile|5k|10k|half marathon|marathon)(?: effort| pace)?))\)",
+        r"(.+?)\s+\((think (?:(?:\d+(?:\.\d+)?[- ]hour|mile|5k|10k|half marathon|marathon)(?: effort| pace)?)(?:, pushing (?:a bit|a little) as you go)?)\)",
         part,
         re.I,
     )
@@ -655,6 +678,34 @@ def qualitative_note_clause(part, pace_unit, coaching_policy, allow_total):
 def normalize_clause(part, *, pace_unit=None, coaching_policy="strict", allow_total=False):
     if not parse(part).unresolved:
         return Conversion(part)
+    pickups = re.fullmatch(
+        r"last (\d+)\s+(miles|mile|mi|km)\s+(\d+)\s*x\s*(\d+)\s*"
+        r"(?:sec|seconds|s)\s+pick[ -]?ups\s+per\s+(mile|km)",
+        part,
+        re.I,
+    )
+    if pickups and coaching_policy == "athlete_preferences":
+        count, unit, per_unit, duration, boundary = pickups.groups()
+        same_unit = (unit.lower() == "km") == (boundary.lower() == "km")
+        if (
+            same_unit
+            and 1 <= int(count) <= 20
+            and 1 <= int(per_unit) <= 8
+            and 0 < int(duration) <= 300
+        ):
+            steps = []
+            for index in range(int(per_unit)):
+                note = f" [coaching note: {part}]" if index == 0 else ""
+                steps.append(f"Run {duration} sec fast" + note)
+                recovery = (
+                    f"Finish current {boundary.lower()} including pickups before pressing Lap"
+                    if index == int(per_unit) - 1
+                    else "Easy running until ready for the next pickup in this distance block"
+                )
+                steps.append(f"Rest until lap easy [coaching note: {recovery}]")
+            text = f"{count} x [" + " | ".join(steps) + "]"
+            if not parse(text).unresolved:
+                return Conversion(text, implied_recovery=True)
     effort_first = re.fullmatch(
         rf"(?:(Run|Warm up|Cool down)\s+)?(\d+(?:\.\d+)?)\s+({EFFORT})\s+(miles|mile|mi|km|m)",
         part,
@@ -1022,7 +1073,7 @@ def normalize_clause(part, *, pace_unit=None, coaching_policy="strict", allow_to
         )
         if len(phases) == 1 and adjacent:
             phases = [adjacent[1], adjacent[2]]
-        if not 2 <= len(phases) <= 8:
+        if not 2 <= len(phases) <= 16:
             return None
         steps = []
         for phase_index, phase in enumerate(phases):

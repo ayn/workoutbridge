@@ -422,6 +422,27 @@ The grammar is shared across coaches: `plus`, top-level commas, singular time
 units and slash-separated work/easy cycles are supported wherever the full
 instruction is explicit. Slashes inside fractions and pace units are preserved.
 No coach name is used to select a different wording parser.
+Distance-based work/easy cycles also infer omitted recovery meters under the
+athlete-preferences policy: `6 x 600 fast with 300 easy recovery` and
+`3 x 150 fast/150 easy` preserve both distances. Strict mode still requires
+explicit units. Parenthetical effort cues such as `think 10k effort, pushing a
+little as you go` remain notes, without guessed pace targets. Explicit repeated
+ladders support up to 16 phases. Final Surge `Run - Fartlek` metadata is accepted;
+the athlete-preferences policy interprets a bounded clock typo such as `2:oo fast`
+as `2:00 fast`, retaining the original prescription in the notes. Missing phases
+and unknown extra instructions still need review.
+Under athlete preferences, an unfinished trailing slash in a repeated ladder
+followed immediately by an explicit clock-form easy duration completes that
+recovery **inside each ladder**, including the final one. For example,
+`3 x (45 sec fast/45 sec easy/90 sec fast/); 3:00 easy` uses three minutes easy
+after each ladder. Strict mode leaves that shorthand for review.
+Pickups per mile/km such as `last 3 miles 3 x 15 sec pick ups per mile` use three
+distance blocks with timed pickups and Lap-ended easy recoveries. The final
+recovery in each block instructs the athlete to finish that mile, including its
+pickups, before pressing Lap; it does not add a full mile after the pickups.
+The original instruction remains in the notes. This conversion requires athlete
+preferences and Lap recovery permission; strict/recovery-review modes retain it
+for review. It relies on the athlete tracking each mile/km boundary.
 `WU`, `WUP` and `CD` work as prefixes or suffixes with an explicit amount/unit,
 including compact and colon forms. Terrain such as `on trails` stays a
 qualitative instruction without inventing a numeric intensity target.

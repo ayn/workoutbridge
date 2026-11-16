@@ -582,7 +582,7 @@ def parse(text: str, *, sport: str = "running") -> Draft:
             members = [parse(part.strip(), sport=sport) for part in group[2].split("|")]
             if (
                 1 <= int(group[1]) <= 100
-                and 2 <= len(members) <= 8
+                and 2 <= len(members) <= 16
                 and all(
                     not member.unresolved
                     and len(member.steps) == 1
