@@ -87,3 +87,70 @@ class DistanceRecoveryLadderTests(unittest.TestCase):
     def test_rest_or_run_is_still_an_athlete_decision(self):
         event = normalize_finalsurge(self.event("Workout: Rest Day", "Rest Day: Rest or easy run"))
         self.assertIn("error", review_item("123", event))
+
+    def test_trailing_slash_uses_explicit_following_easy_after_each_ladder(self):
+        text = (
+            "Workout: Run - Fartlek\n\n1 mi wu; "
+            "3 x (45 sec fast/45 sec easy/90 sec fast/90 sec easy/150 sec fast/"
+            "150 sec easy/90 sec fast/90 sec easy/45 sec fast/); 3:00 easy\n1 mi cd"
+        )
+        event = normalize_finalsurge(self.event(text, "Run - Fartlek: Synthetic ladder"))
+        draft = parse(event.prescription)
+        self.assertFalse(draft.unresolved)
+        groups = [s for s in draft.steps if isinstance(s, Repeat)]
+        self.assertEqual(len(groups), 1)
+        self.assertEqual(groups[0].count, 3)
+        self.assertEqual(
+            [s.duration for s in groups[0].steps], [45, 45, 90, 90, 150, 150, 90, 90, 45, 180]
+        )
+        self.assertFalse(groups[0].skip_last_recovery)
+        self.assertEqual(
+            [s.kind for s in draft.steps if not isinstance(s, Repeat)], ["warm_up", "cool_down"]
+        )
+        for account in ("123", "coros:us:synthetic"):
+            self.assertNotIn("error", review_item(account, event))
+        self.assertTrue(
+            parse(
+                normalize_finalsurge(
+                    self.event(text, "Run - Fartlek: Synthetic ladder"), coaching_policy="strict"
+                ).prescription
+            ).unresolved
+        )
+        for invalid in (
+            "3 x (45 sec fast/); 3:00 easy then sprint",
+            "3 x (45 sec fast/45 sec easy); 3:00 easy then sprint",
+            "3 x (45 sec fast//); 3:00 easy",
+        ):
+            self.assertTrue(parse(normalize_workout(self.event(invalid)).prescription).unresolved)
+
+    def test_pickups_per_mile_are_timed_with_lap_ended_mile_completion(self):
+        text = "Workout: Run\nPlanned: 4 mi\n1 easy\nlast 3 miles 3 x 15 sec pick ups per mile"
+        event = normalize_finalsurge(self.event(text, "Run: Synthetic pickups"))
+        draft = parse(event.prescription)
+        self.assertFalse(draft.unresolved)
+        group = next(s for s in draft.steps if isinstance(s, Repeat))
+        self.assertEqual(group.count, 3)
+        self.assertEqual(len(group.steps), 6)
+        self.assertEqual([s.duration for s in group.steps[::2]], [15, 15, 15])
+        self.assertTrue(all(s.unit == "lap_button" for s in group.steps[1::2]))
+        self.assertFalse(group.skip_last_recovery)
+        self.assertIn("Finish current mile", group.steps[-1].note)
+        self.assertIn("including pickups", group.steps[-1].note)
+        self.assertIn("3 miles", group.steps[0].note)
+        for account in ("123", "coros:us:synthetic"):
+            self.assertNotIn("error", review_item(account, event))
+        for options in ({"coaching_policy": "strict"}, {"recovery_choice": "review"}):
+            self.assertTrue(
+                parse(
+                    normalize_finalsurge(
+                        self.event(text, "Run: Synthetic pickups"), **options
+                    ).prescription
+                ).unresolved
+            )
+        for invalid in (
+            "last 3 miles 3 x 15 sec pick ups per km",
+            "last 0 miles 3 x 15 sec pick ups per mile",
+            "last 3 miles 9 x 15 sec pick ups per mile",
+            "last 3 miles 3 x 15 sec pick ups per mile then add hills",
+        ):
+            self.assertTrue(parse(normalize_workout(self.event(invalid)).prescription).unresolved)
