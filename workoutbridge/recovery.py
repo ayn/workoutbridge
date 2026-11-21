@@ -30,6 +30,7 @@ SAFE_REASONS = {
     "Scheduled entry did not verify uniquely": "schedule_verification_failed",
     "Updated workout did not verify": "update_verification_failed",
     "Event moved; reconcile the previous scheduled entry": "event_moved",
+    "Workout date changed. Move the existing workout in the COROS app.": "event_moved",
     "Resolve the earlier pending write before applying edits": "pending_previous_revision",
     "Legacy receipt requires manual migration; do not reset it": "legacy_receipt",
     "Another source identity has an overlapping local intent": "overlapping_source",

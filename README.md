@@ -522,8 +522,9 @@ same defaults; callers can pass `coaching_policy="strict"` to opt out. The defau
   pace unit or source/distance context is required. Qualitative relative efforts
   such as "faster than marathon effort" stay notes without invented numeric targets.
 - Selects the longer distance for simple distance ranges and the longer recovery
-  for explicit recovery ranges. The original range is retained on that specific
-  run or recovery step, not only in overall workout notes.
+  for explicit recovery ranges. For a cycling cooldown with an explicit
+  duration range, it uses the longer duration. The range stays in the affected
+  step's notes.
 - Schedules a single nominal distance run with a simple `if ...` condition or an
   optional easy-double instruction in that run's note. The athlete decides whether
   to perform or adapt it. Additional executable instructions, conditional sets,

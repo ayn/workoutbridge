@@ -7,6 +7,7 @@ from workoutbridge.coros import workout_payload
 from workoutbridge.coros_publishing import CorosPublisher, approval_token
 from workoutbridge.parser import parse
 from workoutbridge.publishing import ReviewRequired
+from workoutbridge.recovery import publication_failure
 
 
 class FakeClient:
@@ -133,8 +134,14 @@ class CorosPublishingTests(unittest.TestCase):
 
     def test_moved_or_edited_events_require_review(self):
         self.publish()
-        with self.assertRaises(ReviewRequired):
+        with self.assertRaises(ReviewRequired) as caught:
             self.publish(day="2026-10-23")
+        failure = publication_failure(
+            caught.exception, None, "2026-10-22T00:00:00+00:00", "publish_and_verify"
+        )
+        self.assertEqual(failure["code"], "event_moved")
+        self.assertIn("Move the existing workout in the COROS app", failure["message"])
+        self.assertEqual(self.publish(), "9223372036854775806")
         changed = {**self.course, "courseName": "Changed"}
         with self.assertRaises(ReviewRequired):
             self.publish(course=changed)
