@@ -116,6 +116,41 @@ class CyclingTests(unittest.TestCase):
                 event = normalize_workout(self.event("Bike: Intervals", "WU 7 min\n" + body))
                 self.assertIn("error", review_item("synthetic", event))
 
+    def test_short_cycling_reps_keep_both_timed_phases(self):
+        event = normalize_workout(
+            self.event("Bike: Intervals", "WU 8 min\n3 x (20s hard; 45s easy)\nCD 4 min"),
+            coaching_policy="strict",
+        )
+        steps = event_payload(event)["workoutSegments"][0]["workoutSteps"]
+        self.assertEqual(steps[1]["numberOfIterations"], 3)
+        self.assertEqual(
+            [phase["endConditionValue"] for phase in steps[1]["workoutSteps"]], [20, 45]
+        )
+        self.assertEqual(event_values(event)["course"]["sportType"], 2)
+
+    def test_cycling_cooldown_range_uses_longer_duration_with_note(self):
+        for cooldown in ("4–7 mins cool down", "Cool down 4-7 mins"):
+            with self.subTest(cooldown=cooldown):
+                description = (
+                    "Workout: Bike\n\nWarm up 8 mins\n3x (20s hard; 45s easy)\n" + cooldown
+                )
+                source = self.event("Bike: Intervals", description)
+                event = normalize_finalsurge(source)
+                payload = event_payload(event)
+                self.assertEqual(payload["description"], description)
+                steps = payload["workoutSegments"][0]["workoutSteps"]
+                self.assertEqual(len(steps), 3)
+                self.assertEqual(steps[-1]["endConditionValue"], 420)
+                self.assertIn("4-7 mins", steps[-1]["description"])
+                strict = normalize_finalsurge(source, coaching_policy="strict")
+                self.assertIn("error", review_item("synthetic", strict))
+
+    def test_invalid_cycling_cooldown_ranges_stay_in_review(self):
+        for cooldown in ("CD 7-4 mins", "0-6 mins cool down", "6-8 cool down"):
+            with self.subTest(cooldown=cooldown):
+                event = normalize_workout(self.event("Bike: Intervals", "Ride 30 min\n" + cooldown))
+                self.assertIn("error", review_item("synthetic", event))
+
     def test_explicit_cycling_section_preserves_notes_and_sport(self):
         notes = "Keep it comfortable.\n[WorkoutBridge]\nRide 35 min easy\n[/WorkoutBridge]"
         event = normalize_workout(self.event("Recovery session", notes, "cycling"))

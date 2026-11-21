@@ -5,7 +5,7 @@ from dataclasses import replace
 
 from .calendar import Event
 from .calendar_blocks import is_calendar_block
-from .parser import EFFORT, Repeat, Step, parse
+from .parser import EFFORT, TIME_UNITS, Repeat, Step, parse
 from .rest_days import is_rest_day
 from .shorthand import clauses as split_clauses
 from .shorthand import (
@@ -146,6 +146,7 @@ def normalize_workout(
 
 def cycling_step(text):
     """Normalize only a complete, explicitly supported cycling step."""
+    text = re.sub(r"(?<=\d)\s*s\b", " sec", text, flags=re.I)
     text = normalize_bookend(text.strip())
     for candidate in (text, "Ride " + text):
         draft = parse(candidate, sport="cycling")
@@ -154,9 +155,21 @@ def cycling_step(text):
     return None
 
 
-def cycling_clause(text):
+def cycling_clause(text, *, coaching_policy):
     if step := cycling_step(text):
         return step
+    if coaching_policy == "athlete_preferences":
+        cooldown = r"(?:cool[ -]?down|cd)"
+        duration = rf"(\d+(?:\.\d+)?)\s*[-–]\s*(\d+(?:\.\d+)?)\s*({TIME_UNITS})"
+        ranged = re.fullmatch(rf"{cooldown}\s+{duration}", text, re.I) or re.fullmatch(
+            rf"{duration}\s+{cooldown}", text, re.I
+        )
+        if ranged:
+            first, last, unit = ranged.groups()
+            if 0 < float(first) <= float(last) < float("inf"):
+                return cycling_step(
+                    f"Cool down {last} {unit} [coaching note: {first}-{last} {unit}]"
+                )
     if not parse(text, sport="cycling").unresolved:
         return text
     group = re.fullmatch(r"(\d+)\s*x\s*\(([^()]*)\)", text, re.I | re.S)
@@ -176,7 +189,9 @@ def _normalize(
     event: Event, text: str, recovery_choice: str, coaching_policy: str, distance_unit: str
 ) -> Event:
     if event.sport == "cycling":
-        clauses = [cycling_clause(part) for part in split_clauses(text)]
+        clauses = [
+            cycling_clause(part, coaching_policy=coaching_policy) for part in split_clauses(text)
+        ]
         if clauses and all(clause is not None for clause in clauses):
             text = "; ".join(clauses)
         return replace(event, structured_text=text)

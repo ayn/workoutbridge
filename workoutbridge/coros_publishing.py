@@ -86,7 +86,9 @@ class CorosPublisher:
             if row:
                 record = json.loads(row[0])
                 if record["day"] != day:
-                    raise ReviewRequired("COROS event moved; reconcile the existing entry")
+                    raise ReviewRequired(
+                        "Workout date changed. Move the existing workout in the COROS app."
+                    )
                 if record["hash"] != content_hash:
                     self.update(db, key, record, compact_day, course)
                 if record["phase"] not in {

@@ -91,8 +91,10 @@ external title edit.
 
 Moved, completed/uneditable, externally changed, and overlapping events still
 require review, as do new events on a day with an untracked schedule. The adapter
-does not move or delete calendar entries. Unknown human-readable responses stop
-for review instead of guessing.
+keeps the existing receipt if the source changes dates. Move the existing
+calendar entry in the COROS app. The receipt continues to require review if
+the feed date differs from its recorded date. Unknown human-readable responses
+stop for review instead of guessing.
 
 Session files are 0600 in 0700 directories, outside the checkout. OAuth refresh
 tokens persist privately; token renewal is serialized and account identity is
